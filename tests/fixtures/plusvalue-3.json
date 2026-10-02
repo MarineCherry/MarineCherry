@@ -1,0 +1,12 @@
+{
+  "nom": "Vendeur unique, achat ancien, forte plus-value (surtaxe), terrain non bâti",
+  "dossier": {
+    "reference": "Test PV 3", "dateCession": "2026-03-31", "prixVente": 980000, "fraisVendeurs": 0, "bati": false,
+    "ageUsufruitier": null, "cleUsufruitVente": null, "cleUsufruitAcquisition": null,
+    "vendeurs": [{"nom": "Gaston", "exonere": false}],
+    "valeurTerrain": null, "valeurConstruction": null,
+    "origines": [
+      {"vendeur": "Gaston", "libelle": "Achat", "nature": "Onéreux", "dateAcquisition": "2013-04-01", "droitRecu": "Pleine propriété", "droitCede": null, "quotePart": 1, "partPrix": 1, "prix": 410000, "devise": "EUR", "fraisReels": null, "travauxReels": null, "dateAchevement": null}
+    ]
+  }
+}

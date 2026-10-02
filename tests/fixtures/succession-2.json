@@ -1,0 +1,22 @@
+{
+  "nom": "Un parent de 85 ans, parts inégales, décès dans les 15 ans, rappel important",
+  "dossier": {
+    "nomDossier": "Test 2", "dateSimulation": "2026-10-02", "nbParents": 1,
+    "parents": [{"nom": "Paul", "age": 85}, {"nom": "", "age": null}],
+    "enfants": [
+      {"id": "e1", "nom": "Denis", "majeur": true, "part": 0.6},
+      {"id": "e2", "nom": "Emma", "majeur": true, "part": 0.4}
+    ],
+    "petitsEnfants": [],
+    "donFamilial": true, "deces15ans": true,
+    "biens": [
+      {"designation": "Immeuble de rapport", "nature": "Immobilier", "valeur": 1200000, "quotePartP1": 0.5, "regime": "Aucun", "aDonner": true, "montantDonne": 800000, "beneficiaire": "Enfants", "montantPE": null},
+      {"designation": "Portefeuille", "nature": "Titres / parts sociales", "valeur": 900000, "quotePartP1": null, "regime": "Aucun", "aDonner": false, "montantDonne": null, "beneficiaire": "Enfants", "montantPE": null},
+      {"designation": "Livrets", "nature": "Liquidités", "valeur": 200000, "quotePartP1": null, "regime": "Aucun", "aDonner": true, "montantDonne": 100000, "beneficiaire": "Petits-enfants", "montantPE": null}
+    ],
+    "anterieures": [
+      {"date": "2018-06-15", "montant": 150000, "donateur": 1, "beneficiaire": "e1"},
+      {"date": "2021-09-01", "montant": 40000, "donateur": 1, "beneficiaire": "e2"}
+    ]
+  }
+}

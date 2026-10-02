@@ -1,0 +1,9 @@
+{
+  "name": "atelier-notarial",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Outils de calcul pour l'étude notariale",
+  "scripts": {
+    "test": "node --test tests/engines.test.js"
+  }
+}

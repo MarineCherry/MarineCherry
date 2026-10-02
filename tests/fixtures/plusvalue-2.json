@@ -1,0 +1,20 @@
+{
+  "nom": "Indivision : achat, succession démembrée, terrain bâti, exonération et surtaxe",
+  "dossier": {
+    "reference": "Test PV 2", "dateCession": "2026-06-15", "prixVente": 1450000, "fraisVendeurs": 42000, "bati": true,
+    "ageUsufruitier": 74, "cleUsufruitVente": 0.3, "cleUsufruitAcquisition": 0.4,
+    "vendeurs": [
+      {"nom": "Arnaud", "exonere": false}, {"nom": "Béatrice", "exonere": false},
+      {"nom": "Claire", "exonere": true, "motif": "Résidence principale"}, {"nom": "Damien", "exonere": false}
+    ],
+    "valeurTerrain": 300000, "valeurConstruction": 900000,
+    "origines": [
+      {"vendeur": "Arnaud", "libelle": "Achat 2008", "nature": "Onéreux", "dateAcquisition": "2008-03-14", "droitRecu": "Pleine propriété", "droitCede": null, "quotePart": 0.4, "partPrix": 1, "prix": 520000, "devise": "EUR", "fraisReels": null, "travauxReels": null, "dateAchevement": null},
+      {"vendeur": "Béatrice", "libelle": "Succession père", "nature": "Gratuit", "dateAcquisition": "2012-11-02", "droitRecu": "Nue-propriété", "droitCede": "Nue-propriété", "quotePart": 0.3, "partPrix": 1, "prix": 800000, "devise": "EUR", "fraisReels": 9500, "travauxReels": null, "dateAchevement": null},
+      {"vendeur": "Damien", "libelle": "Usufruit", "nature": "Gratuit", "dateAcquisition": "2012-11-02", "droitRecu": "Usufruit", "droitCede": null, "quotePart": 0.3, "partPrix": 1, "prix": 800000, "devise": "EUR", "fraisReels": null, "travauxReels": 25000, "dateAchevement": null},
+      {"vendeur": "Claire", "libelle": "Terrain", "nature": "Onéreux", "dateAcquisition": "1994-05-20", "droitRecu": "Pleine propriété", "droitCede": null, "quotePart": 0.3, "partPrix": 0.25, "prix": 450000, "devise": "FRF", "fraisReels": 3000, "travauxReels": null, "dateAchevement": "2023-01-10"},
+      {"vendeur": "Claire", "libelle": "Construction", "nature": "Construction", "dateAcquisition": "2021-09-01", "droitRecu": "Pleine propriété", "droitCede": null, "quotePart": 0.3, "partPrix": 0.75, "prix": 260000, "devise": "EUR", "fraisReels": null, "travauxReels": null, "dateAchevement": "2023-01-10"},
+      {"vendeur": "Arnaud", "libelle": "Achat récent", "nature": "Onéreux", "dateAcquisition": "2023-02-01", "droitRecu": "Pleine propriété", "droitCede": null, "quotePart": 0.1, "partPrix": 1, "prix": 1500000, "devise": "EUR", "fraisReels": null, "travauxReels": null, "dateAchevement": null}
+    ]
+  }
+}

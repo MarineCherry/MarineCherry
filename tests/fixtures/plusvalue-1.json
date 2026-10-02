@@ -1,0 +1,16 @@
+{
+  "nom": "Exemple du classeur : nue-propriété reçue par donation, réunie avant la vente",
+  "dossier": {
+    "reference": "Exemple", "dateCession": "2026-09-30", "prixVente": 305000, "fraisVendeurs": 14900, "bati": true,
+    "ageUsufruitier": null, "cleUsufruitVente": null, "cleUsufruitAcquisition": null,
+    "vendeurs": [
+      {"nom": "Vendeur A", "exonere": false}, {"nom": "Vendeur B", "exonere": false}, {"nom": "Vendeur C", "exonere": false},
+      {"nom": "Vendeur D", "exonere": false}, {"nom": "Vendeur E", "exonere": false}
+    ],
+    "valeurTerrain": null, "valeurConstruction": null,
+    "origines": [
+      {"vendeur": "Vendeur A", "libelle": "", "nature": "Gratuit", "dateAcquisition": "1999-02-22", "droitRecu": "Nue-propriété", "droitCede": "Pleine propriété", "quotePart": 0.125, "partPrix": 1, "prix": 600000, "devise": "FRF", "fraisReels": null, "travauxReels": null, "dateAchevement": null},
+      {"vendeur": "Vendeur A", "libelle": "", "nature": "Gratuit", "dateAcquisition": "1999-04-12", "droitRecu": "Nue-propriété", "droitCede": "Pleine propriété", "quotePart": 0.125, "partPrix": 1, "prix": 600000, "devise": "FRF", "fraisReels": null, "travauxReels": null, "dateAchevement": null}
+    ]
+  }
+}

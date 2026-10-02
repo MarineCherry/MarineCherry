@@ -1,0 +1,30 @@
+{
+  "nom": "Deux parents, petits-enfants, Dutreil, résidence principale, don familial",
+  "dossier": {
+    "nomDossier": "Test 1", "dateSimulation": "2026-10-02", "nbParents": 2,
+    "parents": [{"nom": "Jean", "age": 68}, {"nom": "Marie", "age": 72}],
+    "enfants": [
+      {"id": "e1", "nom": "Alice", "majeur": true, "part": null},
+      {"id": "e2", "nom": "Bruno", "majeur": true, "part": null},
+      {"id": "e3", "nom": "Chloé", "majeur": false, "part": null}
+    ],
+    "petitsEnfants": [
+      {"id": "p1", "nom": "Xavier", "majeur": true, "part": null},
+      {"id": "p2", "nom": "Yasmine", "majeur": false, "part": null}
+    ],
+    "donFamilial": true, "deces15ans": false,
+    "biens": [
+      {"designation": "Résidence principale", "nature": "Immobilier", "valeur": 450000, "quotePartP1": null, "regime": "Résidence principale (20 %)", "aDonner": false, "montantDonne": null, "beneficiaire": "Enfants", "montantPE": null},
+      {"designation": "Maison de vacances", "nature": "Immobilier", "valeur": 320000, "quotePartP1": 0.5, "regime": "Aucun", "aDonner": true, "montantDonne": null, "beneficiaire": "Enfants et petits-enfants", "montantPE": 200000},
+      {"designation": "Parts de SARL", "nature": "Titres / parts sociales", "valeur": 600000, "quotePartP1": 1, "regime": "Dutreil (75 %)", "aDonner": true, "montantDonne": 300000, "beneficiaire": "Enfants", "montantPE": null},
+      {"designation": "Comptes", "nature": "Liquidités", "valeur": 150000, "quotePartP1": 0.6, "regime": "Aucun", "aDonner": true, "montantDonne": null, "beneficiaire": "Enfants", "montantPE": null},
+      {"designation": "Mobilier", "nature": "Autre", "valeur": 50000, "quotePartP1": null, "regime": "Aucun", "aDonner": false, "montantDonne": null, "beneficiaire": "Enfants", "montantPE": null},
+      {"designation": "Terrain", "nature": "Immobilier", "valeur": 80000, "quotePartP1": 0.3, "regime": "Aucun", "aDonner": true, "montantDonne": null, "beneficiaire": "Petits-enfants", "montantPE": null}
+    ],
+    "anterieures": [
+      {"date": "2015-05-10", "montant": 50000, "donateur": 1, "beneficiaire": "e1"},
+      {"date": "2005-01-01", "montant": 30000, "donateur": 2, "beneficiaire": "e2"},
+      {"date": "2020-03-01", "montant": 20000, "donateur": 2, "beneficiaire": "p1"}
+    ]
+  }
+}

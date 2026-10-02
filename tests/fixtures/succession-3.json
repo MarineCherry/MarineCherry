@@ -1,0 +1,22 @@
+{
+  "nom": "Deux parents, parts saisies, décès dans les 15 ans, sans petits-enfants",
+  "dossier": {
+    "nomDossier": "Test 3", "dateSimulation": "2026-10-02", "nbParents": 2,
+    "parents": [{"nom": "Luc", "age": 59}, {"nom": "Anne", "age": 45}],
+    "enfants": [
+      {"id": "e1", "nom": "Hugo", "majeur": true, "part": 0.5},
+      {"id": "e2", "nom": "Inès", "majeur": true, "part": 0.3},
+      {"id": "e3", "nom": "Jules", "majeur": true, "part": 0.2}
+    ],
+    "petitsEnfants": [],
+    "donFamilial": false, "deces15ans": true,
+    "biens": [
+      {"designation": "Maison", "nature": "Immobilier", "valeur": 700000, "quotePartP1": null, "regime": "Résidence principale (20 %)", "aDonner": true, "montantDonne": null, "beneficiaire": "Enfants", "montantPE": null},
+      {"designation": "Société", "nature": "Titres / parts sociales", "valeur": 2500000, "quotePartP1": 0.8, "regime": "Dutreil (75 %)", "aDonner": true, "montantDonne": null, "beneficiaire": "Enfants", "montantPE": null},
+      {"designation": "Épargne", "nature": "Liquidités", "valeur": 400000, "quotePartP1": 0.5, "regime": "Aucun", "aDonner": false, "montantDonne": null, "beneficiaire": "Enfants", "montantPE": null}
+    ],
+    "anterieures": [
+      {"date": "2016-01-20", "montant": 60000, "donateur": 2, "beneficiaire": "e3"}
+    ]
+  }
+}

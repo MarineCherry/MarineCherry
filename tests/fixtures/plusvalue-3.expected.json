@@ -1,0 +1,41 @@
+{
+ "origines": [
+  {
+   "prixCessionBrut": 980000,
+   "fraisCession": 0,
+   "prixCessionNet": 980000,
+   "prixAcquisition": 410000,
+   "fraisAcquisition": 30750,
+   "annees": 12,
+   "travaux": 0,
+   "prixMajore": 440750,
+   "pvBrute": 539250,
+   "abatIR": 0.42,
+   "abatPS": 0.1155,
+   "pvIR": 312765,
+   "pvPS": 476966.625,
+   "regle": "Achat : prix + forfait 7.5 % ; 12 ans de détention : abattement IR 42 %, PS 11.55 %",
+   "controle": "OK"
+  }
+ ],
+ "vendeurs": [
+  {
+   "prixCessionBrut": 980000,
+   "fraisCession": 0,
+   "prixCessionNet": 980000,
+   "prixAcquisition": 410000,
+   "fraisAcquisition": 30750,
+   "travaux": 0,
+   "prixMajore": 440750,
+   "pvBrute": 539250,
+   "pvImposableIR": 312765,
+   "pvImposablePS": 476967,
+   "impotRevenu": 59425,
+   "surtaxe": 18766,
+   "prelevementsSociaux": 82038,
+   "total": 160229
+  }
+ ],
+ "controleRepartition": "OK : les droits saisis couvrent 100 % du prix de vente",
+ "controleLignes": "OK"
+}
