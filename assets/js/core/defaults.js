@@ -60,5 +60,13 @@
       ],
       natures: ['Immobilier', 'Titres / parts sociales', 'Liquidités', 'Autre'],
     },
+
+    // Origine de propriété : options de rédaction et trames modifiées par l'utilisateur
+    // (les trames d'origine sont dans assets/js/apps/origine/trames.js).
+    origine: {
+      datesEnLettres: false,
+      prixEnLettres: true,
+      trames: {},
+    },
   };
 });

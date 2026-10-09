@@ -4,6 +4,6 @@
   "private": true,
   "description": "Outils de calcul pour l'étude notariale",
   "scripts": {
-    "test": "node --test tests/engines.test.js"
+    "test": "node --test tests/engines.test.js tests/origine.test.js"
   }
 }

@@ -21,8 +21,9 @@
     { id: 'commun', title: 'Barème commun', sub: "Valeur de l'usufruit viager (art. 669 CGI), utilisée par tous les outils." },
     { id: 'plusValue', title: 'Plus-value immobilière', sub: 'Taux d\'imposition et forfaits.' },
     { id: 'succession', title: 'Succession & donation', sub: 'Abattements, barème en ligne directe et régimes particuliers.' },
+    { id: 'origine', title: 'Origine de propriété', sub: 'Présentation des dates et des prix ; trames de rédaction.' },
   ];
-  const ANCHOR = { 'plus-value': 'plusValue', succession: 'succession', commun: 'commun' };
+  const ANCHOR = { 'plus-value': 'plusValue', succession: 'succession', commun: 'commun', origine: 'origine' };
 
   function mount(container, arg) {
     let params = A.store.getParams();
@@ -115,7 +116,18 @@
         ui.button('Ajouter un régime', { icon: 'plus', variant: 'soft', small: true, onClick: () => { p.regimes.push({ nom: 'Nouveau régime', succession: 0, donation: 0 }); save('succession', true); } }));
     }
 
-    const builders = { commun: sectionCommun, plusValue: sectionPlusValue, succession: sectionSuccession };
+    function sectionOrigine() {
+      const p = params.origine;
+      const nb = Object.keys(p.trames || {}).length;
+      const choix = (cle, options) => ui.segmented({ value: cle === 'prixEnLettres' ? p[cle] !== false : !!p[cle], small: true, options, onChange: (v) => { p[cle] = v; save('origine'); } });
+      return h('div', { class: 'param-list' },
+        row('Dates', choix('datesEnLettres', [{ value: false, label: '15 mars 2010' }, { value: true, label: 'En lettres' }]), 'Présentation des dates dans le texte rédigé.'),
+        row('Prix', choix('prixEnLettres', [{ value: true, label: 'Lettres et chiffres' }, { value: false, label: 'Chiffres' }]), 'Ex. : CENT MILLE EUROS (100 000,00 EUR).'),
+        row('Trames de rédaction', h('a', { class: 'btn btn-soft btn-sm', href: '#/origine' }, 'Modifier les trames'),
+          nb ? nb + ' trame(s) personnalisée(s) sur ce poste ; elles sont incluses dans l\'export.' : 'Trames d\'origine (aucune modification).'));
+    }
+
+    const builders = { commun: sectionCommun, plusValue: sectionPlusValue, succession: sectionSuccession, origine: sectionOrigine };
 
     async function importer() {
       try {
