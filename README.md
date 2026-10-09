@@ -23,7 +23,7 @@ Aucune installation : ouvrir **`index.html`** dans Chrome, Edge ou Firefox (doub
 ### Origine de propriété
 
 1. **Chaîne de propriété** : une fiche par acte, de la plus récente à la plus ancienne (type d'acte, parties, date, notaire, publication, état hypothécaire, particularités).
-2. **Personnes** : l'état civil de chaque personne n'est saisi qu'une fois ; il est rédigé en entier à la première mention, puis la personne est rappelée « susnommée ».
+2. **Personnes** : l'état civil de chaque personne n'est saisi qu'une fois ; il est rédigé en entier à la première mention, puis la personne est rappelée « susnommée ». Le propriétaire actuel (bénéficiaire de l'origine immédiate), déjà identifié en tête d'acte, est désigné « le VENDEUR » ; le bien est désigné « le BIEN ».
 3. **Texte rédigé** : « Copier pour Word » puis Ctrl + V dans l'acte. Les éléments non saisis sont surlignés à l'écran et apparaissent « ...... » dans Word.
 4. **Trames** : chaque trame se modifie librement (variables `{date}`, conditions `{si …}{sinon}{fin}`, accords `{accord acquereurs : il | elle | ils | elles}`), avec aperçu immédiat. Les trames personnalisées sont enregistrées sur le poste et partagées via Paramètres → Exporter / Importer.
 

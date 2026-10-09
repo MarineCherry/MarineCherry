@@ -152,6 +152,10 @@
   const majuscules = (s) => (txt(s) ? s.trim().toLocaleUpperCase('fr-FR') : null);
   const nomCourt = (p) => [CIVILITES[p.civilite] || 'Monsieur', txt(p.prenoms), majuscules(p.nom)].filter(Boolean).join(' ');
   const groupe = (personnes) => ({ n: personnes.length, f: personnes.length > 0 && personnes.every((p) => p.civilite === 'Mme') });
+  // Le vendeur aux présentes (propriétaire actuel) est désigné « le VENDEUR » : accord au masculin singulier.
+  const estVendeur = (p, ctx) => ctx.vendeurs.has(p.id);
+  const tousVendeurs = (pers, ctx) => pers.length > 0 && pers.every((p) => estVendeur(p, ctx));
+  const groupeCtx = (pers, ctx) => (tousVendeurs(pers, ctx) ? { n: 1, f: false } : groupe(pers));
 
   function dateTexte(iso, ctx) {
     return L.parseDate(iso) ? L.date(iso, ctx.options.datesEnLettres) : null;
@@ -181,6 +185,7 @@
   // Désignation d'une personne : état civil complet à la première mention, rappel ensuite.
   function designer(p, ctx, forcerRappel) {
     const g = { personne: groupe([p]) };
+    if (estVendeur(p, ctx)) return rendreTrame('commun:vendeur_nomme', varsPersonne(p, ctx), g, ctx);
     if (forcerRappel || p.dejaDesigne || ctx.mentionnees.has(p.id)) return rendreTrame('commun:personne_rappel', varsPersonne(p, ctx), g, ctx);
     ctx.mentionnees.add(p.id);
     return rendreTrame('commun:personne', varsPersonne(p, ctx), g, ctx);
@@ -200,6 +205,7 @@
     const pers = (ids || []).map((id) => ctx.personnes[id]).filter(Boolean);
     if (!pers.length) return null;
     return lazy(true, () => {
+      if (tousVendeurs(pers, ctx)) return rendreTrame('commun:vendeur', {}, {}, ctx);
       const dejaTous = pers.length > 1 && pers.every((p) => p.dejaDesigne || ctx.mentionnees.has(p.id));
       if (dejaTous) {
         const g = groupe(pers);
@@ -210,7 +216,9 @@
   }
   const nomsVar = (ids, ctx) => {
     const pers = (ids || []).map((id) => ctx.personnes[id]).filter(Boolean);
-    return pers.length ? liste(pers.map(nomCourt)).map((x) => (typeof x === 'string' ? { t: x } : x)) : null;
+    if (!pers.length) return null;
+    if (tousVendeurs(pers, ctx)) return lazy(true, () => rendreTrame('commun:vendeur', {}, {}, ctx));
+    return liste(pers.map(nomCourt));
   };
   const personnesDe = (ids, ctx) => (ids || []).map((id) => ctx.personnes[id]).filter(Boolean);
 
@@ -604,8 +612,8 @@
     };
     Object.assign(vars, type.vars(a, ctx));
     const groupes = Object.assign({
-      acquereurs: groupe(personnesDe(a.acquereurs, ctx)),
-      cedants: groupe(personnesDe(a.cedants, ctx)),
+      acquereurs: groupeCtx(personnesDe(a.acquereurs, ctx), ctx),
+      cedants: groupeCtx(personnesDe(a.cedants, ctx), ctx),
     }, type.groupes ? type.groupes(a, ctx) : {});
     return { vars, groupes };
   }
@@ -621,6 +629,8 @@
       trames: Object.assign({}, (options && options.trames) || {}),
       options: options || {},
       personnes,
+      // Bénéficiaires de l'origine immédiate = vendeur aux présentes (sauf option contraire).
+      vendeurs: new Set(dossier.vendeurDirect !== false && dossier.actes && dossier.actes[0] ? dossier.actes[0].acquereurs || [] : []),
       mentionnees: new Set(),
       erreurs: new Set(),
       inconnues: new Set(),
@@ -641,7 +651,12 @@
       .replace(/ +([,.])/g, '$1')
       .replace(/,(\s*,)+/g, ',')
       .replace(/\.(\s*\.)+(?!\.)/g, '.')
-      .replace(/ *\n */g, '\n');
+      .replace(/ *\n */g, '\n')
+      // « à le VENDEUR » → « au VENDEUR » (termes définis en majuscules).
+      .replace(/(^|[\s(])à les (?=[A-ZÉÈ]{2,})/g, '$1aux ')
+      .replace(/(^|[\s(])à le (?=[A-ZÉÈ]{2,})/g, '$1au ')
+      .replace(/(^|[\s(])([dD])e les (?=[A-ZÉÈ]{2,})/g, '$1$2es ')
+      .replace(/(^|[\s(])([dD])e le (?=[A-ZÉÈ]{2,})/g, '$1$2u ');
     const paragraphes = s.split(/\n{2,}/).map((p) => p.trim()).filter((p) => p.replace(/[\s,.;:\-]/g, '') !== '');
     return {
       manquants,
@@ -788,6 +803,7 @@
     ouverture_immediate: 'Ouverture — origine immédiate', ouverture_anterieure: 'Ouverture — origine antérieure',
     publication: 'Mention de publication', publication_ancienne: 'Mention de transcription (avant 1956)',
     personne: 'Désignation d\'une personne (état civil complet)', personne_rappel: 'Rappel d\'une personne déjà désignée',
+    vendeur: 'Vendeur aux présentes', vendeur_nomme: 'Vendeur aux présentes, cité parmi d\'autres',
     notaire: 'Désignation du notaire',
   };
   function nomTrame(id) {
@@ -802,6 +818,8 @@
   };
   DOC_FRAGMENTS.publication_ancienne = DOC_FRAGMENTS.publication;
   DOC_FRAGMENTS.personne_rappel = DOC_FRAGMENTS.personne;
+  DOC_FRAGMENTS.vendeur_nomme = DOC_FRAGMENTS.personne;
+  DOC_FRAGMENTS.vendeur = [];
 
   // Variables utilisables dans une trame, pour l'aide de l'éditeur.
   function documentation(idTrame) {

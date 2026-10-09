@@ -42,17 +42,30 @@ test('Exemple : rédaction complète, rappel « susnommé », contrôles', () =>
   // État civil complet une seule fois, puis rappel.
   assert.strictEqual(t.split('né à MÂCON (71000) le 12 janvier 1950').length - 1, 1);
   assert.match(t, /appartenait à Monsieur Paul BERNARD, susnommé, pour l'avoir recueilli/);
-  assert.match(t, /Madame Claire MARTIN, épouse DUPONT, professeure, demeurant à LYON \(69003\), 12 rue Paul Bert, née à GRENOBLE/);
+  assert.match(t, /^ORIGINE DE PROPRIÉTÉ\n\nLe BIEN objet des présentes appartient au VENDEUR, au moyen de l'acquisition qu'il en a faite de Monsieur Paul BERNARD, retraité/);
+  assert.doesNotMatch(t, /Jean Michel DUPONT/);
   assert.match(t, /DEUX CENT QUATRE-VINGT-CINQ MILLE EUROS/);
   assert.match(t, /la donatrice étant décédée à CLUNY \(71250\), le 2 novembre 1995/);
   assert.ok(r.controles.every((c) => c.ok));
 });
 
-test('Personne déjà désignée dans l\'acte : simple rappel', () => {
+test('Vendeur aux présentes désactivé : état civil complet ou rappel', () => {
   const d = E.exemple();
+  d.vendeurDirect = false;
+  let t = texteDe(E.rediger(d, OPTS));
+  assert.match(t, /Madame Claire MARTIN, épouse DUPONT, professeure, demeurant à LYON \(69003\), 12 rue Paul Bert, née à GRENOBLE/);
   d.personnes.forEach((p) => { if (p.id === 'ex1') p.dejaDesigne = true; });
-  const t = texteDe(E.rediger(d, OPTS));
+  t = texteDe(E.rediger(d, OPTS));
   assert.match(t, /appartient à Monsieur Jean Michel DUPONT, susnommé et Madame Claire MARTIN, épouse DUPONT/);
+});
+
+test('Le VENDEUR : accord au singulier, quittance et vendeur cité parmi d\'autres', () => {
+  const d = E.exemple();
+  Object.assign(d.actes[0], { paiement: 'terme', prixComptant: 200000, quittance: true });
+  assert.match(texteDe(E.rediger(d, OPTS)), /Le VENDEUR s'est libéré du solde de son prix d'acquisition/);
+  // Un seul des deux acquéreurs de l'origine immédiate figure dans une autre liste.
+  d.actes[1].acquereurs = ['ex3', 'ex1'];
+  assert.match(texteDe(E.rediger(d, OPTS)), /Monsieur Jean Michel DUPONT, VENDEUR aux présentes/);
 });
 
 test('Origine trentenaire non atteinte et rupture de la chaîne', () => {
@@ -84,7 +97,7 @@ test('Toutes les trames d\'actes se rédigent sans erreur', () => {
 test('Trame personnalisée, conditions et erreurs de syntaxe', () => {
   const d = E.exemple();
   const r = E.rediger(d, Object.assign({ trames: { 'commun:ouverture_immediate': 'Le BIEN appartient' } }, OPTS));
-  assert.match(texteDe(r), /^ORIGINE DE PROPRIÉTÉ\n\nLe BIEN appartient à Monsieur Jean Michel DUPONT/);
+  assert.match(texteDe(r), /^ORIGINE DE PROPRIÉTÉ\n\nLe BIEN appartient au VENDEUR/);
   const r2 = E.rediger(d, Object.assign({ trames: { 'acte:vente': '{si paiement = terme}À terme{sinon}Comptant{fin} {inconnue}' } }, OPTS));
   assert.match(texteDe(r2), /Comptant \{inconnue\}/);
   assert.deepStrictEqual(r2.inconnues, ['inconnue']);

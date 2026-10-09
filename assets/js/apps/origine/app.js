@@ -18,9 +18,10 @@
     gradient: 'linear-gradient(150deg, #2b6555 0%, #4f9a82 100%)',
   };
 
-  const empty = () => ({ reference: '', personnes: [], actes: [E.nouvelActe('vente')] });
+  const empty = () => ({ reference: '', vendeurDirect: true, personnes: [], actes: [E.nouvelActe('vente')] });
   const isEmpty = (s) => !s.reference && !s.personnes.length && s.actes.every((a) => !a.date && !a.acquereurs.length);
   function normalize(s) {
+    if (s.vendeurDirect === undefined) s.vendeurDirect = true;
     s.personnes = (s.personnes || []).map((p) => E.nouvellePersonne(p));
     s.actes = (s.actes || []).map((a) => E.completerActe(Object.assign(E.nouvelActe(a.type), a)));
     return s;
@@ -184,6 +185,8 @@
     return h('div', { class: 'stack' },
       ui.card('Le dossier', h('div', { class: 'grid-2' },
         ui.field('Référence du dossier', ctx.text(s, 'reference', { placeholder: 'ex. Vente DUPONT / MARTIN' })),
+        ui.field('Bénéficiaires de l\'origine immédiate désignés « le VENDEUR »', ctx.yesNo(s, 'vendeurDirect', { structural: true }),
+          { help: 'Oui : le propriétaire actuel, déjà identifié en tête d\'acte, n\'est pas redésigné (« appartient au VENDEUR »).' }),
         isEmpty(s) ? h('div', { class: 'suggest' },
           h('div', null, h('div', { class: 'suggest-label' }, 'Découvrir'), h('div', { class: 'suggest-value' }, 'Charger un dossier d\'exemple fictif')),
           ui.button('Charger l\'exemple', { small: true, variant: 'soft', onClick: () => { Object.assign(s, normalize(E.exemple())); ctx.render(); ctx.changed(); } })) : null)),
@@ -218,7 +221,10 @@
     const s = ctx.state;
     const { field } = ui;
     const r = roles(s, p.id);
-    return ui.card(p.nom || p.prenoms ? E.nomCourt(p) : 'Nouvelle personne', h('div', { class: 'stack-sm' },
+    const vendeur = s.vendeurDirect !== false && s.actes[0] && s.actes[0].acquereurs.includes(p.id);
+    const titre = h('span', null, p.nom || p.prenoms ? E.nomCourt(p) : 'Nouvelle personne', vendeur ? h('span', { class: 'tag tag-accent' }, 'le VENDEUR') : null);
+    return ui.card(titre, h('div', { class: 'stack-sm' },
+      vendeur ? ui.note('Vendeur aux présentes : désigné « le VENDEUR » dans l\'origine, sans reprise de son état civil (déjà donné en tête d\'acte).') : null,
       h('div', { class: 'grid-3' },
         field('Civilité', ctx.segmented(p, 'civilite', [{ value: 'M', label: 'Monsieur' }, { value: 'Mme', label: 'Madame' }], { small: true, structural: true })),
         field('Prénoms', ctx.text(p, 'prenoms', { placeholder: 'dans l\'ordre de l\'état civil' })),
