@@ -150,8 +150,11 @@
   const CIVILITES = { M: 'Monsieur', Mme: 'Madame' };
   const txt = (s) => (typeof s === 'string' && s.trim() ? s.trim() : null);
   const majuscules = (s) => (txt(s) ? s.trim().toLocaleUpperCase('fr-FR') : null);
-  const nomCourt = (p) => [CIVILITES[p.civilite] || 'Monsieur', txt(p.prenoms), majuscules(p.nom)].filter(Boolean).join(' ');
-  const groupe = (personnes) => ({ n: personnes.length, f: personnes.length > 0 && personnes.every((p) => p.civilite === 'Mme') });
+  // Personne morale (société, SCI…) : désignée « la société X », accord au féminin.
+  const nomCourt = (p) => (p.morale ? 'la société ' + (majuscules(p.nom) || '') : [CIVILITES[p.civilite] || 'Monsieur', txt(p.prenoms), majuscules(p.nom)].filter(Boolean).join(' '));
+  const feminin = (p) => p.morale || p.civilite === 'Mme';
+  const groupe = (personnes) => ({ n: personnes.length, f: personnes.length > 0 && personnes.every(feminin) });
+  const formatSiren = (s) => (s || '').replace(/\D/g, '').replace(/^(\d{3})(\d{3})(\d{3})$/, '$1 $2 $3');
   // Le vendeur aux présentes (propriétaire actuel) est désigné « le VENDEUR » : accord au masculin singulier.
   const estVendeur = (p, ctx) => ctx.vendeurs.has(p.id);
   const tousVendeurs = (pers, ctx) => pers.length > 0 && pers.every((p) => estVendeur(p, ctx));
@@ -167,6 +170,12 @@
   }
 
   function varsPersonne(p, ctx) {
+    if (p.morale) {
+      return {
+        civilite: 'la société', prenoms: '', nom: majuscules(p.nom), denomination: majuscules(p.nom),
+        siege: txt(p.domicile), siren: formatSiren(p.siren) || null, forme: txt(p.profession) || '',
+      };
+    }
     return {
       civilite: CIVILITES[p.civilite] || 'Monsieur',
       prenoms: txt(p.prenoms),
@@ -186,6 +195,10 @@
   function designer(p, ctx, forcerRappel) {
     const g = { personne: groupe([p]) };
     if (estVendeur(p, ctx)) return rendreTrame('commun:vendeur_nomme', varsPersonne(p, ctx), g, ctx);
+    if (p.morale && !(forcerRappel || p.dejaDesigne || ctx.mentionnees.has(p.id))) {
+      ctx.mentionnees.add(p.id);
+      return rendreTrame('commun:societe', varsPersonne(p, ctx), g, ctx);
+    }
     if (forcerRappel || p.dejaDesigne || ctx.mentionnees.has(p.id)) return rendreTrame('commun:personne_rappel', varsPersonne(p, ctx), g, ctx);
     ctx.mentionnees.add(p.id);
     return rendreTrame('commun:personne', varsPersonne(p, ctx), g, ctx);
@@ -769,6 +782,7 @@
       id: uid('p'), civilite: 'M', prenoms: '', nom: '', nomUsage: '', profession: '', domicile: '',
       naissanceDate: '', naissanceLieu: '', situation: '', nationalite: '',
       decede: false, decesDate: '', decesLieu: '', decesDomicile: false, dejaDesigne: false,
+      morale: false, siren: '', importe: false,
     }, o || {});
   }
 
@@ -804,6 +818,7 @@
     publication: 'Mention de publication', publication_ancienne: 'Mention de transcription (avant 1956)',
     personne: 'Désignation d\'une personne (état civil complet)', personne_rappel: 'Rappel d\'une personne déjà désignée',
     vendeur: 'Vendeur aux présentes', vendeur_nomme: 'Vendeur aux présentes, cité parmi d\'autres',
+    societe: 'Désignation d\'une société (personne morale)',
     notaire: 'Désignation du notaire',
   };
   function nomTrame(id) {
@@ -820,6 +835,7 @@
   DOC_FRAGMENTS.personne_rappel = DOC_FRAGMENTS.personne;
   DOC_FRAGMENTS.vendeur_nomme = DOC_FRAGMENTS.personne;
   DOC_FRAGMENTS.vendeur = [];
+  DOC_FRAGMENTS.societe = [['denomination', 'dénomination'], ['forme', 'forme sociale (ex. société civile immobilière)'], ['siege', 'siège social'], ['siren', 'numéro SIREN']];
 
   // Variables utilisables dans une trame, pour l'aide de l'éditeur.
   function documentation(idTrame) {

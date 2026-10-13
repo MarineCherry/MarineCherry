@@ -160,6 +160,7 @@
       }));
 
     return ui.card(h('span', null, 'Origine n° ' + (i + 1), h('span', { class: 'card-title-sub' }, i === 0 ? ' · immédiate' : ' · antérieure')), h('div', { class: 'stack-sm' },
+      a.importNotes ? h('details', { class: 'import-notes' }, h('summary', null, 'Relevé sur l\'état hypothécaire'), h('p', null, a.importNotes)) : null,
       ui.field("Type d'acte", ui.selectInput({
         value: a.type, options: E.TYPES_LISTE.map((x) => ({ value: x.id, label: x.libelle })),
         onChange: (v) => { a.type = v; E.completerActe(a); ctx.render(); ctx.changed(); },
@@ -190,6 +191,18 @@
         isEmpty(s) ? h('div', { class: 'suggest' },
           h('div', null, h('div', { class: 'suggest-label' }, 'Découvrir'), h('div', { class: 'suggest-value' }, 'Charger un dossier d\'exemple fictif')),
           ui.button('Charger l\'exemple', { small: true, variant: 'soft', onClick: () => { Object.assign(s, normalize(E.exemple())); ctx.render(); ctx.changed(); } })) : null)),
+      ui.card('Depuis un état hypothécaire', h('div', { class: 'import-line' },
+        h('p', { class: 'muted' }, 'Importez un état hors formalités (PDF de l\'ANF) : les formalités informatisées concernant le bien sont transformées en origines, les personnes sont créées. Les fiches manuscrites s\'affichent à côté du formulaire.'),
+        h('div', { class: 'card-actions' },
+          A.importEtat.courant() && A.importEtat.courant().analyse.pagesScannees.length
+            ? ui.button('Fiches scannées (' + A.importEtat.courant().analyse.pagesScannees.length + ')', { icon: 'file', variant: 'ghost', small: true, onClick: () => A.importEtat.ouvrirFiches() }) : null,
+          ui.button('Importer un état (PDF)', { icon: 'upload', variant: 'primary', small: true, onClick: () => A.importEtat.importer(ctx, (res, mode) => {
+            s.personnes.push(...res.personnes);
+            if (mode === 'remplacer') s.actes = res.actes;
+            else s.actes.push(...res.actes);
+            ctx.render();
+            ctx.changed();
+          }) })))),
       ui.note('Saisissez les origines de la plus récente à la plus ancienne, jusqu\'à remonter à plus de trente ans. Chaque personne n\'est saisie qu\'une fois : son état civil complet est donné à sa première mention, puis elle est rappelée « susnommée ».'),
       s.actes.map((a, i) => acteCard(ctx, a, i)),
       h('div', { class: 'add-row' }, ui.button('Ajouter une origine antérieure', {
@@ -217,15 +230,49 @@
     return out;
   }
 
+  function boutonSupprimer(ctx, p, i, r) {
+    const s = ctx.state;
+    return ui.button('Supprimer', { icon: 'trash', variant: 'ghost', small: true, onClick: async () => {
+      if (r.length && !(await ui.confirm('Supprimer cette personne ?', 'Elle sera retirée des origines où elle figure : ' + r.join(', ') + '.', 'Supprimer'))) return;
+      s.personnes.splice(i, 1);
+      s.actes.forEach((a) => {
+        ['acquereurs', 'cedants', 'defunts', 'autresDonataires'].forEach((k) => { if (Array.isArray(a[k])) a[k] = a[k].filter((x) => x !== p.id); });
+        if (a.predecede === p.id) a.predecede = '';
+      });
+      ctx.render();
+      ctx.changed();
+    } });
+  }
+
   function personneCard(ctx, p, i) {
     const s = ctx.state;
     const { field } = ui;
     const r = roles(s, p.id);
     const vendeur = s.vendeurDirect !== false && s.actes[0] && s.actes[0].acquereurs.includes(p.id);
-    const titre = h('span', null, p.nom || p.prenoms ? E.nomCourt(p) : 'Nouvelle personne', vendeur ? h('span', { class: 'tag tag-accent' }, 'le VENDEUR') : null);
+    const titre = h('span', null, p.nom || p.prenoms ? E.nomCourt(p) : 'Nouvelle personne',
+      vendeur ? h('span', { class: 'tag tag-accent' }, 'le VENDEUR') : null,
+      p.importe ? h('span', { class: 'tag tag-warn' }, 'importée — à compléter') : null);
+    const nature = field('Nature', ctx.segmented(p, 'morale', [{ value: false, label: 'Personne physique' }, { value: true, label: 'Société' }], { small: true, structural: true }));
+    if (p.morale) {
+      return ui.card(titre, h('div', { class: 'stack-sm' },
+        h('div', { class: 'grid-3' },
+          nature,
+          field('Dénomination', ctx.text(p, 'nom', { placeholder: 'ex. SCI DU BANAY' })),
+          field('Forme sociale', ctx.text(p, 'profession', { placeholder: 'ex. société civile immobilière' }), { optional: true }),
+          field('Siège social', ctx.text(p, 'domicile', { placeholder: 'ex. ORANGE (84100), 2 rue des Prés' }), { wide: true }),
+          field('Numéro SIREN', ctx.text(p, 'siren')),
+          field('Déjà désignée dans l\'acte en cours ?', ctx.yesNo(p, 'dejaDesigne'))),
+        h('div', { class: 'designation' }, h('span', { class: 'suggest-label' }, 'Désignation complète'),
+          ctx.live(() => h('p', null, paragraphe(E.designation(p, options(ctx.params()))))))), {
+        subtitle: r.length ? r.join(' · ') : 'Pas encore rattachée à une origine',
+        actions: boutonSupprimer(ctx, p, i, r),
+      });
+    }
     return ui.card(titre, h('div', { class: 'stack-sm' },
       vendeur ? ui.note('Vendeur aux présentes : désigné « le VENDEUR » dans l\'origine, sans reprise de son état civil (déjà donné en tête d\'acte).') : null,
       h('div', { class: 'grid-3' },
+        nature,
+        h('div'), h('div'),
         field('Civilité', ctx.segmented(p, 'civilite', [{ value: 'M', label: 'Monsieur' }, { value: 'Mme', label: 'Madame' }], { small: true, structural: true })),
         field('Prénoms', ctx.text(p, 'prenoms', { placeholder: 'dans l\'ordre de l\'état civil' })),
         field('Nom de naissance', ctx.text(p, 'nom')),
@@ -245,16 +292,7 @@
       h('div', { class: 'designation' }, h('span', { class: 'suggest-label' }, 'Désignation complète'),
         ctx.live(() => h('p', null, paragraphe(E.designation(p, options(ctx.params()))))))), {
       subtitle: r.length ? r.join(' · ') : 'Pas encore rattachée à une origine',
-      actions: ui.button('Supprimer', { icon: 'trash', variant: 'ghost', small: true, onClick: async () => {
-        if (r.length && !(await ui.confirm('Supprimer cette personne ?', 'Elle sera retirée des origines où elle figure : ' + r.join(', ') + '.', 'Supprimer'))) return;
-        s.personnes.splice(i, 1);
-        s.actes.forEach((a) => {
-          ['acquereurs', 'cedants', 'defunts', 'autresDonataires'].forEach((k) => { if (Array.isArray(a[k])) a[k] = a[k].filter((x) => x !== p.id); });
-          if (a.predecede === p.id) a.predecede = '';
-        });
-        ctx.render();
-        ctx.changed();
-      } }),
+      actions: boutonSupprimer(ctx, p, i, r),
     });
   }
 

@@ -116,6 +116,7 @@
     personne_rappel: '{civilite} {prenoms} {nom}, {accord personne : susnommé | susnommée | susnommés | susnommées}',
     vendeur: 'le VENDEUR',
     vendeur_nomme: '{civilite} {prenoms} {nom}, VENDEUR aux présentes',
+    societe: 'la société dénommée {denomination}{si forme}, {forme}{fin}, dont le siège est à {siege}, identifiée au SIREN sous le numéro {siren}',
     notaire: 'Me {notaire_nom}, notaire à {notaire_ville}',
   };
 
