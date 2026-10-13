@@ -21,7 +21,7 @@
    */
   function stackedBars(bars, series, opts) {
     const o = opts || {};
-    const W = 560, H = 280, L = 64, R = 16, T = 28, B = 46;
+    const W = 560, H = 290, L = 64, R = 16, T = 28, B = 56;
     const max = niceMax(Math.max(1, ...bars.map((b) => b.parts.reduce((a, x) => a + x, 0))));
     const y = (v) => T + (H - T - B) * (1 - v / max);
     const slot = (W - L - R) / bars.length;
@@ -40,7 +40,9 @@
       });
       return s('g', null, rects,
         s('text', { x: x + bw / 2, y: y(total) - 8, 'text-anchor': 'middle', class: ['chart-value', b.highlight ? 'chart-value-hl' : ''].join(' ') }, fmtEuro(total)),
-        s('text', { x: x + bw / 2, y: H - B + 20, 'text-anchor': 'middle', class: ['chart-label', b.highlight ? 'chart-label-hl' : ''].join(' ') }, b.label));
+        // Libellé sur deux lignes (« C » puis « Nue-propriété ») pour éviter les chevauchements.
+        s('text', { x: x + bw / 2, y: H - B + 18, 'text-anchor': 'middle', class: ['chart-label', b.highlight ? 'chart-label-hl' : ''].join(' ') },
+          b.label.split(' · ').map((part, k) => s('tspan', { x: x + bw / 2, dy: k ? 14 : 0, class: k ? 'chart-label-sub' : null }, part))));
     });
     return h('figure', { class: 'chart' },
       o.title ? h('figcaption', null, o.title) : null,

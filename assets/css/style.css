@@ -465,6 +465,7 @@ input[type='date'].input { padding-right: 8px; }
 .chart-value-hl { fill: var(--good); font-weight: 700; }
 .chart-label { font-size: 12.5px; fill: var(--ink-2); font-family: var(--font); }
 .chart-label-hl { fill: var(--good); font-weight: 700; }
+.chart-label-sub { font-size: 11px; font-weight: 500; }
 .donut-wrap { display: flex; align-items: center; gap: 16px; }
 .donut-wrap svg { width: 170px; flex: none; }
 .donut-total { font-family: var(--serif); font-size: 22px; font-weight: 600; fill: var(--ink); }
@@ -472,7 +473,8 @@ input[type='date'].input { padding-right: 8px; }
 .legend { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--ink-2); }
 .legend-v { flex-direction: column; margin: 0; flex: 1; min-width: 0; }
 .legend li { display: flex; align-items: center; gap: 7px; }
-.legend-v li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px; }
+.legend-v li { display: grid; grid-template-columns: 10px minmax(0, 1fr); column-gap: 8px; row-gap: 1px; align-items: center; }
+.legend-v li strong { grid-column: 2; margin-left: 0; }
 .legend strong { margin-left: auto; white-space: nowrap; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
 .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
 .resume { padding: 18px 20px; border-radius: 12px; background: var(--accent-soft); }
@@ -487,6 +489,30 @@ input[type='date'].input { padding-right: 8px; }
 .param-help { font-size: 12.5px; color: var(--ink-3); }
 .param-sub { font-size: 14px; color: var(--ink-2); margin-top: 22px !important; }
 .params-body .table td > .affix, .params-body .table td > .input { max-width: 220px; }
+
+
+/* ---------- Succession : branches, donations, couleurs des hypothèses ---------- */
+.row-pe { grid-template-columns: 26px minmax(160px, 1.4fr) minmax(150px, 1fr) auto 32px; }
+.pe-donateur { padding: 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); }
+.cell-2 { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; }
+.branches { display: grid; grid-template-columns: 1fr; gap: 18px; }
+.branche h4 { font-family: var(--serif); font-size: 15px; margin-bottom: 8px; }
+.branche-P1 { border-top: 3px solid var(--primary-2); }
+.branche-P2 { border-top: 3px solid #8c3b4a; }
+.branche-commun { border-top: 3px solid var(--accent); }
+.synthese-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.table .col-don { background: rgba(176, 138, 79, 0.07); }
+.table .col-succ { background: rgba(44, 79, 134, 0.06); }
+.hyp-B .table .col-succ, .hyp-C .table .col-succ, .hyp-D .table .col-succ { background: rgba(47, 143, 131, 0.09); }
+.table .group-res { color: #2f8f83; }
+.table tr.row-pe td { color: var(--ink-2); font-style: italic; }
+.txt-res { color: #2f8f83; font-weight: 600; }
+.txt-succ { color: var(--primary-2); font-weight: 600; }
+.stat-don { background: rgba(176, 138, 79, 0.1); border-color: rgba(176, 138, 79, 0.3); }
+.stat-res { background: rgba(47, 143, 131, 0.1); border-color: rgba(47, 143, 131, 0.3); }
+.stat-res .stat-value { color: #237268; }
+@media (max-width: 1180px) { .branches { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .row-pe { grid-template-columns: 26px 1fr 1fr; } }
 
 /* ---------- Origine de propriété ---------- */
 .form-sub { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); font-weight: 700; margin-top: 6px; }
@@ -678,5 +704,47 @@ body.avec-fiches .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .chart { padding: 8px; }
   .donut-wrap svg { width: 120px; }
   .resume { break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .chart, .stat, .badge, .table tr.row-best td, .table tr.strong td, .swatch { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .chart, .stat, .badge, .table tr.row-best td, .table tr.strong td, .swatch, .table .col-don, .table .col-succ { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .branches { grid-template-columns: 1fr; gap: 8px; }
+  .synthese-actions { display: none; }
 }
+
+/* Mise en page du PDF enregistré directement (mêmes règles que l'impression). */
+.pdf-mode { font-size: 10pt; color: #111; }
+.pdf-mode .print-doc { color: #111; }
+.pdf-mode .print-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; padding-bottom: 10px; border-bottom: 2px solid var(--accent); margin-bottom: 16px; }
+.pdf-mode .print-brand { font-size: 8pt; text-transform: uppercase; letter-spacing: 0.16em; color: var(--accent); font-weight: 700; }
+.pdf-mode .print-head h1 { font-family: var(--serif); font-size: 20pt; font-weight: 600; margin-top: 2px; }
+.pdf-mode .print-sub { font-size: 11pt; color: #444; margin-top: 2px; }
+.pdf-mode .print-meta { text-align: right; font-size: 9pt; }
+.pdf-mode .print-meta .kv { display: block; }
+.pdf-mode .print-meta .kv span { color: #666; margin-right: 6px; }
+.pdf-mode .print-doc h2 { font-family: var(--serif); font-size: 13pt; margin: 18px 0 8px; break-after: avoid; }
+.pdf-mode .print-kv { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; font-size: 9.5pt; }
+.pdf-mode .print-kv .kv { display: flex; justify-content: space-between; border-bottom: 1px dotted #ccc; padding: 3px 0; }
+.pdf-mode .print-kv .kv span { color: #555; }
+.pdf-mode .print-checks { margin-top: 8px; }
+.pdf-mode .print-small { margin-top: 8px; font-size: 8pt; color: #555; white-space: pre-line; }
+.pdf-mode .print-foot { margin-top: 22px; padding-top: 8px; border-top: 1px solid #ccc; font-size: 8pt; color: #666; }
+.pdf-mode .table-wrap { overflow: visible; border: 1px solid #ccc; border-radius: 6px; break-inside: avoid; margin-top: 8px; }
+.pdf-mode .table { font-size: 8.5pt; min-width: 0 !important; }
+.pdf-mode .table th, .pdf-mode .table td { padding: 4px 6px; }
+.pdf-mode .table thead th { font-size: 7.5pt; white-space: normal; }
+.pdf-mode .table .row-head { white-space: normal; }
+.pdf-mode .table tr.strong td { font-size: 9pt; }
+.pdf-mode .badge { padding: 2px 8px; font-size: 8pt; }
+.pdf-mode .redaction { font-size: 11.5pt; max-width: none; }
+.pdf-mode .synthese > * + * { margin-top: 10px; }
+.pdf-mode .synthese-head h2 { font-size: 18pt; }
+.pdf-mode .section-title { font-size: 12pt; margin-top: 14px !important; break-after: avoid; }
+.pdf-mode .kpis, .pdf-mode .bilan { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; break-inside: avoid; }
+.pdf-mode .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pdf-mode .stat { padding: 8px 10px; }
+.pdf-mode .stat-value { font-size: 13pt; }
+.pdf-mode .stat-strong { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pdf-mode .charts { grid-template-columns: 1.3fr 1fr; gap: 10px; break-inside: avoid; }
+.pdf-mode .chart { padding: 8px; }
+.pdf-mode .donut-wrap svg { width: 120px; }
+.pdf-mode .resume { break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pdf-mode .chart, .pdf-mode .stat, .pdf-mode .badge, .pdf-mode .table tr.row-best td, .pdf-mode .table tr.strong td, .pdf-mode .swatch { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pdf-mode .branches { grid-template-columns: 1fr; gap: 8px; }

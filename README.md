@@ -5,7 +5,7 @@ Boîte à outils de calcul pour l'étude notariale. Un écran d'accueil façon �
 | Outil | Rôle |
 | --- | --- |
 | **Plus-value immobilière** | Plus-value des particuliers : origines de propriété multiples, démembrement, terrain bâti, forfaits, abattements, surtaxe, récapitulatif par vendeur. |
-| **Succession & donation** | Comparatif des droits : A · succession sans donation, B · donation en pleine propriété, C · donation en nue-propriété. Petits-enfants, Dutreil, résidence principale, don familial, rappel fiscal, synthèse client avec graphiques. |
+| **Succession & donation** | Patrimoine par branche (biens propres de chaque parent, biens communs), donations envisagées ligne par ligne (qui donne, quel bien, quel montant, à qui). Comparatif parent par parent : A · succession sans donation, B · pleine propriété aux enfants, C · nue-propriété aux enfants, D · nue-propriété aux enfants et petits-enfants (montant égal par branche, montant optimal calculé). Synthèse client avec graphiques, enregistrable en PDF. |
 | **Origine de propriété** | Saisie de la chaîne de propriété (11 types d'actes) et des personnes, rédaction automatique à partir de trames modifiables, rappel « susnommé » des personnes déjà désignées, contrôle de l'origine trentenaire, copie vers Word. |
 | **Paramètres** | Barème de l'usufruit (art. 669 CGI), taux, abattements, barème en ligne directe, régimes particuliers. |
 
@@ -16,7 +16,7 @@ Les calculs reprennent à l'identique les formules des classeurs Excel d'origine
 Aucune installation : ouvrir **`index.html`** dans Chrome, Edge ou Firefox (double-clic).
 
 - **Enregistrer** : télécharge le dossier dans un fichier `.json` sur le poste. **Ouvrir** permet de le reprendre plus tard.
-- **Imprimer / PDF** : ouvre la fenêtre d'impression ; choisir « Enregistrer au format PDF » pour obtenir un PDF.
+- **Imprimer / PDF** : ouvre la fenêtre d'impression ; choisir « Enregistrer au format PDF » pour obtenir un PDF. La synthèse succession s'enregistre aussi directement en PDF (html2canvas et jsPDF, `assets/vendor/pdf`, licence MIT).
 - Le dossier en cours est aussi conservé automatiquement dans le navigateur : on le retrouve en revenant dans l'outil.
 - **Paramètres** : les modifications sont enregistrées sur le poste et s'appliquent à tous les dossiers. « Exporter » / « Importer » permet de partager les mêmes paramètres entre collègues.
 
