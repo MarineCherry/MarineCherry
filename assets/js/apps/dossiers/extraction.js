@@ -35,9 +35,9 @@
   // « 12 rue des Lilas 84 100 Orange » → { adresse, codePostal, commune }
   function adresse(s) {
     const t = propre(s);
-    const m = /^(.*?)[,\s]+(\d{2})\s?(\d{3})\s+([A-Za-zÀ-ÿ' -]+?)(?:\s*cedex.*)?$/i.exec(t);
+    const m = /^(.*?)[,\s–-]+(\d{2})\s?(\d{3})\s+([A-Za-zÀ-ÿ' -]+?)(?:\s*cedex.*)?$/i.exec(t);
     if (!m) return { adresse: t, codePostal: '', commune: '' };
-    return { adresse: m[1].replace(/[,\s]+$/, ''), codePostal: m[2] + m[3], commune: m[4].trim() };
+    return { adresse: m[1].replace(/[,\s–-]+$/, ''), codePostal: m[2] + m[3], commune: m[4].trim() };
   }
 
   /* ---------- Mail au format .eml (MIME) ---------- */
@@ -143,7 +143,7 @@
   // Libellés « clé : valeur » reconnus (sans accents, en minuscules).
   const CLES = [
     ['adresseBien', /^adresse (du )?bien( vendu)?$/],
-    ['adresse', /^adresse( postale)?$|^domicile$|^demeurant$/],
+    ['adresse', /^adresse( postale)?$|^domicile$|^(demeurant|domicilie\(?e?\)?|domiciliee)( au| a| a l.adresse)?$/],
     ['telephone', /^(tel|telephone|portable|mobile)\.?$/],
     ['email', /^(e-?mail|courriel|mail)$/],
     ['profession', /^profession$/],
@@ -151,7 +151,8 @@
     ['situation', /^(situation (familiale|matrimoniale)|regime matrimonial)$/],
     ['typeBien', /^(type|nature)( de bien| du bien)?$/],
     ['cadastre', /^(cadastre|cadastree?|references? cadastrales?|parcelles?)$/],
-    ['prix', /^prix( de vente| net vendeur| d.?achat| propose| offert)?$/],
+    ['prixNet', /^prix net( vendeur)?$|^net vendeur$/],
+    ['prix', /^prix( de vente| d.?achat| propose| offert| fai| frais d.?agence inclus)?$/],
     ['honoraires', /^(honoraires|commission|frais d.?agence)$/],
     ['depot', /^(depot de garantie|sequestre|acompte)$/],
     ['financement', /^(financement|mode de financement|pret|credit)$/],
@@ -175,6 +176,19 @@
     const civ = m ? (/^(madame|mme|mademoiselle|mlle)/i.test(m[1]) ? 'Mme' : 'M.') : '';
     return { civilite: civ, nom: propre(l.replace(CIVILITE, '')).replace(/[,:;.]+$/, '') };
   }
+  const estTelephone = (l) => /^[\d\s.+()-]{9,20}$/.test(l) && /^(0[1-9]|33[1-9])\d{7,9}$/.test(l.replace(/\D/g, '').replace(/^0033/, '33'));
+  const EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/;
+  // « Fabienne MEURGEY » : nom en capitales, sans chiffre ni deux-points → « MEURGEY Fabienne ».
+  function nomSansCivilite(l) {
+    if (/[:@\d]/.test(l) || l.length > 60) return null;
+    const mots = l.replace(/[,;.]+$/, '').split(/\s+/);
+    if (mots.length < 2 || mots.length > 6) return null;
+    const maj = mots.filter((m) => m.length > 1 && m === m.toUpperCase() && /[A-ZÀ-Ý]/.test(m));
+    if (!maj.length) return null;
+    const autres = mots.filter((m) => !maj.includes(m));
+    if (autres.some((m) => !/^[A-ZÀ-Ý][a-zà-ÿ'-]+$/.test(m))) return null;
+    return maj.concat(autres).join(' ');
+  }
   const SOCIETE = /(^|\s)(SCI|SARL|SAS|SASU|EURL|SA|SNC|SCP|SCEA|GFA|SELARL|Soci[ée]t[ée]|SOCI[ÉE]T[ÉE])(\s|$)/;
 
   function extraire(doc) {
@@ -189,17 +203,54 @@
     let rubrique = null;
     let courant = null;
     const valeurs = {};
-    const fin = /^(bien cordialement|cordialement|bien [àa] vous|sinc[eè]res salutations|--)/i;
-    for (let i = 0; i < lignes.length; i++) {
-      const l = lignes[i];
+    const fin = /^(bien cordialement|cordialement|bien [àa] vous|sinc[eè]res salutations|respectueusement|salutations distingu[ée]es|--)/i;
+    // Mail transféré : l'expéditeur d'origine est dans le corps (« De : … »).
+    let debut = 0;
+    let expediteurOrigine = '';
+    for (let i = 0; i < Math.min(lignes.length, 60); i++) {
+      const m = /^(de|from)\s*:\s*(.+)$/i.exec(lignes[i]);
+      if (m && lignes.slice(i + 1, i + 6).some((x) => /^(envoy[ée]|sent|date|[àa]|to|objet|subject)\s*:/i.test(x))) {
+        expediteurOrigine = m[2];
+        let j = i + 1;
+        while (j < lignes.length && (/^(envoy[ée]|sent|date|[àa]|to|cc|objet|subject|importance)\s*:/i.test(lignes[j]) || !lignes[j])) j++;
+        debut = j;
+        break;
+      }
+    }
+    for (let i = debut; i < lignes.length; i++) {
+      const l = lignes[i].replace(/^[-–•*·]\s*/, '');
       if (!l) continue;
       if (fin.test(l)) {
-        // Signature : la ligne suivante non vide est le nom de l'expéditeur.
+        // Signature : nom de l'expéditeur, puis (après « -- ») le nom de l'agence et ses coordonnées.
         const sig = lignes.slice(i + 1).filter(Boolean);
-        if (sig[0] && sig[0].length < 60 && !/@|http/.test(sig[0])) res.agence.contact = sig[0];
-        const tel = sig.slice(0, 4).find((x) => /^(\+33|0)\s?[1-9](?:[\s.]?\d{2}){4}$/.test(x));
+        if (sig[0] && sig[0].length < 60 && !/@|http|^-+$/.test(sig[0]) && !estTelephone(sig[0])) res.agence.contact = sig[0];
+        const sep = sig.findIndex((x) => /^-{2,}\s*$/.test(x));
+        const bloc = sep >= 0 ? sig.slice(sep + 1, sep + 6) : sig.slice(0, 6);
+        if (sep >= 0 && bloc[0] && !/@|http/.test(bloc[0]) && !estTelephone(bloc[0]) && bloc[0].length < 60) res.agence.nomSignature = bloc[0];
+        const tel = sig.slice(0, 8).find(estTelephone);
         if (tel) res.agence.telephone = tel;
+        const mail = sig.slice(0, 8).map((x) => (EMAIL.exec(x) || [])[0]).find(Boolean);
+        if (mail) res.agence.emailSignature = mail;
         break;
+      }
+      // Bien : « l'appartement situé : » puis l'adresse (sur la même ligne ou la suivante).
+      const situe = /\b(appartement|maison|villa|terrain|local|immeuble|studio|bien)\b.*\b(situ[ée]e?s?|sise?)(?=[\s:]|$)\s*(?:au|[àa])?\s*:?\s*(.*)$/i.exec(l);
+      if (situe && !valeurs.adresseBien) {
+        const suite = situe[3] || (lignes.slice(i + 1).find(Boolean) || '');
+        if (/\d{2}\s?\d{3}\s+\S/.test(suite)) {
+          valeurs.adresseBien = suite;
+          if (!valeurs.typeBien) valeurs.typeBien = situe[1];
+        }
+      }
+      // À compléter : « Il manque au dossier : … ».
+      if (/^il manque/i.test(l)) {
+        res.aSuivre = [];
+        for (let j = i + 1; j < lignes.length && res.aSuivre.length < 10; j++) {
+          if (!lignes[j]) continue;
+          if (!/^[-–•*·]/.test(lignes[j])) break;
+          res.aSuivre.push(lignes[j].replace(/^[-–•*·]\s*/, ''));
+        }
+        continue;
       }
       const rub = RUBRIQUES.find((r) => r.re.test(sansAccent(l).replace(/\s+/g, ' ')) || r.re.test(l));
       if (rub && l.length < 120) {
@@ -218,9 +269,14 @@
         }
         continue;
       }
-      // Personne : ligne commençant par une civilité.
-      if ((rubrique === 'vendeurs' || rubrique === 'acquereurs') && CIVILITE.test(l) && !/:/.test(l)) {
-        const n = lireNom(l);
+      const partie = rubrique === 'vendeurs' || rubrique === 'acquereurs';
+      // Téléphone ou e-mail seuls sur leur ligne.
+      if (partie && courant && estTelephone(l)) { if (!courant.telephone) courant.telephone = l; continue; }
+      if (partie && courant && EMAIL.test(l) && !/:/.test(l.replace(/<mailto:[^>]*>/, ''))) { if (!courant.email) courant.email = EMAIL.exec(l)[0]; continue; }
+      // Personne : ligne commençant par une civilité, ou nom en capitales seul sur sa ligne.
+      const sansCiv = partie && !CIVILITE.test(l) ? nomSansCivilite(l) : null;
+      if (partie && ((CIVILITE.test(l) && !/:/.test(l)) || sansCiv)) {
+        const n = sansCiv ? { civilite: '', nom: sansCiv } : lireNom(l);
         const liste = res[rubrique];
         const soc = liste.find((x) => x.qualite === 'societe' && x.representantsEnCours);
         if (soc) {
@@ -280,6 +336,8 @@
     }
     if (valeurs.lots) res.bien.lots = valeurs.lots;
     if (/copropri[ée]t[ée]/i.test(texte) && res.bien.copro === undefined) res.bien.copro = true;
+    if (res.bien.type === 'appartement' && res.bien.copro === undefined && /r[ée]sidence|\bb[aâ]t(iment)?\b|[ée]tage|\blot\b/i.test(valeurs.adresseBien || texte)) res.bien.copro = true;
+    if (/travaux (de moins de (10|dix) ans|r[ée]cents?)|travaux r[ée]alis[ée]s depuis moins de (10|dix) ans/i.test(texte)) res.bien.travauxRecents = true;
 
     // Prix et honoraires : « 282 000 € commission comprise soit 274 000 € net vendeur et 8 000 € de commission à CHARGE VENDEURS ».
     if (valeurs.prix) {
@@ -297,7 +355,16 @@
       if (/charge (des )?vendeurs?|charge du vendeur/.test(charge)) res.prix.chargeHonoraires = 'vendeur';
       else if (/charge (des )?acquereurs?|charge de l.?acquereur/.test(charge)) res.prix.chargeHonoraires = 'acquereur';
     }
+    if (valeurs.prixNet) {
+      const net = montant(valeurs.prixNet);
+      const total = res.prix.prix;
+      if (net) {
+        res.prix.prix = net;
+        if (total && total > net) res.prix.prixFAI = total;
+      }
+    }
     if (valeurs.honoraires && !res.prix.honoraires) res.prix.honoraires = montant(valeurs.honoraires);
+    if (!res.prix.honoraires && res.prix.prixFAI && res.prix.prix) res.prix.honoraires = res.prix.prixFAI - res.prix.prix;
     if (valeurs.depot) res.financement.depotGarantie = montant(valeurs.depot);
     if (valeurs.financement) {
       const f = sansAccent(valeurs.financement).toLowerCase();
@@ -320,14 +387,23 @@
       }
     });
 
-    // Agence (expéditeur).
-    const exp = doc.expediteur || '';
-    const em = /[\w.+-]+@[\w-]+\.[\w.-]+/.exec(exp);
+    // Agence : expéditeur (d'origine si le mail a été transféré), signature, objet du mail.
+    // Un expéditeur de l'étude (adresse notaires.fr ou interne Exchange) n'est pas l'agence.
+    const exp = expediteurOrigine || doc.expediteur || '';
+    const interne = /notaires\.fr|\/o=exchange/i.test(exp);
+    const em = interne ? null : EMAIL.exec(exp);
     if (em) res.agence.email = em[0];
-    const nomExp = propre(exp.replace(/<[^>]*>/, '').replace(/"/g, '').replace(em ? em[0] : '', ''));
+    else if (res.agence.emailSignature) res.agence.email = res.agence.emailSignature;
+    const nomExp = interne ? '' : propre(exp.replace(/<[^>]*>/, '').replace(/"/g, '').replace(em ? em[0] : '', ''));
     if (nomExp) res.agence.nom = nomExp;
-    const agenceSujet = /^([^:]{2,40})\s*:/.exec(doc.sujet || '');
+    if (res.agence.nomSignature) {
+      if (nomExp && !res.agence.contact) res.agence.contact = nomExp;
+      res.agence.nom = res.agence.nomSignature;
+    }
+    const agenceSujet = /^([^:]{2,40})\s*:/.exec((doc.sujet || '').replace(/^\s*((re|tr|fw|fwd)\s*:\s*)+/i, ''));
     if (agenceSujet && !/^(re|tr|fw|fwd)$/i.test(agenceSujet[1].trim())) res.agence.nom = agenceSujet[1].trim();
+    delete res.agence.nomSignature;
+    delete res.agence.emailSignature;
 
     // Résumé de ce qui a été trouvé.
     const t = res.trouve;
@@ -339,6 +415,8 @@
     if (res.financement.depotGarantie) t.push('dépôt de garantie');
     if (res.notaires.length) t.push(res.notaires.length + ' notaire(s)');
     if (res.piecesJointes.some((x) => x.piece)) t.push('pièces jointes reconnues');
+    if (res.bien.travauxRecents) t.push('travaux récents');
+    if (res.aSuivre && res.aSuivre.length) t.push('pièces annoncées');
     return res;
   }
   function situation(v) {
@@ -415,6 +493,11 @@
         if (cur.statut !== 'recue') d.pieces[x.piece] = Object.assign({}, cur, { statut: 'recue', date: today, note: cur.note || ('Reçu : ' + x.fichier) });
       });
     }
+    if (res.aSuivre && res.aSuivre.length && g.pieces !== false) {
+      const bloc = 'À suivre' + (opts.source ? ' (' + opts.source + ')' : '') + ' :\n' + res.aSuivre.map((x) => '- ' + x).join('\n');
+      if (!(d.notes || '').includes(bloc)) d.notes = (d.notes ? d.notes + '\n\n' : '') + bloc;
+    }
+    if (g.bien && res.bien && res.bien.travauxRecents && d.bien) d.bien.travauxRecents = true;
     if (opts.source) d.documents.push({ id: uid('doc'), date: today, fichier: opts.source, piece: '', source: res.sujet || '', lu: true });
     return d;
   }

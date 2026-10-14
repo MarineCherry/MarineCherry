@@ -129,6 +129,7 @@
         b.description || '',
         b.cadastre ? 'Cadastre : ' + b.cadastre + (b.contenance ? ' (' + b.contenance + ')' : '') : '',
         b.copro ? 'En copropriété' : '',
+        b.travauxRecents ? 'Travaux de moins de 10 ans' : '',
       ].filter(Boolean)),
       bloc('prix', 'Prix', [
         res.prix.prix ? 'Prix : ' + fmtEuro(res.prix.prix) + (res.prix.prixFAI ? ' (' + fmtEuro(res.prix.prixFAI) + ' honoraires compris)' : '') : '',
@@ -145,7 +146,8 @@
         [res.agence.telephone, res.agence.email].filter(Boolean).join(' · '),
         res.agence.mandat ? 'Mandat n° ' + res.agence.mandat : '',
       ].filter(Boolean)),
-      bloc('pieces', 'Pièces jointes', res.piecesJointes.map((x) => x.fichier + (x.piece ? ' → ' + nomPiece(x.piece) + ' (reçue)' : ' → non classée'))));
+      bloc('pieces', 'Pièces jointes et pièces annoncées', res.piecesJointes.map((x) => x.fichier + (x.piece ? ' → ' + nomPiece(x.piece) + ' (reçue)' : ' → non classée'))
+        .concat((res.aSuivre || []).map((x) => 'À suivre : ' + x + ' (ajouté aux notes)'))));
     return fenetre('Informations trouvées', contenu, (close) => [
       ui.button('Annuler', { variant: 'ghost', onClick: () => close(null) }),
       avecCourant ? ui.button('Compléter ce dossier', { variant: 'soft', onClick: () => close({ groupes, cible: 'courant' }) }) : null,

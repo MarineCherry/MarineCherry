@@ -149,3 +149,63 @@ test('Report dans un dossier : champs vides seulement, pas de doublon, pièces r
   assert.strictEqual(d.notaires.length, 2, 'pas de doublon');
   assert.strictEqual(d.pieces.identite.date, '2026-10-14', 'déjà reçue');
 });
+
+test('Mail transféré, sans civilité ni libellés (données fictives)', () => {
+  const corps = [
+    'De : Julie LEROY <julie.leroy@example.fr>',
+    'Envoyé : mardi 29 septembre 2026 10:54',
+    'À : Étude <etude@84000.notaires.fr>',
+    'Objet : VENTE DUPONT / ROUX',
+    '',
+    'Bonjour Maître,',
+    '',
+    "Dans le cadre de la vente immobilière de l'appartement situé :",
+    '',
+    'Résidence Les Pins - avenue des Pins - Bât 2, 3ème étage - 84100 Orange',
+    '',
+    '- Acheteurs :',
+    '',
+    'Claire ROUX',
+    '06 00 000 00 01',
+    'claire.roux@example.fr <mailto:claire.roux@example.fr>',
+    'Domiciliée au : 6, impasse des Roses - 84100 Orange',
+    '',
+    '- Vendeurs :',
+    '',
+    'Marc DUPONT',
+    '06 00 00 00 02',
+    'Domicilié au : 3 rue Haute - 84000 Avignon',
+    '',
+    '- Prix de vente : 99 000 €',
+    '- Prix net vendeur : 93 000 €',
+    "- Frais d'agence : 6 000 €",
+    '- Dépôt de garantie : 4 000 €',
+    '',
+    'Il manque au dossier :',
+    '- Le rapport de diagnostics,',
+    '- Le contrôle assainissement.',
+    '',
+    'Travaux de moins de 10 ans : menuiseries',
+    '',
+    'Respectueusement,',
+    '',
+    'Julie LEROY',
+    '',
+    '--',
+    'Agence des Remparts',
+    '06 11 22 33 44',
+  ].join('\n');
+  const r = X.extraire({ sujet: 'TR: VENTE DUPONT / ROUX', expediteur: 'Étude <etude@84000.notaires.fr>', corps, piecesJointes: [] });
+  assert.deepStrictEqual(r.acquereurs.map((x) => [x.nom, x.telephone, x.email, x.commune]), [['ROUX Claire', '06 00 000 00 01', 'claire.roux@example.fr', 'Orange']]);
+  assert.deepStrictEqual(r.vendeurs.map((x) => [x.nom, x.commune]), [['DUPONT Marc', 'Avignon']]);
+  assert.deepStrictEqual({ cp: r.bien.codePostal, type: r.bien.type, copro: r.bien.copro, travaux: r.bien.travauxRecents }, { cp: '84100', type: 'appartement', copro: true, travaux: true });
+  assert.strictEqual(r.bien.adresse, 'Résidence Les Pins - avenue des Pins - Bât 2, 3ème étage');
+  assert.deepStrictEqual(r.prix, { prix: 93000, prixFAI: 99000, honoraires: 6000 });
+  assert.strictEqual(r.financement.depotGarantie, 4000);
+  assert.deepStrictEqual(r.agence, { contact: 'Julie LEROY', telephone: '06 11 22 33 44', email: 'julie.leroy@example.fr', nom: 'Agence des Remparts' });
+  assert.deepStrictEqual(r.aSuivre, ['Le rapport de diagnostics,', 'Le contrôle assainissement.']);
+  const d = { notes: '' };
+  X.fusionner(d, r, { parties: true, bien: true, pieces: true }, { source: 'mail.msg' });
+  assert.ok(d.notes.startsWith('À suivre (mail.msg) :\n- Le rapport de diagnostics,'));
+  assert.strictEqual(d.bien.travauxRecents, true);
+});
