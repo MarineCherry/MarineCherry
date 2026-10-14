@@ -178,7 +178,7 @@
   }
   const estTelephone = (l) => /^[\d\s.+()-]{9,20}$/.test(l) && /^(0[1-9]|33[1-9])\d{7,9}$/.test(l.replace(/\D/g, '').replace(/^0033/, '33'));
   const EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/;
-  // « Fabienne MEURGEY » : nom en capitales, sans chiffre ni deux-points → « MEURGEY Fabienne ».
+  // « Claire ROUX » : nom en capitales, sans chiffre ni deux-points → « ROUX Claire ».
   function nomSansCivilite(l) {
     if (/[:@\d]/.test(l) || l.length > 60) return null;
     const mots = l.replace(/[,;.]+$/, '').split(/\s+/);
