@@ -229,7 +229,7 @@
 
     const pe = s.petitsEnfants.filter((x) => x.nom);
     const peCard = ui.card('Donations aux petits-enfants (hypothèse D)', pe.length ? h('div', { class: 'stack-sm' },
-      ui.note('Chaque grand-parent attribue à chaque branche le même montant en nue-propriété, prélevé sur la part de l\'enfant de cette branche et partagé à égalité entre ses enfants. Le montant indiqué est celui reçu en nue-propriété.'),
+      ui.note('En plus de la donation aux enfants, chaque grand-parent donne à chaque branche le même montant en nue-propriété, partagé à égalité entre les petits-enfants de la branche. Ce don est pris sur les biens conservés (hors liquidités) : il réduit d\'autant la succession résiduelle. Le montant indiqué est celui reçu en nue-propriété.'),
       h('div', { class: 'grid-2 grid-top' }, engine.PARENTS.slice(0, s.nbParents).map((g, i) => h('div', { class: 'pe-donateur' },
         ui.field('Montant par branche — ' + parentNom(s, i), ctx.num(s.donsPE, g, { suffix: '€', placeholder: '0' }), { help: 'Valeur reçue en nue-propriété par l\'ensemble des petits-enfants d\'une branche.' }),
         ctx.live((r) => {
@@ -241,6 +241,8 @@
               return h('li', null, h('span', null, 'Branche de ' + enf.nom + ' (' + x.nombre + ')'),
                 h('strong', null, fmtEuro(x.parPetitEnfant) + ' chacun'));
             })),
+            h('p', { class: 'small muted' }, 'Pris sur les biens conservés : ' + fmtEuro(r.parents[i].nuePropriete ? (r.donsPE[g] * v.repartitionPE.length) / r.parents[i].nuePropriete : 0)
+              + ' en pleine propriété (au plus ' + fmtEuro(r.capacitePE[g]) + ' en nue-propriété par branche).'),
             h('p', { class: 'small muted' }, 'Droits de ce grand-parent : ' + fmtEuro(v.total.totalDroits) + ' en D, contre ' + fmtEuro(r.hypotheses.C.parents[i].total.totalDroits) + ' en C.'));
         })))),
       h('div', { class: 'card-actions' }, ui.button('Calculer le montant optimal', {
@@ -367,7 +369,7 @@
       'Droits en ligne directe (barème de l\'art. 777 CGI) ; abattement de ' + fmtEuro(p.abattEnfant) + ' par parent et par enfant, renouvelé tous les ' + p.delaiRappel + ' ans.',
       "Usufruit viager valorisé selon le barème fiscal de l'article 669 du CGI, à l'âge de chaque parent ; il s'éteint au décès sans droits supplémentaires.",
       'Chaque parent transmet ses biens propres et la moitié des biens communs ; les droits du conjoint survivant ne sont pas modélisés.',
-      'Hypothèse D : chaque branche reçoit des grands-parents le même montant en nue-propriété, partagé entre les petits-enfants de la branche et prélevé sur la part de leur parent ; abattement de ' + fmtEuro(p.abattPetitEnfant) + ' par grand-parent et par petit-enfant.',
+      'Hypothèse D : chaque branche reçoit des grands-parents le même montant en nue-propriété, partagé entre les petits-enfants de la branche, en plus de la donation aux enfants et pris sur le patrimoine conservé ; abattement de ' + fmtEuro(p.abattPetitEnfant) + ' par grand-parent et par petit-enfant.',
       s.deces15ans
         ? 'Décès supposé dans les ' + p.delaiRappel + ' ans suivant la donation : la donation est rappelée fiscalement et consomme l\'abattement.'
         : 'Décès supposé plus de ' + p.delaiRappel + ' ans après la donation : les abattements sont reconstitués.',

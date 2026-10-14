@@ -1,6 +1,6 @@
 /*
  * Succession & donation : patrimoine par branche, donations envisagées, hypothèse D
- * (nue-propriété aux petits-enfants, équité entre branches) et recherche du montant optimal.
+ * (nue-propriété aux petits-enfants en plus des enfants, équité entre branches) et recherche du montant optimal.
  */
 'use strict';
 const test = require('node:test');
@@ -54,21 +54,33 @@ test('Hypothèses B et C : pleine propriété puis nue-propriété (60 %)', () =
   near(c.succession.transmis, 150000, 'C : succession résiduelle (moitié du compte titres)');
 });
 
-test('Hypothèse D : montant en nue-propriété par branche, partagé entre les petits-enfants de la branche', () => {
+test('Hypothèse D : montant en nue-propriété par branche, en plus de la donation aux enfants', () => {
   const r = S.calculer(dossier(), P);
   const D = r.hypotheses.D.parents[0];
-  near(D.enfants[0].donation.transmis, 150000, 'Alice : 180 000 − 30 000');
-  near(D.enfants[1].donation.transmis, 150000, 'Bruno : 180 000 − 30 000');
+  const C = r.hypotheses.C.parents[0];
+  // La donation aux enfants est la même qu'en C.
+  near(D.enfants[0].donation.transmis, 180000, 'Alice : 60 % de 300 000, comme en C');
+  near(D.enfants[0].donation.droits, C.enfants[0].donation.droits, 'Alice : mêmes droits de donation qu\'en C');
   const pe = Object.fromEntries(D.petitsEnfants.map((x) => [x.nom, x]));
   near(pe['Léa'].transmis, 15000, 'branche d\'Alice : 30 000 / 2');
   near(pe['Zoé'].transmis, 10000, 'branche de Bruno : 30 000 / 3');
   near(pe['Zoé'].droits, 0, 'sous l\'abattement de 31 865 €');
-  near(D.enfants[0].donation.droits, droits(50000), 'Alice : 150 000 − 100 000 taxables');
-  // Chaque branche reçoit au total la même chose qu'en C.
-  near(D.enfants[0].donation.transmis + pe['Léa'].transmis + pe['Hugo'].transmis, 180000, 'total de la branche d\'Alice');
+  // 2 branches × 30 000 en nue-propriété = 100 000 en pleine propriété pris sur le compte titres conservé.
+  near(D.enfants[0].succession.transmis, (300000 - 100000) / 2, 'succession résiduelle réduite');
+  near(D.enfants[0].succession.droits, 0, '100 000 : couvert par l\'abattement');
+  near(C.enfants[0].succession.droits, droits(50000), 'en C : 150 000 − 100 000 taxables');
+  // Capacité : 300 000 × 60 % / 2 branches.
+  near(r.capacitePE.P1, 90000, 'montant maximal par branche');
   // Le parent 2 n'a rien attribué aux petits-enfants : D = C pour lui.
   near(r.hypotheses.D.parents[1].total.totalDroits, r.hypotheses.C.parents[1].total.totalDroits, 'parent 2');
   assert.ok(r.hypotheses.D.cumul.total.totalDroits < r.hypotheses.C.cumul.total.totalDroits);
+});
+
+test('Hypothèse D : montant plafonné au patrimoine conservé', () => {
+  const r = S.calculer(dossier({ donsPE: { P1: 200000, P2: 0 } }), P);
+  near(r.donsPE.P1, 90000, 'plafond');
+  near(r.hypotheses.D.parents[0].enfants[0].succession.transmis, 0, 'plus rien à transmettre par succession');
+  assert.strictEqual(r.controles.find((c) => c.libelle === 'Montants donnés').ok, false);
 });
 
 test('Montant optimal pour les petits-enfants : minimum du total des droits', () => {
@@ -76,9 +88,9 @@ test('Montant optimal pour les petits-enfants : minimum du total des droits', ()
   const opt = S.optimiserPetitsEnfants(d, P);
   const cout = (y) => S.calculer(Object.assign({}, d, { donsPE: { P1: y, P2: 0 } }), P).hypotheses.D.parents[0].total.totalDroits;
   let min = Infinity;
-  for (let y = 0; y <= 180000; y += 100) min = Math.min(min, cout(y));
+  for (let y = 0; y <= 90000; y += 100) min = Math.min(min, cout(y));
   near(opt.P1.droits, min, 'droits au montant optimal');
-  assert.ok(opt.P1.montant > 0 && opt.P1.montant <= 180000);
+  assert.ok(opt.P1.montant > 0 && opt.P1.montant <= 90000);
   near(opt.P1.gain, opt.P1.droitsC - opt.P1.droits, 'économie par rapport à C');
   assert.strictEqual(opt.P1.montant % 100, 0);
 });
