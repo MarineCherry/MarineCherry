@@ -5,7 +5,7 @@ Boîte à outils de calcul pour l'étude notariale. Un écran d'accueil façon �
 | Outil | Rôle |
 | --- | --- |
 | **Plus-value immobilière** | Plus-value des particuliers : origines de propriété multiples, démembrement, terrain bâti, forfaits, abattements, surtaxe, récapitulatif par vendeur. |
-| **Succession & donation** | Patrimoine par branche (biens propres de chaque parent, biens communs), donations envisagées ligne par ligne (qui donne, quel bien, quel montant, à qui). Comparatif parent par parent : A · succession sans donation, B · pleine propriété aux enfants, C · nue-propriété aux enfants, D · nue-propriété aux enfants et, en plus, aux petits-enfants (montant égal par branche pris sur le patrimoine conservé, montant optimal calculé). Synthèse client avec graphiques, enregistrable en PDF. |
+| **Succession & donation** | Patrimoine par branche (biens propres de chaque parent, biens communs), donations envisagées ligne par ligne (qui donne, quel bien, quel montant, à qui). Comparatif parent par parent : A · succession sans donation, B · pleine propriété aux enfants, C · nue-propriété aux enfants, D · montage optimisé en nue-propriété (part des biens donnée à chaque enfant, don aux petits-enfants à égalité entre les branches, part gardée pour la succession, choisis pour minimiser les droits de la famille). Synthèse client avec graphiques, enregistrable en PDF. |
 | **Origine de propriété** | Saisie de la chaîne de propriété (11 types d'actes) et des personnes, rédaction automatique à partir de trames modifiables, rappel « susnommé » des personnes déjà désignées, contrôle de l'origine trentenaire, copie vers Word. |
 | **Paramètres** | Barème de l'usufruit (art. 669 CGI), taux, abattements, barème en ligne directe, régimes particuliers. |
 

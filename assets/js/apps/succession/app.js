@@ -33,7 +33,7 @@
       parents: [{ nom: '', age: null }, { nom: '', age: null }],
       enfants: [newEnfant()], petitsEnfants: [],
       donFamilial: false, deces15ans: false,
-      biens: [], donations: [], donsPE: { P1: null, P2: null }, anterieures: [],
+      biens: [], donations: [], anterieures: [],
     };
   }
   const isEmpty = (s) => !s.nomDossier && s.enfants.every((e) => !e.nom) && s.biens.every((b) => !b.valeur);
@@ -227,44 +227,45 @@
         r.alertes.map((a) => ui.badge(false, a))))),
     { subtitle: 'Montant en pleine propriété ; vide = toute la part du donateur dans le bien. B : donné en pleine propriété. C et D : la nue-propriété est donnée, l\'usufruit réservé (les liquidités sont données en pleine propriété).' });
 
-    const pe = s.petitsEnfants.filter((x) => x.nom);
-    const peCard = ui.card('Donations aux petits-enfants (hypothèse D)', pe.length ? h('div', { class: 'stack-sm' },
-      ui.note('En plus de la donation aux enfants, chaque grand-parent donne à chaque branche le même montant en nue-propriété, partagé à égalité entre les petits-enfants de la branche. Ce don est pris sur les biens conservés (hors liquidités) : il réduit d\'autant la succession résiduelle. Le montant indiqué est celui reçu en nue-propriété.'),
-      h('div', { class: 'grid-2 grid-top' }, engine.PARENTS.slice(0, s.nbParents).map((g, i) => h('div', { class: 'pe-donateur' },
-        ui.field('Montant par branche — ' + parentNom(s, i), ctx.num(s.donsPE, g, { suffix: '€', placeholder: '0' }), { help: 'Valeur reçue en nue-propriété par l\'ensemble des petits-enfants d\'une branche.' }),
-        ctx.live((r) => {
-          const v = r.hypotheses.D.parents[i];
-          if (!v) return null;
-          if (!(r.capacitePE[g] > 0)) {
-            return h('p', { class: 'small muted' }, parentNom(s, i) + ' ne conserve aucun bien (hors liquidités) après la donation aux enfants : rien ne peut être donné en plus aux petits-enfants. Réduisez la donation aux enfants dans le tableau ci-dessus pour laisser une marge.');
-          }
-          return h('div', { class: 'stack-sm' },
-            h('ul', { class: 'aside-list' }, v.repartitionPE.filter((x) => x.nombre).map((x) => {
-              const enf = r.enfants.find((e) => e.id === x.enfant);
-              return h('li', null, h('span', null, 'Branche de ' + enf.nom + ' (' + x.nombre + ')'),
-                h('strong', null, fmtEuro(x.parPetitEnfant) + ' chacun'));
-            })),
-            h('p', { class: 'small muted' }, 'Pris sur les biens conservés : ' + fmtEuro(r.parents[i].nuePropriete ? (r.donsPE[g] * v.repartitionPE.length) / r.parents[i].nuePropriete : 0)
-              + ' en pleine propriété (au plus ' + fmtEuro(r.capacitePE[g]) + ' en nue-propriété par branche).'),
-            h('p', { class: 'small muted' }, 'Droits de ce grand-parent : ' + fmtEuro(v.total.totalDroits) + ' en D, contre ' + fmtEuro(r.hypotheses.C.parents[i].total.totalDroits) + ' en C.'));
-        })))),
-      h('div', { class: 'card-actions' }, ui.button('Calculer le montant optimal', {
-        icon: 'check', variant: 'primary', small: true, onClick: () => {
-          const opt = engine.optimiserPetitsEnfants(s, ctx.params());
-          let gain = 0;
-          engine.PARENTS.forEach((g) => { if (opt[g]) { s.donsPE[g] = opt[g].montant; gain += opt[g].gain; } });
-          ctx.render();
-          ctx.changed();
-          ui.toast(gain > 0.5 ? 'Montants optimaux appliqués : ' + fmtEuro(gain) + ' de droits en moins par rapport à C.' : 'Aucun don aux petits-enfants ne réduit les droits dans cette configuration.');
-        },
-      })),
-      ctx.live((r) => h('div', { class: 'stack-sm detail-d' },
+    const peCard = ui.card('Montage optimisé (hypothèse D)', h('div', { class: 'stack-sm' },
+      ui.note('Le logiciel cherche, pour chaque grand-parent et chaque branche, la répartition qui rend les droits de la famille les plus faibles : '
+        + 'quelle part des biens ci-dessus donner à l\'enfant en nue-propriété, quel montant donner aux petits-enfants (le même pour chaque branche, partagé entre les petits-enfants de la branche) '
+        + 'et ce qu\'il vaut mieux garder pour la succession, afin d\'utiliser l\'abattement de l\'enfant au décès s\'il survient plus de ' + ctx.params().delaiRappel + ' ans après la donation.'),
+      ctx.live((r) => h('div', { class: 'stack-sm' },
+        tablesMontage(s, r),
         h('h3', { class: 'section-title' }, 'Détail de l\'hypothèse D'),
-        h('p', { class: 'small muted' }, 'Pour chaque branche : donation aux enfants (comme en C), don aux petits-enfants, puis succession résiduelle des biens conservés. Abattement de ' + fmtEuro(ctx.params().abattEnfant) + ' par enfant et de ' + fmtEuro(ctx.params().abattPetitEnfant) + ' par petit-enfant, pour chaque grand-parent.'),
-        vueHypothese(s, r, 'D')))) : ui.note('Ajoutez les petits-enfants dans l\'onglet Famille, en indiquant de quel enfant ils sont issus.'),
-    { subtitle: 'Le bouton « Calculer le montant optimal » recherche, pour chaque grand-parent, le montant qui rend le total des droits le plus faible.' });
+        h('p', { class: 'small muted' }, 'Abattement de ' + fmtEuro(ctx.params().abattEnfant) + ' par enfant et de ' + fmtEuro(ctx.params().abattPetitEnfant) + ' par petit-enfant, pour chaque grand-parent. '
+          + (s.deces15ans ? 'Décès supposé dans les ' + ctx.params().delaiRappel + ' ans : les donations aux enfants sont rappelées dans leur succession.' : 'Décès supposé plus de ' + ctx.params().delaiRappel + ' ans après la donation : l\'abattement des enfants est à nouveau disponible dans la succession.')),
+        h('div', { class: 'detail-d' }, vueHypothese(s, r, 'D'))))),
+    { subtitle: s.petitsEnfants.some((x) => x.nom) ? 'Calculé automatiquement à partir des biens désignés ci-dessus.' : 'Sans petits-enfants saisis, le montage porte seulement sur la part donnée aux enfants et celle gardée pour la succession.' });
 
     return h('div', { class: 'stack' }, enfantsCard, peCard);
+  }
+
+  // Montage de l'hypothèse D, grand-parent par grand-parent : ce qui est donné et ce qui est gardé.
+  function tablesMontage(s, r) {
+    return r.parents.filter((x) => x.actif).map((x) => {
+      const mt = r.montage[x.code];
+      if (!mt) return null;
+      const lignes = mt.branches.map((b) => {
+        const k = r.enfants.find((e) => e.id === b.enfant);
+        return {
+          nom: 'Branche de ' + k.nom, prevu: b.prevuPP, donne: b.donnePP, np: b.donneNP, part: b.prevuPP ? b.part : null,
+          pe: b.petitsEnfants && b.peNP > 0 ? fmtEuro(b.peNP) + ' (' + b.petitsEnfants + ' × ' + fmtEuro(b.peNP / b.petitsEnfants) + ')' : '—',
+          succ: b.successionPP,
+        };
+      });
+      return h('div', { class: 'stack-sm' },
+        h('h4', { class: 'montage-titre' }, parentNom(s, x.index) + ' — ' + fmtPct(x.nuePropriete, 0) + ' en nue-propriété'),
+        ui.table([
+          { label: 'Branche', key: 'nom' },
+          { label: 'Biens désignés (PP)', num: true, render: (l) => fmtEuro(l.prevu) },
+          { label: 'Donné à l\'enfant (PP)', num: true, className: 'col-don', render: (l) => fmtEuro(l.donne) + (l.part !== null && l.part < 0.9995 ? ' · ' + fmtPct(l.part, 0) : '') },
+          { label: 'soit en nue-propriété', num: true, className: 'col-don', render: (l) => fmtEuro(l.np) },
+          { label: 'Aux petits-enfants (NP)', num: true, className: 'col-don', render: (l) => l.pe },
+          { label: 'Transmis par succession', num: true, className: 'col-succ', render: (l) => fmtEuro(l.succ) },
+        ], lignes, { compact: true }));
+    });
   }
 
   /* ---------- Onglet « Donations antérieures » ---------- */
@@ -371,7 +372,7 @@
   function resume(s, r) {
     const best = r.meilleure, a = r.comparatif[0];
     if (best.code === 'A') return 'Dans la configuration saisie, aucune des hypothèses de donation ne réduit les droits.';
-    const libelles = { B: 'donation en pleine propriété aux enfants', C: "donation en nue-propriété aux enfants avec réserve d'usufruit", D: "donation en nue-propriété aux enfants et aux petits-enfants avec réserve d'usufruit" };
+    const libelles = { B: 'donation en pleine propriété aux enfants', C: "donation en nue-propriété aux enfants avec réserve d'usufruit", D: "montage optimisé : donation en nue-propriété aux enfants et aux petits-enfants avec réserve d'usufruit, une partie étant gardée pour la succession" };
     return 'Sans donation, vos enfants supporteront ' + fmtEuro(a.total) + ' de droits de succession. Avec l\'hypothèse ' + best.code + ' (' + libelles[best.code]
       + '), les droits totaux (donation + succession) ne seraient que de ' + fmtEuro(best.total) + ', soit ' + fmtEuro(best.economie) + ' économisés (' + fmtPct(best.economiePct, 0) + ').';
   }
@@ -380,7 +381,7 @@
       'Droits en ligne directe (barème de l\'art. 777 CGI) ; abattement de ' + fmtEuro(p.abattEnfant) + ' par parent et par enfant, renouvelé tous les ' + p.delaiRappel + ' ans.',
       "Usufruit viager valorisé selon le barème fiscal de l'article 669 du CGI, à l'âge de chaque parent ; il s'éteint au décès sans droits supplémentaires.",
       'Chaque parent transmet ses biens propres et la moitié des biens communs ; les droits du conjoint survivant ne sont pas modélisés.',
-      'Hypothèse D : chaque branche reçoit des grands-parents le même montant en nue-propriété, partagé entre les petits-enfants de la branche, en plus de la donation aux enfants et pris sur le patrimoine conservé ; abattement de ' + fmtEuro(p.abattPetitEnfant) + ' par grand-parent et par petit-enfant.',
+      'Hypothèse D : montage optimisé en nue-propriété. Pour chaque branche, part des biens désignés donnée à l\'enfant, don aux petits-enfants (même montant par branche, partagé entre eux) et part gardée pour la succession, choisis pour que le total des droits soit le plus faible ; abattement de ' + fmtEuro(p.abattPetitEnfant) + ' par grand-parent et par petit-enfant.',
       s.deces15ans
         ? 'Décès supposé dans les ' + p.delaiRappel + ' ans suivant la donation : la donation est rappelée fiscalement et consomme l\'abattement.'
         : 'Décès supposé plus de ' + p.delaiRappel + ' ans après la donation : les abattements sont reconstitués.',
@@ -448,6 +449,9 @@
       h('div', { class: 'charts' }, bars, donut),
       parBranche ? [h('h3', { class: 'section-title' }, 'Droits par branche'), parBranche] : null,
       h('h3', { class: 'section-title' }, 'Droits à payer par bénéficiaire'), detail,
+      h('h3', { class: 'section-title' }, 'Le montage proposé (hypothèse D)'),
+      h('p', { class: 'field-help' }, 'Part des biens donnée en nue-propriété à chaque enfant, don aux petits-enfants et part gardée pour la succession, pour que les droits de la famille soient les plus faibles.'),
+      tablesMontage(s, r),
       h('div', { class: 'resume' }, h('h3', { class: 'section-title' }, 'En résumé'), h('p', null, resume(s, r))),
       h('h3', { class: 'section-title' }, 'Hypothèses retenues'),
       h('ul', { class: 'bullets small' }, hypothesesTexte(s, p).map((x) => h('li', null, x))));
@@ -566,7 +570,7 @@
     s.parents = [0, 1].map((i) => Object.assign({ nom: '', age: null }, (s.parents || [])[i]));
     s.biens = s.biens || [];
     s.donations = s.donations || [];
-    s.donsPE = Object.assign({ P1: null, P2: null }, s.donsPE || {});
+    delete s.donsPE;
     s.petitsEnfants = (s.petitsEnfants || []).map((x) => Object.assign({ parent: '' }, x));
     migrer(s);
     return s;

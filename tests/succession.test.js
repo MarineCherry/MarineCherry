@@ -1,6 +1,6 @@
 /*
  * Succession & donation : patrimoine par branche, donations envisagées, hypothèse D
- * (nue-propriété aux petits-enfants en plus des enfants, équité entre branches) et recherche du montant optimal.
+ * (montage optimisé : part donnée aux enfants, petits-enfants à égalité entre branches, part gardée pour la succession).
  */
 'use strict';
 const test = require('node:test');
@@ -30,7 +30,6 @@ function dossier(o) {
       { id: 'l', designation: 'Livret', nature: 'Liquidités', valeur: 100000, proprietaire: 'P2', regime: 'Aucun' },
     ],
     donations: [{ id: 'd1', donateur: 'deux', bienId: 'm', montant: null, beneficiaire: 'tous' }],
-    donsPE: { P1: 30000, P2: 0 },
     anterieures: [],
   }, o || {});
 }
@@ -54,45 +53,57 @@ test('Hypothèses B et C : pleine propriété puis nue-propriété (60 %)', () =
   near(c.succession.transmis, 150000, 'C : succession résiduelle (moitié du compte titres)');
 });
 
-test('Hypothèse D : montant en nue-propriété par branche, en plus de la donation aux enfants', () => {
+// Coût du montage D d'un grand-parent, recalculé à la main pour une répartition (t, y) donnée.
+function coutBranche(r, g, t, y) {
+  const par = r.parents.find((x) => x.code === g);
+  const np = par.nuePropriete;
+  return r.enfants.reduce((tot, k) => {
+    const pe = r.petitsEnfants.filter((x) => x.branche === k.id);
+    const pp = (r.patrimoine[g].brut - r.patrimoine[g].resteBrut) * k.part;
+    const yy = pe.length ? y : 0;
+    const donEnf = S.liquider(P.bareme777, P.abattEnfant, t * pp * np, 0, 0, 0);
+    const donPE = pe.reduce((a) => a + S.liquider(P.bareme777, P.abattPetitEnfant, yy / pe.length, 0, 0, 0).droits, 0);
+    const succ = S.liquider(P.bareme777, P.abattEnfant, k.part * r.patrimoine[g].resteBrut + (1 - t) * pp - yy / np, 0, 0, 0);
+    return tot + donEnf.droits + donPE + succ.droits;
+  }, 0);
+}
+
+test('Hypothèse D : montage optimisé (part donnée, petits-enfants, part gardée pour la succession)', () => {
   const r = S.calculer(dossier(), P);
   const D = r.hypotheses.D.parents[0];
   const C = r.hypotheses.C.parents[0];
-  // La donation aux enfants est la même qu'en C.
-  near(D.enfants[0].donation.transmis, 180000, 'Alice : 60 % de 300 000, comme en C');
-  near(D.enfants[0].donation.droits, C.enfants[0].donation.droits, 'Alice : mêmes droits de donation qu\'en C');
+  const m = r.montage.P1;
+  // Équité : même montant par branche, partagé entre les petits-enfants de la branche.
   const pe = Object.fromEntries(D.petitsEnfants.map((x) => [x.nom, x]));
-  near(pe['Léa'].transmis, 15000, 'branche d\'Alice : 30 000 / 2');
-  near(pe['Zoé'].transmis, 10000, 'branche de Bruno : 30 000 / 3');
-  near(pe['Zoé'].droits, 0, 'sous l\'abattement de 31 865 €');
-  // 2 branches × 30 000 en nue-propriété = 100 000 en pleine propriété pris sur le compte titres conservé.
-  near(D.enfants[0].succession.transmis, (300000 - 100000) / 2, 'succession résiduelle réduite');
-  near(D.enfants[0].succession.droits, 0, '100 000 : couvert par l\'abattement');
-  near(C.enfants[0].succession.droits, droits(50000), 'en C : 150 000 − 100 000 taxables');
-  // Capacité : 300 000 × 60 % / 2 branches.
-  near(r.capacitePE.P1, 90000, 'montant maximal par branche');
-  // Le parent 2 n'a rien attribué aux petits-enfants : D = C pour lui.
-  near(r.hypotheses.D.parents[1].total.totalDroits, r.hypotheses.C.parents[1].total.totalDroits, 'parent 2');
-  assert.ok(r.hypotheses.D.cumul.total.totalDroits < r.hypotheses.C.cumul.total.totalDroits);
+  near(pe['Léa'].transmis, m.y / 2, 'branche d\'Alice : y / 2');
+  near(pe['Zoé'].transmis, m.y / 3, 'branche de Bruno : y / 3');
+  assert.strictEqual(m.y % 100, 0);
+  // Ce qui n'est pas donné reste dans la succession de l'enfant de la branche.
+  const b = m.branches[0];
+  near(D.enfants[0].succession.transmis, 150000 + (300000 - b.donnePP) - b.pePP, 'succession d\'Alice');
+  near(D.enfants[0].donation.transmis, b.donnePP * 0.6, 'donation à Alice en nue-propriété');
+  // Le montage est au moins aussi bon que C et que toute autre répartition testée.
+  assert.ok(D.total.totalDroits <= C.total.totalDroits + 0.01);
+  for (const t of [0, 0.25, 0.5, 0.75, 1]) for (const y of [0, 20000, 40000]) {
+    assert.ok(D.total.totalDroits <= coutBranche(r, 'P1', t, y) + 50, `t=${t}, y=${y}`);
+  }
 });
 
-test('Hypothèse D : montant plafonné au patrimoine conservé', () => {
-  const r = S.calculer(dossier({ donsPE: { P1: 200000, P2: 0 } }), P);
-  near(r.donsPE.P1, 90000, 'plafond');
-  near(r.hypotheses.D.parents[0].enfants[0].succession.transmis, 0, 'plus rien à transmettre par succession');
-  assert.strictEqual(r.controles.find((c) => c.libelle === 'Montants donnés').ok, false);
-});
-
-test('Montant optimal pour les petits-enfants : minimum du total des droits', () => {
-  const d = dossier();
-  const opt = S.optimiserPetitsEnfants(d, P);
-  const cout = (y) => S.calculer(Object.assign({}, d, { donsPE: { P1: y, P2: 0 } }), P).hypotheses.D.parents[0].total.totalDroits;
-  let min = Infinity;
-  for (let y = 0; y <= 90000; y += 100) min = Math.min(min, cout(y));
-  near(opt.P1.droits, min, 'droits au montant optimal');
-  assert.ok(opt.P1.montant > 0 && opt.P1.montant <= 90000);
-  near(opt.P1.gain, opt.P1.droitsC - opt.P1.droits, 'économie par rapport à C');
-  assert.strictEqual(opt.P1.montant % 100, 0);
+test('Hypothèse D : gros patrimoine donné en totalité, les petits-enfants reçoivent une part', () => {
+  // Tout est donné en C : chaque enfant est taxé à 20 %. Le montage donne aux petits-enfants
+  // et garde une partie pour la succession (nouvel abattement après 15 ans).
+  const d = dossier({
+    biens: [{ id: 'm', designation: 'Maison', nature: 'Immobilier', valeur: 2000000, proprietaire: 'commun', regime: 'Aucun' }],
+    donations: [{ id: 'd1', donateur: 'deux', bienId: 'm', montant: null, beneficiaire: 'tous' }],
+  });
+  const r = S.calculer(d, P);
+  assert.ok(r.montage.P1.y > 0, 'don aux petits-enfants');
+  assert.ok(r.montage.P1.branches[0].successionPP > 0, 'une part est gardée pour la succession');
+  assert.ok(r.hypotheses.D.cumul.total.totalDroits < r.hypotheses.C.cumul.total.totalDroits - 10000);
+  // Décès dans les 15 ans : la donation est rappelée, garder pour la succession n'apporte rien de plus.
+  const r2 = S.calculer(Object.assign({}, d, { deces15ans: true }), P);
+  assert.ok(r2.hypotheses.D.cumul.total.totalDroits <= r2.hypotheses.C.cumul.total.totalDroits);
+  assert.ok(r2.montage.P1.y > 0);
 });
 
 test('Contrôle : donation supérieure à la part du donateur', () => {
