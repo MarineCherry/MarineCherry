@@ -82,7 +82,8 @@
   /*
    * Zone termites ou mérule de la commune du bien.
    * zones : [{ dept, commune ('*' = tout le département), arrete, aConfirmer }]
-   * departements : { [dept]: 'tout' | 'partie' | 'aucun' } (couverture connue du département)
+   * departements : { [dept]: 'tout' | 'liste' | 'partie' | 'aucun' } (couverture connue du département ;
+   *   'liste' : la liste des communes du département est complète)
    * Résultat : { statut: 'oui' | 'non' | 'inconnu', zone, motif }
    */
   function zone(liste, couverture, bien) {
@@ -93,6 +94,7 @@
     if (z) return { statut: 'oui', zone: z, motif: (z.commune === '*' ? 'Tout le département (' + dept + ') est concerné' : 'Commune listée') + (z.arrete ? ' : ' + z.arrete : '') + '.' };
     const c = (couverture || {})[dept];
     if (c === 'aucun') return { statut: 'non', motif: 'Aucun arrêté connu dans le département.' };
+    if (c === 'liste') return { statut: 'non', motif: 'La commune ne figure pas parmi les communes délimitées par arrêté dans le département.' };
     if (c === 'partie') return { statut: 'inconnu', motif: 'Le département n\'est couvert qu\'en partie et la commune n\'est pas dans la liste : à vérifier auprès de la mairie ou de la préfecture.' };
     return { statut: 'inconnu', motif: 'Pas d\'information pour ce département : à vérifier auprès de la mairie ou de la préfecture.' };
   }

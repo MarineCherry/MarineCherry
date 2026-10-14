@@ -157,10 +157,10 @@
           ], liste, { compact: true, empty: 'Aucune commune.' }),
           ui.button('Ajouter une commune', { icon: 'plus', variant: 'soft', small: true, onClick: () => { liste.push({ dept: '84', commune: '', arrete: '' }); save('dossiers', true); } }),
           h('h4', { class: 'param-sub' }, 'Couverture des départements'),
-          h('p', { class: 'param-help' }, 'Pour une commune absente de la liste : « en partie » ou inconnu = à vérifier ; « aucun arrêté » = non requis.'),
+          h('p', { class: 'param-help' }, 'Pour une commune absente de la liste : « liste complète » ou « aucun arrêté » = non requis ; « liste incomplète » ou département absent = à vérifier.'),
           ui.table([
             { label: 'Département', render: (x) => h('span', null, x.dept) },
-            { label: 'Arrêté', render: (x) => ui.selectInput({ value: depts[x.dept], options: [{ value: 'tout', label: 'Tout le département' }, { value: 'partie', label: 'Une partie des communes' }, { value: 'aucun', label: 'Aucun arrêté' }], ariaLabel: 'Couverture', onChange: (v) => { depts[x.dept] = v; save('dossiers'); } }) },
+            { label: 'Arrêté', render: (x) => ui.selectInput({ value: depts[x.dept], options: [{ value: 'tout', label: 'Tout le département' }, { value: 'liste', label: 'Les communes listées (liste complète)' }, { value: 'partie', label: 'Une partie (liste incomplète)' }, { value: 'aucun', label: 'Aucun arrêté' }], ariaLabel: 'Couverture', onChange: (v) => { depts[x.dept] = v; save('dossiers'); } }) },
             { label: '', render: (x) => ui.button('Retirer', { icon: 'trash', iconOnly: true, variant: 'ghost', small: true, onClick: () => { delete depts[x.dept]; save('dossiers', true); } }) },
           ], Object.keys(depts).sort().map((k) => ({ dept: k })), { compact: true, empty: 'Aucun département renseigné.' }),
           (() => {
@@ -174,7 +174,7 @@
         h('h4', { class: 'param-sub' }, 'Pièces — ventes'), listePieces('vente'),
         h('h4', { class: 'param-sub' }, 'Pièces — successions'), listePieces('succession'),
         h('h4', { class: 'param-sub' }, 'Termites : communes délimitées par arrêté préfectoral'),
-        ui.note('Liste préremplie à partir de sources non officielles pour le Vaucluse : à confirmer avec l\'arrêté en vigueur (préfecture, DDT ou mairie) et à compléter pour votre secteur.', 'warn'),
+        ui.note('Vaucluse : communes reprises de la carte de la DDT de Vaucluse (communes contaminées par les termites ou susceptibles de l\'être, et zones de présence d\'un risque de mérule, 2022). Bouches-du-Rhône : tout le département. Les autres départements sont à compléter pour votre secteur.'),
         listeZones('zonesTermites', 'departementsTermites'),
         h('h4', { class: 'param-sub' }, 'Mérule : zones de présence d\'un risque'),
         listeZones('zonesMerule', 'departementsMerule'));

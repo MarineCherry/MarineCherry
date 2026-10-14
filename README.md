@@ -28,7 +28,7 @@ Aucune installation : ouvrir **`index.html`** dans Chrome, Edge ou Firefox (doub
 3. **Diagnostics** : obligatoires ou non selon le type de bien, l'époque du permis de construire, l'âge des installations, l'assainissement, la copropriété, la classe du DPE et la commune ; validité contrôlée à la date de signature. Le bouton « Interroger Géorisques » interroge, à la demande, la Base Adresse Nationale et Géorisques (seule l'adresse du bien est envoyée).
 4. **Partage** : avec Chrome ou Edge, « Choisir le dossier partagé » et désigner un dossier du réseau de l'étude ; chaque collègue choisit le même dossier. Un fichier par dossier y est enregistré ; si un collègue a modifié le dossier entre-temps, l'Atelier le signale. Avec un autre navigateur, les dossiers restent sur le poste.
 
-La liste des communes termitées du Vaucluse est préremplie à partir de sources non officielles (arrêté n° 821 du 6 avril 2001) et doit être vérifiée et complétée dans Paramètres ; les Bouches-du-Rhône sont entièrement couvertes (arrêté du 19 juillet 2001).
+Zones préremplies : Vaucluse d'après la carte de la DDT de Vaucluse (2022) — 51 communes contaminées par les termites ou susceptibles de l'être, zone de risque de mérule à Avignon ; Bouches-du-Rhône entièrement couvertes pour les termites (arrêté du 19 juillet 2001). Les autres départements se complètent dans Paramètres.
 
 Les mails Outlook (.msg) sont lus avec msgreader (`assets/vendor/msgreader`, licences Apache 2.0 et BSD).
 

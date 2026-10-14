@@ -18,8 +18,13 @@ const vente = (o) => Object.assign({
 test('Zones termites : commune listée, département entier, département partiel', () => {
   assert.strictEqual(E.zone(P.zonesTermites, P.departementsTermites, { codePostal: '84000', commune: 'AVIGNON' }).statut, 'oui');
   assert.strictEqual(E.zone(P.zonesTermites, P.departementsTermites, { codePostal: '13100', commune: 'Aix-en-Provence' }).statut, 'oui');
-  assert.strictEqual(E.zone(P.zonesTermites, P.departementsTermites, { codePostal: '84100', commune: 'Orange' }).statut, 'inconnu');
+  // Vaucluse : liste complète (carte DDT 2022).
+  assert.strictEqual(E.zone(P.zonesTermites, P.departementsTermites, { codePostal: '84100', commune: 'Orange' }).statut, 'non');
   assert.strictEqual(E.zone(P.zonesTermites, P.departementsTermites, { codePostal: '84700', commune: 'Sorgues' }).statut, 'oui');
+  assert.strictEqual(E.zone(P.zonesTermites, P.departementsTermites, { codePostal: '84800', commune: 'L\'Isle sur la Sorgue' }).statut, 'oui');
+  assert.strictEqual(E.zone(P.zonesTermites, P.departementsTermites, { codePostal: '83000', commune: 'Toulon' }).statut, 'inconnu');
+  assert.strictEqual(E.zone(P.zonesMerule, P.departementsMerule, { codePostal: '84000', commune: 'Avignon' }).statut, 'oui');
+  assert.strictEqual(E.zone(P.zonesMerule, P.departementsMerule, { codePostal: '84300', commune: 'Cavaillon' }).statut, 'non');
   assert.strictEqual(E.normCommune('St-Rémy-de-Provence'), 'saint remy de provence');
 });
 
