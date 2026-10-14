@@ -22,8 +22,9 @@
     { id: 'plusValue', title: 'Plus-value immobilière', sub: 'Taux d\'imposition et forfaits.' },
     { id: 'succession', title: 'Succession & donation', sub: 'Abattements, barème en ligne directe et régimes particuliers.' },
     { id: 'origine', title: 'Origine de propriété', sub: 'Présentation des dates et des prix ; trames de rédaction.' },
+    { id: 'dossiers', title: 'Suivi des dossiers', sub: 'Pièces attendues à chaque étape ; communes soumises à un arrêté termites ou mérule.' },
   ];
-  const ANCHOR = { 'plus-value': 'plusValue', succession: 'succession', commun: 'commun', origine: 'origine' };
+  const ANCHOR = { 'plus-value': 'plusValue', succession: 'succession', commun: 'commun', origine: 'origine', dossiers: 'dossiers' };
 
   function mount(container, arg) {
     let params = A.store.getParams();
@@ -127,7 +128,59 @@
           nb ? nb + ' trame(s) personnalisée(s) sur ce poste ; elles sont incluses dans l\'export.' : 'Trames d\'origine (aucune modification).'));
     }
 
-    const builders = { commun: sectionCommun, plusValue: sectionPlusValue, succession: sectionSuccession, origine: sectionOrigine };
+    function sectionDossiers() {
+      const p = params.dossiers;
+      const E = A.engines.dossiers;
+      const texte = (obj, key, aria, structural) => ui.textInput({ value: obj[key], ariaLabel: aria, onChange: (v) => { obj[key] = v; save('dossiers'); }, onCommit: structural ? () => render() : null });
+      const choix = (obj, key, options, aria) => ui.selectInput({ value: obj[key] || '', options, ariaLabel: aria, onChange: (v) => { obj[key] = v; save('dossiers'); } });
+      const retirer = (liste, x) => ui.button('Retirer', { icon: 'trash', iconOnly: true, variant: 'ghost', small: true, onClick: () => { liste.splice(liste.indexOf(x), 1); save('dossiers', true); } });
+      const listePieces = (type) => {
+        const liste = p.pieces[type];
+        return h('div', { class: 'stack-sm' },
+          ui.table([
+            { label: 'Pièce', render: (x) => texte(x, 'libelle', 'Pièce') },
+            { label: 'Étape', render: (x) => choix(x, 'etape', E.ETAPES[type].map((e) => ({ value: e.id, label: e.libelle })), 'Étape') },
+            { label: 'Demandée', render: (x) => (x.auto === 'diagnostics' ? h('span', { class: 'readonly' }, 'selon les diagnostics') : choix(x, 'condition', E.CONDITIONS.map((c) => ({ value: c.id, label: c.libelle })), 'Condition')) },
+            { label: '', render: (x) => retirer(liste, x) },
+          ], liste, { compact: true }),
+          ui.button('Ajouter une pièce', { icon: 'plus', variant: 'soft', small: true, onClick: () => { liste.push({ id: 'perso' + Date.now().toString(36), libelle: 'Nouvelle pièce', etape: E.ETAPES[type][0].id, condition: '' }); save('dossiers', true); } }));
+      };
+      const listeZones = (cle, cleDept) => {
+        const liste = p[cle];
+        const depts = p[cleDept];
+        return h('div', { class: 'stack-sm' },
+          ui.table([
+            { label: 'Département', render: (x) => texte(x, 'dept', 'Département') },
+            { label: 'Commune (* = tout le département)', render: (x) => texte(x, 'commune', 'Commune') },
+            { label: 'Arrêté', render: (x) => texte(x, 'arrete', 'Arrêté') },
+            { label: '', render: (x) => retirer(liste, x) },
+          ], liste, { compact: true, empty: 'Aucune commune.' }),
+          ui.button('Ajouter une commune', { icon: 'plus', variant: 'soft', small: true, onClick: () => { liste.push({ dept: '84', commune: '', arrete: '' }); save('dossiers', true); } }),
+          h('h4', { class: 'param-sub' }, 'Couverture des départements'),
+          h('p', { class: 'param-help' }, 'Pour une commune absente de la liste : « en partie » ou inconnu = à vérifier ; « aucun arrêté » = non requis.'),
+          ui.table([
+            { label: 'Département', render: (x) => h('span', null, x.dept) },
+            { label: 'Arrêté', render: (x) => ui.selectInput({ value: depts[x.dept], options: [{ value: 'tout', label: 'Tout le département' }, { value: 'partie', label: 'Une partie des communes' }, { value: 'aucun', label: 'Aucun arrêté' }], ariaLabel: 'Couverture', onChange: (v) => { depts[x.dept] = v; save('dossiers'); } }) },
+            { label: '', render: (x) => ui.button('Retirer', { icon: 'trash', iconOnly: true, variant: 'ghost', small: true, onClick: () => { delete depts[x.dept]; save('dossiers', true); } }) },
+          ], Object.keys(depts).sort().map((k) => ({ dept: k })), { compact: true, empty: 'Aucun département renseigné.' }),
+          (() => {
+            const champ = ui.textInput({ value: '', placeholder: 'n° (ex. : 30)', ariaLabel: 'Département à ajouter', onChange: () => {} });
+            return h('div', { class: 'inline-add' }, champ, ui.button('Ajouter le département', { icon: 'plus', variant: 'soft', small: true, onClick: () => { const v = champ.value.trim(); if (v) { depts[v] = 'partie'; save('dossiers', true); } } }));
+          })());
+      };
+      return h('div', null,
+        h('div', { class: 'param-list' },
+          row('Relance des pièces demandées', ui.numberInput({ value: p.delaiRelance, suffix: 'jours', onChange: (v) => { if (v !== null) { p.delaiRelance = v; save('dossiers'); } } }), 'Une pièce demandée depuis plus longtemps est signalée « à relancer ».')),
+        h('h4', { class: 'param-sub' }, 'Pièces — ventes'), listePieces('vente'),
+        h('h4', { class: 'param-sub' }, 'Pièces — successions'), listePieces('succession'),
+        h('h4', { class: 'param-sub' }, 'Termites : communes délimitées par arrêté préfectoral'),
+        ui.note('Liste préremplie à partir de sources non officielles pour le Vaucluse : à confirmer avec l\'arrêté en vigueur (préfecture, DDT ou mairie) et à compléter pour votre secteur.', 'warn'),
+        listeZones('zonesTermites', 'departementsTermites'),
+        h('h4', { class: 'param-sub' }, 'Mérule : zones de présence d\'un risque'),
+        listeZones('zonesMerule', 'departementsMerule'));
+    }
+
+    const builders = { commun: sectionCommun, plusValue: sectionPlusValue, succession: sectionSuccession, origine: sectionOrigine, dossiers: sectionDossiers };
 
     async function importer() {
       try {

@@ -1,9 +1,10 @@
 # Atelier notarial
 
-Boîte à outils de calcul pour l'étude notariale. Un écran d'accueil façon « téléphone » donne accès à chaque outil :
+Boîte à outils de l'étude notariale. Un écran d'accueil façon « téléphone » donne accès à chaque outil :
 
 | Outil | Rôle |
 | --- | --- |
+| **Suivi des dossiers** | Tableau de bord des ventes et successions de l'étude : avancement des pièces par étape (promesse, vente / ouverture, règlement), échéances, alertes et relances. Diagnostics obligatoires selon le bien et la commune (zones termites et mérule tenues dans Paramètres), avec leur durée de validité. Import d'un mail d'agence (.msg Outlook, .eml), d'une offre ou d'un compromis (PDF) : parties, bien, prix, notaires et pièces jointes sont repris automatiquement. Dossiers partagés entre collègues via un dossier du réseau de l'étude. |
 | **Plus-value immobilière** | Plus-value des particuliers : origines de propriété multiples, démembrement, terrain bâti, forfaits, abattements, surtaxe, récapitulatif par vendeur. |
 | **Succession & donation** | Patrimoine par branche (biens propres de chaque parent, biens communs), donations envisagées ligne par ligne (qui donne, quel bien, quel montant, à qui). Comparatif parent par parent : A · succession sans donation, B · pleine propriété aux enfants, C · nue-propriété aux enfants, D · montage optimisé en nue-propriété (part des biens donnée à chaque enfant, don aux petits-enfants à égalité entre les branches, part gardée pour la succession, choisis pour minimiser les droits de la famille). Synthèse client avec graphiques, enregistrable en PDF. |
 | **Origine de propriété** | Saisie de la chaîne de propriété (11 types d'actes) et des personnes, rédaction automatique à partir de trames modifiables, rappel « susnommé » des personnes déjà désignées, contrôle de l'origine trentenaire, copie vers Word. |
@@ -20,6 +21,17 @@ Aucune installation : ouvrir **`index.html`** dans Chrome, Edge ou Firefox (doub
 - Le dossier en cours est aussi conservé automatiquement dans le navigateur : on le retrouve en revenant dans l'outil.
 - **Paramètres** : les modifications sont enregistrées sur le poste et s'appliquent à tous les dossiers. « Exporter » / « Importer » permet de partager les mêmes paramètres entre collègues.
 
+### Suivi des dossiers
+
+1. **Ouvrir un dossier** : « Importer un mail ou un document » (ou glisser le mail depuis Outlook sur le tableau de bord). L'Atelier lit le mail sur le poste et propose ce qu'il a trouvé (vendeurs, acquéreurs, société et ses représentants, adresse et cadastre du bien, prix, honoraires, dépôt de garantie, financement, notaires, agence) ; les pièces jointes reconnues (pièces d'identité, diagnostics…) sont cochées « reçues ». Seuls les noms des pièces jointes sont conservés.
+2. **Pièces** : liste par étape, adaptée à la situation (copropriété, société, mariés ou pacsés, prêt, travaux, permis). Chaque pièce est « à obtenir », « demandée » (avec date, relance signalée après 15 jours), « reçue » ou « sans objet ». Les listes se modifient dans Paramètres → Suivi des dossiers.
+3. **Diagnostics** : obligatoires ou non selon le type de bien, l'époque du permis de construire, l'âge des installations, l'assainissement, la copropriété, la classe du DPE et la commune ; validité contrôlée à la date de signature. Le bouton « Interroger Géorisques » interroge, à la demande, la Base Adresse Nationale et Géorisques (seule l'adresse du bien est envoyée).
+4. **Partage** : avec Chrome ou Edge, « Choisir le dossier partagé » et désigner un dossier du réseau de l'étude ; chaque collègue choisit le même dossier. Un fichier par dossier y est enregistré ; si un collègue a modifié le dossier entre-temps, l'Atelier le signale. Avec un autre navigateur, les dossiers restent sur le poste.
+
+La liste des communes termitées du Vaucluse est préremplie à partir de sources non officielles (arrêté n° 821 du 6 avril 2001) et doit être vérifiée et complétée dans Paramètres ; les Bouches-du-Rhône sont entièrement couvertes (arrêté du 19 juillet 2001).
+
+Les mails Outlook (.msg) sont lus avec msgreader (`assets/vendor/msgreader`, licences Apache 2.0 et BSD).
+
 ### Origine de propriété
 
 1. **Chaîne de propriété** : une fiche par acte, de la plus récente à la plus ancienne (type d'acte, parties, date, notaire, publication, état hypothécaire, particularités).
@@ -30,7 +42,7 @@ Aucune installation : ouvrir **`index.html`** dans Chrome, Edge ou Firefox (doub
 
 Les trames d'origine sont adaptées des formules du JCl. Notarial Formulaire (V° Origine de propriété, fasc. 15, © LexisNexis) transmises par l'étude, pour son usage interne. En cas de diffusion ou de commercialisation de l'outil, elles devront être remplacées par des trames propres ou faire l'objet d'une licence.
 
-Confidentialité : rien n'est envoyé sur internet. Les polices sont incluses dans le dossier, l'application fonctionne hors connexion.
+Confidentialité : rien n'est envoyé sur internet (sauf la recherche Géorisques, lancée à la demande avec la seule adresse du bien). Les polices sont incluses dans le dossier, l'application fonctionne hors connexion.
 
 ## Organisation du code
 

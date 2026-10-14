@@ -8,7 +8,7 @@
   const ui = A.ui;
 
   // Ordre d'affichage sur l'écran d'accueil.
-  const ORDER = ['plus-value', 'succession', 'origine', 'parametres'];
+  const ORDER = ['dossiers', 'plus-value', 'succession', 'origine', 'parametres'];
   const appRoot = document.getElementById('app');
 
   function draftLabel(app) {
@@ -37,7 +37,7 @@
         h('p', { class: 'home-sub' }, 'Les outils de calcul de l\'étude')),
       h('nav', { class: 'home-grid', 'aria-label': 'Outils' }, tiles),
       h('footer', { class: 'home-foot' }, ui.icon('lock', 16),
-        h('span', null, 'Les dossiers restent sur ce poste : rien n\'est envoyé sur internet.'))));
+        h('span', null, 'Les dossiers restent sur ce poste ou sur le réseau de l\'étude : rien n\'est envoyé sur internet sans votre demande.'))));
   }
 
   function route() {
