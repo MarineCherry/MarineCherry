@@ -235,6 +235,9 @@
         ctx.live((r) => {
           const v = r.hypotheses.D.parents[i];
           if (!v) return null;
+          if (!(r.capacitePE[g] > 0)) {
+            return h('p', { class: 'small muted' }, parentNom(s, i) + ' ne conserve aucun bien (hors liquidités) après la donation aux enfants : rien ne peut être donné en plus aux petits-enfants. Réduisez la donation aux enfants dans le tableau ci-dessus pour laisser une marge.');
+          }
           return h('div', { class: 'stack-sm' },
             h('ul', { class: 'aside-list' }, v.repartitionPE.filter((x) => x.nombre).map((x) => {
               const enf = r.enfants.find((e) => e.id === x.enfant);
@@ -254,7 +257,11 @@
           ctx.changed();
           ui.toast(gain > 0.5 ? 'Montants optimaux appliqués : ' + fmtEuro(gain) + ' de droits en moins par rapport à C.' : 'Aucun don aux petits-enfants ne réduit les droits dans cette configuration.');
         },
-      }))) : ui.note('Ajoutez les petits-enfants dans l\'onglet Famille, en indiquant de quel enfant ils sont issus.'),
+      })),
+      ctx.live((r) => h('div', { class: 'stack-sm detail-d' },
+        h('h3', { class: 'section-title' }, 'Détail de l\'hypothèse D'),
+        h('p', { class: 'small muted' }, 'Pour chaque branche : donation aux enfants (comme en C), don aux petits-enfants, puis succession résiduelle des biens conservés. Abattement de ' + fmtEuro(ctx.params().abattEnfant) + ' par enfant et de ' + fmtEuro(ctx.params().abattPetitEnfant) + ' par petit-enfant, pour chaque grand-parent.'),
+        vueHypothese(s, r, 'D')))) : ui.note('Ajoutez les petits-enfants dans l\'onglet Famille, en indiquant de quel enfant ils sont issus.'),
     { subtitle: 'Le bouton « Calculer le montant optimal » recherche, pour chaque grand-parent, le montant qui rend le total des droits le plus faible.' });
 
     return h('div', { class: 'stack' }, enfantsCard, peCard);
@@ -294,32 +301,36 @@
 
   /* ---------- Résultats (réutilisés à l'impression) ---------- */
   // Tableau d'une branche (ou du cumul) pour une hypothèse.
-  function tableBranche(v, code, detail) {
+  // compact : seulement « Reçu » et « Droits » (tableau de cumul imprimé). Sinon détail du calcul :
+  // abattement, exonérations (si besoin), reste taxable.
+  function tableBranche(v, code, compact) {
     const sansDon = code === 'A';
-    const cols = [{ label: 'Bénéficiaire', key: 'nom' }];
     const succLabel = sansDon ? 'Succession' : 'Succession résiduelle';
-    if (!sansDon) {
-      cols.push(
-        { label: 'Reçu', num: true, className: 'col-don', render: (x) => (x.donation ? fmtEuro(x.donation.transmis) : '') },
-        detail ? { label: 'Abattement', num: true, className: 'col-don', render: (x) => (x.donation ? fmtEuro(x.donation.abattement) : '') } : null,
-        detail ? { label: 'Exonérations', num: true, className: 'col-don', render: (x) => (x.donation ? fmtEuro(x.donation.exonerations) : '') } : null,
-        { label: 'Droits', num: true, className: 'col-don col-strong', render: (x) => (x.donation ? fmtEuro(x.donation.droits) : '') });
-    }
-    cols.push(
-      { label: 'Reçu', num: true, className: 'col-succ', render: (x) => (x.succession ? fmtEuro(x.succession.transmis) : '—') },
-      detail ? { label: 'Abattement', num: true, className: 'col-succ', render: (x) => (x.succession ? fmtEuro(x.succession.abattement) : '') } : null,
-      detail ? { label: 'Exonérations', num: true, className: 'col-succ', render: (x) => (x.succession ? fmtEuro(x.succession.exonerations) : '') } : null,
-      { label: 'Droits', num: true, className: 'col-succ col-strong', render: (x) => (x.succession ? fmtEuro(x.succession.droits) : '—') });
+    const lignesDe = { donation: v.enfants.map((x) => x.donation).concat(v.petitsEnfants), succession: v.enfants.map((x) => x.succession) };
+    const groupe = (cle, cls) => {
+      const avecExo = !compact && lignesDe[cle].some((x) => x && x.exonerations > 0.5);
+      return [
+      { label: 'Reçu', num: true, className: cls, render: (x) => (x[cle] ? fmtEuro(x[cle].transmis) : '—') },
+      compact ? null : { label: 'Abattement', num: true, className: cls, render: (x) => (x[cle] ? fmtEuro(x[cle].abattement) : '') },
+      avecExo ? { label: 'Exonérations', num: true, className: cls, render: (x) => (x[cle] ? fmtEuro(x[cle].exonerations) : '') } : null,
+      compact ? null : { label: 'Reste taxable', num: true, className: cls, render: (x) => (x[cle] ? fmtEuro(x[cle].resteTaxable) : '') },
+      { label: 'Droits', num: true, className: cls + ' col-strong', render: (x) => (x[cle] ? fmtEuro(x[cle].droits) : '—') },
+      ].filter(Boolean);
+    };
+    const cols = [{ label: 'Bénéficiaire', key: 'nom' }];
+    const colsDon = sansDon ? [] : groupe('donation', 'col-don');
+    const colsSucc = groupe('succession', 'col-succ');
+    cols.push(...colsDon, ...colsSucc);
     if (!sansDon) {
       cols.push(
         { label: 'Total des droits', num: true, className: 'col-strong', render: (x) => fmtEuro(x.totalDroits) },
         { label: 'Économie', num: true, render: (x) => (x.economie === undefined ? '' : h('span', { class: x.economie < -0.5 ? 'neg' : x.economie > 0.5 ? 'pos' : '' }, fmtEuro(x.economie))) });
     }
     const colonnes = cols.filter(Boolean);
-    const nDon = sansDon ? 0 : detail ? 4 : 2;
-    const nSucc = detail ? 4 : 2;
+    const nDon = colsDon.length;
+    const nSucc = colsSucc.length;
     const rows = v.enfants.slice();
-    v.petitsEnfants.filter((x) => x.transmis > 0).forEach((x) => rows.push({ nom: x.nom + ' (petit-enfant)', donation: x, succession: null, totalDroits: x.droits, __class: 'row-pe' }));
+    v.petitsEnfants.filter((x) => x.transmis > 0).forEach((x) => rows.push({ nom: h('span', null, x.nom, h('span', { class: 'muted' }, ' · petit-enfant')), donation: x, succession: null, totalDroits: x.droits, __class: 'row-pe' }));
     return ui.table(colonnes, rows, {
       compact: true,
       groups: [{ label: '', span: 1 }].concat(nDon ? [{ label: "Donation (aujourd'hui)", span: nDon, className: 'group-don' }] : [])
@@ -344,9 +355,9 @@
       branches.length > 1
         ? h('div', { class: 'branches' }, branches.map((v) => h('div', { class: 'branche' },
           h('h4', null, 'Branche de ' + parentNom(s, v.parent === 'P2' ? 1 : 0)),
-          tableBranche(v, code, o.detail))))
-        : tableBranche(branches[0], code, o.detail),
-      branches.length > 1 ? h('details', { class: 'sub-details', open: o.ouvert || null }, h('summary', null, 'Cumul des deux parents'), tableBranche(H.cumul, code, !o.ouvert)) : null);
+          tableBranche(v, code)))) 
+        : tableBranche(branches[0], code),
+      branches.length > 1 ? h('details', { class: 'sub-details', open: o.ouvert || null }, h('summary', null, 'Cumul des deux parents'), tableBranche(H.cumul, code, o.ouvert)) : null);
   }
 
   function tabResultats(ctx) {
