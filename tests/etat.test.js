@@ -137,7 +137,7 @@ test('Conversion en origines puis rédaction', () => {
   assert.strictEqual(defunt.decesDate, '2004-02-01');
   const texte = E.texte(E.rediger({ personnes: res.personnes, actes: res.actes }, { aujourdhui: '2026-10-13' }).blocs);
   assert.match(texte, /appartient au VENDEUR, au moyen de l'acquisition qu'il en a faite de Monsieur/);
-  assert.match(texte, /publié au fichier immobilier de LYON 1, le 20 mai 2021, volume 2021P, n° 4567/);
+  assert.match(texte, /publié au service de la publicité foncière de LYON 1, le 20 mai 2021, volume 2021P, n° 4567/);
   assert.match(texte, /pour l'avoir recueilli dans la succession de Monsieur/);
 });
 

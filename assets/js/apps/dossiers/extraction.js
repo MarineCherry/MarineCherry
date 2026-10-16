@@ -170,15 +170,24 @@
   function personneVide(nom, qualite) {
     return { nom: nom || '', qualite: qualite || 'personne', civilite: '', adresse: '', codePostal: '', commune: '', telephone: '', email: '', profession: '', situation: '', representants: '' };
   }
-  // « Monsieur MARTIN Paul » → { civilite: 'M.', nom: 'MARTIN Paul' }
+  // Prénom avant le NOM : « MARTIN Paul » → « Paul MARTIN » (le nom est repéré par ses capitales).
+  function prenomAvantNom(s) {
+    const mots = (s || '').split(/\s+/).filter(Boolean);
+    const estNom = (m) => m.length > 1 && m === m.toUpperCase() && /[A-ZÀ-Ý]/.test(m);
+    const noms = mots.filter(estNom);
+    const prenoms = mots.filter((m) => !estNom(m));
+    if (!noms.length || !prenoms.length) return mots.join(' ');
+    return prenoms.concat(noms).join(' ');
+  }
+  // « Monsieur MARTIN Paul » → { civilite: 'M.', nom: 'Paul MARTIN' }
   function lireNom(l) {
     const m = CIVILITE.exec(l);
     const civ = m ? (/^(madame|mme|mademoiselle|mlle)/i.test(m[1]) ? 'Mme' : 'M.') : '';
-    return { civilite: civ, nom: propre(l.replace(CIVILITE, '')).replace(/[,:;.]+$/, '') };
+    return { civilite: civ, nom: prenomAvantNom(propre(l.replace(CIVILITE, '')).replace(/[,:;.]+$/, '')) };
   }
   const estTelephone = (l) => /^[\d\s.+()-]{9,20}$/.test(l) && /^(0[1-9]|33[1-9])\d{7,9}$/.test(l.replace(/\D/g, '').replace(/^0033/, '33'));
   const EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/;
-  // « Claire ROUX » : nom en capitales, sans chiffre ni deux-points → « ROUX Claire ».
+  // « Claire ROUX » : nom en capitales, sans chiffre ni deux-points (prénom puis NOM).
   function nomSansCivilite(l) {
     if (/[:@\d]/.test(l) || l.length > 60) return null;
     const mots = l.replace(/[,;.]+$/, '').split(/\s+/);
@@ -187,7 +196,7 @@
     if (!maj.length) return null;
     const autres = mots.filter((m) => !maj.includes(m));
     if (autres.some((m) => !/^[A-ZÀ-Ý][a-zà-ÿ'-]+$/.test(m))) return null;
-    return maj.concat(autres).join(' ');
+    return autres.concat(maj).join(' ');
   }
   const SOCIETE = /(^|\s)(SCI|SARL|SAS|SASU|EURL|SA|SNC|SCP|SCEA|GFA|SELARL|Soci[ée]t[ée]|SOCI[ÉE]T[ÉE])(\s|$)/;
 

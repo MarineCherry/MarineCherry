@@ -96,7 +96,7 @@ test('Informations repérées dans le mail', () => {
   const m = X.lireEml(EML);
   const r = X.extraire({ sujet: m.sujet, expediteur: m.expediteur, corps: m.corps, piecesJointes: m.piecesJointes });
   assert.strictEqual(r.vendeurs.length, 2);
-  assert.strictEqual(r.vendeurs[0].nom, 'MARTIN Paul');
+  assert.strictEqual(r.vendeurs[0].nom, 'Paul MARTIN');
   assert.strictEqual(r.vendeurs[0].civilite, 'M.');
   assert.strictEqual(r.vendeurs[0].commune, 'Avignon');
   assert.strictEqual(r.vendeurs[0].email, 'paul.martin@example.fr');
@@ -105,7 +105,7 @@ test('Informations repérées dans le mail', () => {
   assert.strictEqual(r.acquereurs.length, 1);
   assert.strictEqual(r.acquereurs[0].nom, 'SCI LES OLIVIERS');
   assert.strictEqual(r.acquereurs[0].qualite, 'societe');
-  assert.strictEqual(r.acquereurs[0].representants, 'M. BERNARD Luc et Mme BERNARD Anne');
+  assert.strictEqual(r.acquereurs[0].representants, 'M. Luc BERNARD et Mme Anne BERNARD');
   assert.deepStrictEqual({ cp: r.bien.codePostal, commune: r.bien.commune, type: r.bien.type, copro: r.bien.copro, surface: r.bien.surface, cadastre: r.bien.cadastre },
     { cp: '84000', commune: 'Avignon', type: 'appartement', copro: true, surface: 68, cadastre: 'AB 112' });
   assert.deepStrictEqual(r.prix, { prix: 200000, prixFAI: 210000, honoraires: 10000, chargeHonoraires: 'acquereur' });
@@ -196,8 +196,8 @@ test('Mail transféré, sans civilité ni libellés (données fictives)', () => 
     '06 11 22 33 44',
   ].join('\n');
   const r = X.extraire({ sujet: 'TR: VENTE DUPONT / ROUX', expediteur: 'Étude <etude@84000.notaires.fr>', corps, piecesJointes: [] });
-  assert.deepStrictEqual(r.acquereurs.map((x) => [x.nom, x.telephone, x.email, x.commune]), [['ROUX Claire', '06 00 000 00 01', 'claire.roux@example.fr', 'Orange']]);
-  assert.deepStrictEqual(r.vendeurs.map((x) => [x.nom, x.commune]), [['DUPONT Marc', 'Avignon']]);
+  assert.deepStrictEqual(r.acquereurs.map((x) => [x.nom, x.telephone, x.email, x.commune]), [['Claire ROUX', '06 00 000 00 01', 'claire.roux@example.fr', 'Orange']]);
+  assert.deepStrictEqual(r.vendeurs.map((x) => [x.nom, x.commune]), [['Marc DUPONT', 'Avignon']]);
   assert.deepStrictEqual({ cp: r.bien.codePostal, type: r.bien.type, copro: r.bien.copro, travaux: r.bien.travauxRecents }, { cp: '84100', type: 'appartement', copro: true, travaux: true });
   assert.strictEqual(r.bien.adresse, 'Résidence Les Pins - avenue des Pins - Bât 2, 3ème étage');
   assert.deepStrictEqual(r.prix, { prix: 93000, prixFAI: 99000, honoraires: 6000 });

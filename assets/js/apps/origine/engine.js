@@ -629,8 +629,8 @@
     ['ouverture', '« L\'immeuble ci-dessus appartient » ou « Antérieurement, ledit immeuble appartenait »'],
     ['acquereurs', 'bénéficiaires de l\'acte (état civil complet ou « susnommé »)'], ['acquereurs_noms', 'leurs noms seulement'],
     ['cedants', 'précédents propriétaires (état civil complet ou « susnommé »)'], ['cedants_noms', 'leurs noms seulement'],
-    ['date', "date de l'acte"], ['notaire', '« Me X, notaire à Y »'],
-    ['publication', '« publié au fichier immobilier de … »'], ['publication_feminin', 'idem, accordé au féminin (attestation)'], ['publication_pluriel', 'idem, au pluriel'],
+    ['date', "date de l'acte"], ['notaire', '« Maître X, notaire à Y »'],
+    ['publication', '« publié au service de la publicité foncière de … »'], ['publication_feminin', 'idem, accordé au féminin (attestation)'], ['publication_pluriel', 'idem, au pluriel'],
     ['ancien', 'oui si la formalité est antérieure au 1er janvier 1956'], ['etat', 'résultat de l\'état hypothécaire'],
   ];
   const DOC_GROUPES = ['acquereurs', 'cedants'];

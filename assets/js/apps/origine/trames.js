@@ -115,14 +115,14 @@
     titre_anterieure: 'ORIGINE ANTÉRIEURE',
     ouverture_immediate: 'Le BIEN objet des présentes appartient',
     ouverture_anterieure: 'Antérieurement, le BIEN appartenait',
-    publication: 'publié{e} au fichier immobilier de {service}, le {date_publication}, volume {volume}, n° {numero}',
+    publication: 'publié{e} au service de la publicité foncière de {service}, le {date_publication}, volume {volume}, n° {numero}',
     publication_ancienne: 'transcrit{e} au bureau des hypothèques de {service}, le {date_publication}, volume {volume}, n° {numero}',
     personne: '{civilite} {prenoms} {nom}{si nom_usage}, {accord personne : époux | épouse | époux | épouses} {nom_usage}{fin}{si profession}, {si decede}en son vivant {fin}{profession}{fin}, demeurant à {domicile}, {accord personne : né | née | nés | nées} à {naissance_lieu} le {naissance_date}{si situation}, {situation}{fin}{si nationalite}, de nationalité {nationalite}{fin}',
     personne_rappel: '{civilite} {prenoms} {nom}, {accord personne : susnommé | susnommée | susnommés | susnommées}',
     vendeur: 'le VENDEUR',
     vendeur_nomme: '{civilite} {prenoms} {nom}, VENDEUR aux présentes',
     societe: 'la société dénommée {denomination}{si forme}, {forme}{fin}, dont le siège est à {siege}, identifiée au SIREN sous le numéro {siren}',
-    notaire: 'Me {notaire_nom}, notaire à {notaire_ville}',
+    notaire: 'Maître {notaire_nom}, notaire à {notaire_ville}',
   };
 
   const join = (lines) => lines.join('\n\n');

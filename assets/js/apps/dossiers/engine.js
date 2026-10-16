@@ -309,7 +309,12 @@
   // Intitulé du dossier : « MARTIN / SCI LES OLIVIERS » ou « Succession DUPONT ».
   function reference(d) {
     if (d.reference) return d.reference;
-    const noms = (l) => (l || []).filter((x) => x.nom).map((x) => (x.qualite === 'societe' ? x.nom : (x.nom.split(/\s+/)[0] || '').toUpperCase()));
+    // Nom de famille : le mot en capitales (« Paul MARTIN » → MARTIN), sinon le dernier mot.
+    const famille = (nom) => {
+      const mots = nom.trim().split(/\s+/);
+      return (mots.find((m) => m.length > 1 && m === m.toUpperCase() && /[A-ZÀ-Ý]/.test(m)) || mots[mots.length - 1] || '').toUpperCase();
+    };
+    const noms = (l) => (l || []).filter((x) => x.nom).map((x) => (x.qualite === 'societe' ? x.nom : famille(x.nom)));
     const uniq = (a) => a.filter((x, i) => a.indexOf(x) === i);
     if (d.type === 'succession') return d.defunt && d.defunt.nom ? 'Succession ' + d.defunt.nom.toUpperCase() : '';
     const v = uniq(noms(d.vendeurs)).join(' - '), a = uniq(noms(d.acquereurs)).join(' - ');

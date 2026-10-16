@@ -115,7 +115,7 @@
         return h('tr', { class: concerne ? '' : 'muted-row' },
           h('td', null, cb),
           h('td', { class: 'nowrap' }, fmtDate(f.dateActe) || '—'),
-          h('td', null, h('div', { class: 'strong' }, f.nature), f.redacteur ? h('div', { class: 'small muted' }, f.redacteur.replace(/^NOT\s+/, 'Me ')) : null),
+          h('td', null, h('div', { class: 'strong' }, f.nature), f.redacteur ? h('div', { class: 'small muted' }, f.redacteur.replace(/^NOT\s+/, 'Maître ')) : null),
           h('td', null, ui.selectInput({ value: c.type, options: LIBELLES_TYPES().map((t) => ({ value: t.id, label: t.libelle })), ariaLabel: 'Type d\'acte', onChange: (v) => { c.type = v; } })),
           h('td', { class: 'small' }, f.disposants.map((p) => p.nom).join(', ') || '—', ' → ', f.beneficiaires.map((p) => p.nom).join(', ') || '—'),
           h('td', { class: 'small' }, Array.from(new Set(biens)).join(' ; ')),
