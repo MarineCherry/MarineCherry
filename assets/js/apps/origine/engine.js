@@ -239,9 +239,23 @@
      3. Éléments communs aux actes
      ====================================================================== */
 
+  /*
+   * Prénom avant le NOM : « NEGRIN-MORTEAU Nathalie » → « Nathalie NEGRIN-MORTEAU ».
+   * Le nom est repéré par ses capitales ; un nom saisi entièrement en capitales ou en minuscules est laissé tel quel.
+   */
+  function prenomAvantNom(s) {
+    const t = txt(s);
+    if (!t) return t;
+    const mots = t.split(/\s+/);
+    const estNom = (m) => /[A-ZÀ-Ý]{2}/.test(m) && m === m.toLocaleUpperCase('fr-FR');
+    const i = mots.findIndex((m) => !estNom(m));
+    // Seulement si le texte commence par le nom en capitales et se poursuit par des prénoms.
+    if (i <= 0 || !mots.slice(i).every((m) => !estNom(m))) return t;
+    return mots.slice(i).concat(mots.slice(0, i)).join(' ');
+  }
   function notaireVar(n, ctx) {
     if (!n || (!txt(n.nom) && !txt(n.ville))) return null;
-    return lazy(true, () => rendreTrame('commun:notaire', { notaire_nom: txt(n.nom), notaire_ville: majuscules(n.ville) }, {}, ctx));
+    return lazy(true, () => rendreTrame('commun:notaire', { notaire_nom: prenomAvantNom(n.nom), notaire_ville: majuscules(n.ville) }, {}, ctx));
   }
   const memeNotaire = (a, b) => a && b && txt(a.nom) && (a.nom || '').trim().toLowerCase() === (b.nom || '').trim().toLowerCase();
 
@@ -950,7 +964,7 @@
 
   return {
     rediger, apercu, designation, texte, html, controler, parse, accorder, documentation, nomTrame,
-    nouvellePersonne, nouvelActe, completerActe, exemple, nomCourt,
+    nouvellePersonne, nouvelActe, completerActe, exemple, nomCourt, prenomAvantNom,
     TYPES, TYPES_LISTE, IDS_TRAMES, TRAMES_DEFAUT: T.defaults, VIDE,
   };
 });

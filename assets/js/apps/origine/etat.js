@@ -336,9 +336,17 @@
 
   const cle = (p) => (p.morale ? 'M:' + (p.siren || norm(p.nom)) : 'P:' + norm(p.nom) + ':' + p.naissanceDate);
 
+  // « NEGRIN-MORTEAU Nathalie » → « Nathalie NEGRIN-MORTEAU » (nom en capitales placé en tête).
+  function prenomAvantNom(t) {
+    const mots = t.split(/\s+/).filter(Boolean);
+    const estNom = (m) => /[A-ZÀ-Ý]{2}/.test(m) && m === m.toLocaleUpperCase('fr-FR');
+    const i = mots.findIndex((m) => !estNom(m));
+    if (i <= 0 || !mots.slice(i).every((m) => !estNom(m))) return t;
+    return mots.slice(i).concat(mots.slice(0, i)).join(' ');
+  }
   function notaire(redacteur, commune) {
     const m = /^NOT\.?\s+(.*)$/i.exec((redacteur || '').trim());
-    return { nom: m ? m[1].trim() : (redacteur || '').trim(), ville: (commune || '').trim() };
+    return { nom: prenomAvantNom(m ? m[1].trim() : (redacteur || '').trim()), ville: (commune || '').trim() };
   }
   function enliassement(ref) {
     const m = /^(\d{4})\s*([A-Z])\s*(?:n°\s*)?(\d+)$/.exec((ref || '').trim());

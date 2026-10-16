@@ -127,3 +127,13 @@ test('Apport en société : société bénéficiaire, titres attribués, apport 
   assert.match(t, /à titre partiellement onéreux à concurrence du passif de CINQUANTE MILLE EUROS \(50\s000,00\sEUR\) pris en charge par la société/);
   assert.ok(t.includes('attribué à Monsieur Paul BERNARD UN (1) action de la société LES TILLEULS, d\'une valeur nominale de 10 euros chacune.'));
 });
+
+test('Notaire : prénom avant le NOM, même saisi ou lu à l\'envers', () => {
+  assert.strictEqual(E.prenomAvantNom('NEGRIN-MORTEAU Nathalie'), 'Nathalie NEGRIN-MORTEAU');
+  assert.strictEqual(E.prenomAvantNom('DE LA FONTAINE Jean-Marie'), 'Jean-Marie DE LA FONTAINE');
+  assert.strictEqual(E.prenomAvantNom('Paul LEGRAND'), 'Paul LEGRAND');
+  assert.strictEqual(E.prenomAvantNom('GARDEL'), 'GARDEL');
+  const ex = E.exemple();
+  ex.actes[0].notaire = { nom: 'LEROY Sophie', ville: 'Lyon' };
+  assert.ok(E.texte(E.rediger(ex, {}).blocs).includes('reçu par Maître Sophie LEROY, notaire à LYON'));
+});
