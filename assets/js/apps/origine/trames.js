@@ -96,6 +96,11 @@
       'Cet acte a été {publication}.',
       'L\'état délivré du chef de {defunts_noms} {etat}.',
     ],
+    apport: [
+      '{ouverture} à {acquereurs}, par suite de l\'apport qui lui en a été fait par {cedants}, suivant acte {operation} reçu par {notaire}, le {date}, {publication}.',
+      'Cet apport a été consenti à la société en pleine propriété, à titre {si titre_apport = onereux}partiellement onéreux à concurrence du passif de {passif} pris en charge par la société{sinon}pur et simple{fin}, en rémunération duquel il a été attribué à {cedants_noms} {nombre_titres} {titres} de la société {societe}, d\'une valeur nominale de {valeur_nominale} chacune.',
+      'L\'état délivré sur cette formalité {etat}.',
+    ],
     succession: [
       '{ouverture} à {acquereurs}, pour l\'avoir recueilli dans la succession de {cedants}, {lien_defunt}, {deces_cedants}, dont {accord acquereurs : il était seul héritier | elle était seule héritière | ils étaient seuls héritiers | elles étaient seules héritières}.',
       'Ainsi que le constatent :',

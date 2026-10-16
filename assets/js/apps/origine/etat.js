@@ -99,7 +99,8 @@
     [/PARTAGE/, 'partage'],
     [/ECHANGE/, 'echange'],
     [/ADJUDICATION/, 'adjudication'],
-    [/VENTE|CESSION|APPORT/, 'vente'],
+    [/APPORT|FUSION/, 'apport'],
+    [/VENTE|CESSION/, 'vente'],
   ];
   function typeActe(nature, complement) {
     const n = sansAccents(nature).toUpperCase();

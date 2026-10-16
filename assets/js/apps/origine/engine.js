@@ -582,6 +582,35 @@
       doc: [['en_propre', 'oui si bien propre'], ['defunts', 'défunts (état civil)'], ['defunts_noms', 'noms des défunts'], ['successions_de', '« de la succession de » / « des successions réunies et confondues de »'],
         ['lien_defunts', 'ex. « leur père et mère »'], ['defunts_deces', 'décès des défunts'], ['notorietes', 'actes de notoriété'], ['soulte', 'mention de soulte']],
     },
+    apport: {
+      libelle: 'Apport en société', acquereurs: 'Société bénéficiaire', cedants: 'Apporteur(s)', acte: "Acte d'apport",
+      champs: [
+        { cle: 'operation', libelle: 'Acte', type: 'choix', options: [['constitution', 'De constitution'], ['augmentation', "D'augmentation de capital"], ['apport-partiel', "D'apport partiel d'actif"], ['fusion', 'De fusion']], defaut: 'constitution' },
+        { cle: 'titreApport', libelle: 'Apport consenti à titre', type: 'choix', options: [['pur', 'Pur et simple'], ['onereux', 'Partiellement onéreux']], defaut: 'pur' },
+        { cle: 'passif', libelle: 'Passif pris en charge par la société', type: 'montant', si: (a) => a.titreApport === 'onereux' },
+        { cle: 'nombreTitres', libelle: 'Nombre de titres attribués', type: 'texte', aide: 'Ex. : 1 000 (écrit en lettres et en chiffres dans le texte).' },
+        { cle: 'natureTitres', libelle: 'Titres', type: 'choix', options: [['parts', 'Parts sociales'], ['actions', 'Actions']], defaut: 'parts' },
+        { cle: 'valeurNominale', libelle: 'Valeur nominale de chaque titre', type: 'texte', aide: 'Ex. : 10 euros' },
+      ],
+      vars: (a, ctx) => {
+        const n = Number(String(a.nombreTitres || '').replace(/[\s.]/g, ''));
+        const nombre = Number.isInteger(n) && n > 0 ? L.enLettres(n).toUpperCase() + ' (' + n.toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ') + ')' : txt(a.nombreTitres);
+        const un = n === 1;
+        const societes = personnesDe(a.acquereurs, ctx).map((p) => majuscules(p.nom)).filter(Boolean);
+        return {
+          operation: { constitution: 'de constitution', augmentation: "d'augmentation de capital", 'apport-partiel': "d'apport partiel d'actif", fusion: 'de fusion' }[a.operation || 'constitution'],
+          titre_apport: a.titreApport || 'pur',
+          passif: montantVar(a.passif, a.prixDevise, ctx),
+          nombre_titres: nombre,
+          titres: a.natureTitres === 'actions' ? (un ? 'action' : 'actions') : (un ? 'part sociale' : 'parts sociales'),
+          societe: societes.length ? societes.join(' et ') : null,
+          valeur_nominale: txt(a.valeurNominale),
+        };
+      },
+      doc: [['operation', '« de constitution », « d\'augmentation de capital », « d\'apport partiel d\'actif » ou « de fusion »'],
+        ['titre_apport', '« pur » ou « onereux »'], ['passif', 'passif pris en charge par la société'], ['nombre_titres', 'nombre de titres, en lettres et en chiffres'],
+        ['titres', '« parts sociales » ou « actions »'], ['societe', 'dénomination de la société bénéficiaire'], ['valeur_nominale', 'valeur nominale de chaque titre']],
+    },
     succession: {
       libelle: 'Succession', acquereurs: 'Héritier(s)', cedants: 'Défunt', acte: 'Attestation immobilière',
       champs: [{ cle: 'lienDefunt', libelle: 'Lien de parenté avec le défunt', type: 'texte', aide: 'Ex. : son père, son frère' }].concat(NOTORIETE),
@@ -863,6 +892,7 @@
     envoi_notaire: "notaire dépositaire de l'ordonnance", envoi_depot_date: 'date du dépôt', envoi_tribunal: 'tribunal', envoi_date: "date de l'ordonnance",
     donataires_liste: 'donataires', cedants_liste: 'vendeurs', nombre_donataires: 'nombre de donataires', quotite: 'quotité', testament: 'testament',
     lien_defunt: 'lien avec le défunt', attestation_notaire: "notaire de l'attestation", prix_comptant: 'part payée comptant', cahier_date: 'date du cahier',
+    nombre_titres: 'nombre de titres attribués', valeur_nominale: 'valeur nominale des titres', societe: 'société bénéficiaire', passif: 'passif pris en charge',
   });
   function libelle(nom) {
     const l = LIBELLES[nom] || nom.replace(/_/g, ' ');
@@ -897,6 +927,12 @@
     const dossier = { reference: 'Exemple', personnes: Object.values(P), actes };
     if (typeSeul) {
       const modele = actes.find((a) => a.type === typeSeul);
+      if (typeSeul === 'apport') {
+        dossier.personnes.push(nouvellePersonne({ id: 'ex6', morale: true, nom: 'Les Tilleuls', profession: 'société civile immobilière', domicile: 'MÂCON (71000), 4 place aux Herbes', siren: '123456789' }));
+        dossier.actes = [nouvelActe('apport', { id: 'exa', acquereurs: ['ex6'], cedants: ['ex3'], date: '2010-03-15', notaire: { nom: 'Henri FAURE', ville: 'Mâcon' },
+          publication: { service: 'Mâcon', date: '2010-04-02', volume: '2010P', numero: '845' }, operation: 'augmentation', nombreTitres: '1000', valeurNominale: '10 euros' })];
+        return dossier;
+      }
       const a = modele || nouvelActe(typeSeul, { id: 'exa', acquereurs: ['ex3'], cedants: ['ex4'], date: '2001-09-20', notaire: { nom: 'Henri FAURE', ville: 'Mâcon' }, publication: { service: 'Mâcon', date: '2001-10-15', volume: '2001P', numero: '1203' } });
       dossier.actes = [a];
     }

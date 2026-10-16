@@ -115,3 +115,15 @@ test('Actes anciens : transcription avant 1956, témoins avant 1967, cahier des 
   a.actes[0].cahierDate = '2005-01-10';
   assert.match(texteDe(E.rediger(a, OPTS)), /cahier des charges/);
 });
+
+test('Apport en société : société bénéficiaire, titres attribués, apport partiellement onéreux', () => {
+  const ex = E.exemple('apport');
+  ex.vendeurDirect = false;
+  Object.assign(ex.actes[0], { titreApport: 'onereux', passif: 50000, natureTitres: 'actions', nombreTitres: '1' });
+  const t = E.texte(E.rediger(ex, {}).blocs);
+  assert.ok(t.includes('appartient à la société dénommée LES TILLEULS, société civile immobilière'));
+  assert.ok(t.includes("par suite de l'apport qui lui en a été fait par Monsieur Paul BERNARD"));
+  assert.ok(t.includes("suivant acte d'augmentation de capital reçu par Me Henri FAURE, notaire à MÂCON, le 15 mars 2010"));
+  assert.match(t, /à titre partiellement onéreux à concurrence du passif de CINQUANTE MILLE EUROS \(50\s000,00\sEUR\) pris en charge par la société/);
+  assert.ok(t.includes('attribué à Monsieur Paul BERNARD UN (1) action de la société LES TILLEULS, d\'une valeur nominale de 10 euros chacune.'));
+});
