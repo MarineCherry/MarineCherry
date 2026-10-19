@@ -390,7 +390,24 @@
     if (rp) lignes.push({ l: 'Abattement de ' + fmtPct(p.fiscal.abattementRP, 0) + ' sur la résidence principale', v: null, note: rp.designation || '' });
     if ((s.fraisFuneraires || 0) > p.fiscal.forfaitFuneraire) lignes.push({ l: 'Frais funéraires non déductibles au-delà de ' + fmtEuro(p.fiscal.forfaitFuneraire), v: s.fraisFuneraires - p.fiscal.forfaitFuneraire });
     lignes.push({ l: 'Coefficient appliqué aux parts reçues', v: null, note: fmtPct(sc.fisc.coef, 2), total: true });
-    return ui.card('Passage à l\'actif fiscal', tableauCalcul(lignes), { subtitle: 'Les droits sont ensuite liquidés pour chaque bénéficiaire (onglet Résultats) : abattement, rappel des donations de moins de ' + p.fiscal.delaiRappel + ' ans, barème selon le lien de parenté.' });
+    // Rappel fiscal : donations du défunt de moins de 15 ans, qu'elles soient en avancement de part ou hors part.
+    const deces = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s.dateDeces || '');
+    const limite = deces ? (+deces[1] - p.fiscal.delaiRappel) + '-' + deces[2] + '-' + deces[3] : null;
+    const rappels = sc.fisc.lignes.filter((x) => !x.conjoint).map((x) => {
+      const dons = s.donations.filter((d) => d.beneficiaire === x.id && isNum(d.valeur));
+      return { x, dons, recents: dons.filter((d) => limite && d.date && d.date > limite) };
+    }).filter((y) => y.dons.length);
+    const tableRappel = rappels.length ? h('div', { class: 'stack-sm' },
+      h('h4', { class: 'param-sub' }, 'Rappel des donations antérieures (art. 784 CGI)'),
+      ui.table([
+        { label: 'Bénéficiaire', render: (y) => y.x.nom },
+        { label: 'Donations', render: (y) => h('div', null, y.dons.map((d) => h('div', { class: 'small' }, fmtDate(d.date) + ' — ' + fmtEuro(isNum(d.montantFiscal) ? d.montantFiscal : d.valeur) + (d.horsPart ? ' (hors part)' : '') + (y.recents.includes(d) ? '' : ' : plus de ' + p.fiscal.delaiRappel + ' ans, non rappelée')))) },
+        { label: 'Montant rappelé', num: true, render: (y) => fmtEuro(y.x.rappel) },
+        { label: 'Abattement', num: true, render: (y) => fmtEuro(y.x.abattementTotal) },
+        { label: 'Abattement restant', num: true, className: 'col-strong', render: (y) => fmtEuro(Math.max(0, y.x.abattementTotal - y.x.rappel)) },
+      ], rappels, { compact: true }),
+      h('p', { class: 'small muted' }, 'Fiscalement, toutes les donations consenties par le défunt depuis moins de ' + p.fiscal.delaiRappel + ' ans consomment l\'abattement du bénéficiaire, y compris celles faites hors part successorale (qui, civilement, s\'imputent sur la quotité disponible). Seule la part donnée par le défunt est à saisir pour une donation faite par les deux époux.')) : null;
+    return ui.card('Passage à l\'actif fiscal', h('div', { class: 'stack' }, tableauCalcul(lignes), tableRappel), { subtitle: 'Les droits sont ensuite liquidés pour chaque bénéficiaire (onglet Résultats) : abattement, rappel des donations de moins de ' + p.fiscal.delaiRappel + ' ans, barème selon le lien de parenté.' });
   }
   function tabDetail(ctx) {
     const s = ctx.state;
