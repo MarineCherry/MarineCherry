@@ -21,10 +21,11 @@
     { id: 'commun', title: 'Barème commun', sub: "Valeur de l'usufruit viager (art. 669 CGI), utilisée par tous les outils." },
     { id: 'plusValue', title: 'Plus-value immobilière', sub: 'Taux d\'imposition et forfaits.' },
     { id: 'succession', title: 'Succession & donation', sub: 'Abattements, barème en ligne directe et régimes particuliers.' },
+    { id: 'conjoint', title: 'Conjoint survivant', sub: 'Barèmes et abattements hors ligne directe, assurance-vie, droit au logement (ligne directe : section Succession).' },
     { id: 'origine', title: 'Origine de propriété', sub: 'Présentation des dates et des prix ; trames de rédaction.' },
     { id: 'dossiers', title: 'Suivi des dossiers', sub: 'Pièces attendues à chaque étape ; communes soumises à un arrêté termites ou mérule.' },
   ];
-  const ANCHOR = { 'plus-value': 'plusValue', succession: 'succession', commun: 'commun', origine: 'origine', dossiers: 'dossiers' };
+  const ANCHOR = { 'plus-value': 'plusValue', succession: 'succession', commun: 'commun', origine: 'origine', dossiers: 'dossiers', conjoint: 'conjoint' };
 
   function mount(container, arg) {
     let params = A.store.getParams();
@@ -180,7 +181,33 @@
         listeZones('zonesMerule', 'departementsMerule'));
     }
 
-    const builders = { commun: sectionCommun, plusValue: sectionPlusValue, succession: sectionSuccession, origine: sectionOrigine, dossiers: sectionDossiers };
+    function sectionConjoint() {
+      const c = params.conjoint;
+      const f = c.fiscal;
+      const bareme = (cle) => ui.table([
+        { label: 'Au-delà de', render: (x) => num(x, 'de', 'conjoint', { suffix: '€', ariaLabel: 'Seuil' }) },
+        { label: 'Taux', render: (x) => pct(x, 'taux', 'conjoint', { ariaLabel: 'Taux' }) },
+      ], f[cle], { compact: true });
+      return h('div', null,
+        h('div', { class: 'param-list' },
+          row('Abattement frères et sœurs', num(f, 'abattFrere', 'conjoint', { suffix: '€' }), 'Art. 779 IV CGI.'),
+          row('Abattement neveux et nièces', num(f, 'abattNeveu', 'conjoint', { suffix: '€' }), 'Art. 779 V CGI.'),
+          row('Abattement à défaut d\'autre abattement', num(f, 'abattDefaut', 'conjoint', { suffix: '€' }), 'Art. 788 IV CGI.'),
+          row('Abattement personne handicapée', num(f, 'abattHandicap', 'conjoint', { suffix: '€' }), 'Art. 779 II CGI ; cumulable.'),
+          row('Frais funéraires déductibles', num(f, 'forfaitFuneraire', 'conjoint', { suffix: '€' }), 'Art. 775 CGI.'),
+          row('Abattement résidence principale', pct(f, 'abattementRP', 'conjoint'), 'Art. 764 bis CGI.'),
+          row('Délai du rappel fiscal', num(f, 'delaiRappel', 'conjoint', { suffix: 'ans' }), 'Art. 784 CGI.'),
+          row('Droit d\'usage et d\'habitation', pct(c, 'coefHabitation', 'conjoint'), 'En proportion de la valeur de l\'usufruit (art. 762 bis CGI).'),
+          row('Assurance-vie : abattement 990 I', num(f, 'abattement990I', 'conjoint', { suffix: '€' }), 'Par bénéficiaire.'),
+          row('Assurance-vie : seuil du taux majoré', num(f, 'seuil990I', 'conjoint', { suffix: '€' }), 'Taxé à 20 % jusqu\'à ce montant après abattement.'),
+          row('Assurance-vie : taux', h('div', { class: 'pair' }, pct(f, 'taux990I1', 'conjoint'), pct(f, 'taux990I2', 'conjoint')), '20 % puis 31,25 %.'),
+          row('Assurance-vie : abattement 757 B', num(f, 'abattement757B', 'conjoint', { suffix: '€' }), 'Global, sur les primes versées après 70 ans.')),
+        h('h4', { class: 'param-sub' }, 'Barème entre frères et sœurs'), bareme('baremeFrere'),
+        h('h4', { class: 'param-sub' }, 'Barème entre parents jusqu\'au 4e degré'), bareme('baremeParent4'),
+        h('h4', { class: 'param-sub' }, 'Barème entre non-parents'), bareme('baremeTiers'));
+    }
+
+    const builders = { conjoint: sectionConjoint, commun: sectionCommun, plusValue: sectionPlusValue, succession: sectionSuccession, origine: sectionOrigine, dossiers: sectionDossiers };
 
     async function importer() {
       try {

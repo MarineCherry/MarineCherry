@@ -30,6 +30,7 @@
     up: '<path d="m6 15 6-6 6 6"/>',
     down: '<path d="m6 9 6 6 6-6"/>',
     lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+    conjoint: '<circle cx="8.5" cy="7" r="2.6"/><circle cx="15.5" cy="7" r="2.6"/><path d="M3.5 19a5 5 0 0 1 10 0"/><path d="M13.2 14.4A5 5 0 0 1 20.5 19"/><path d="M12 3.2l.9.9-.9.9-.9-.9z"/>',
     dossiers: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="m8.5 13.5 2.5 2.5 4.5-5"/>',
     mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/>',
     users: '<circle cx="9" cy="8" r="3.2"/><path d="M3 19.5a6 6 0 0 1 12 0"/><path d="M16 5.2a3 3 0 0 1 0 5.6M18 14a5 5 0 0 1 3 5"/>',

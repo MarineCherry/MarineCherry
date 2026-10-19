@@ -871,3 +871,11 @@ body.avec-fiches .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 #section-dossiers .table td:first-child, #section-dossiers .table td:nth-child(3) { min-width: 300px; }
 #section-dossiers .table .input { width: 100%; }
 .dc-etape-ligne { grid-template-columns: 74px 1fr 40px; }
+
+/* Conjoint survivant */
+.card-muted { opacity: 0.75; }
+.recompense { padding: 10px; border-radius: 12px; border: 1px dashed var(--line-strong); }
+.recompense-calcul { padding: 4px 4px 0; }
+.cantonnement-biens { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.check { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+.conj-table .table td:first-child { min-width: 150px; }

@@ -69,6 +69,28 @@
       trames: {},
     },
 
+    // Droits du conjoint survivant : barèmes hors ligne directe et abattements (ligne directe : section Succession).
+    conjoint: {
+      coefHabitation: 0.6,            // Droit d'usage et d'habitation = 60 % de l'usufruit (art. 762 bis CGI)
+      fiscal: {
+        abattFrere: 15932,            // Art. 779 IV CGI
+        abattNeveu: 7967,             // Art. 779 V CGI
+        abattDefaut: 1594,            // Art. 788 IV CGI
+        abattHandicap: 159325,        // Art. 779 II CGI
+        baremeFrere: [{ de: 0, taux: 0.35 }, { de: 24430, taux: 0.45 }],
+        baremeParent4: [{ de: 0, taux: 0.55 }],
+        baremeTiers: [{ de: 0, taux: 0.6 }],
+        forfaitFuneraire: 1500,       // Art. 775 CGI
+        abattementRP: 0.2,            // Art. 764 bis CGI
+        delaiRappel: 15,              // Art. 784 CGI
+        abattement990I: 152500,       // Art. 990 I CGI
+        seuil990I: 700000,
+        taux990I1: 0.2,
+        taux990I2: 0.3125,
+        abattement757B: 30500,        // Art. 757 B CGI
+      },
+    },
+
     // Suivi des dossiers : pièces attendues par étape (condition : voir engine.CONDITIONS)
     // et zones délimitées par arrêté préfectoral (termites, mérule). Tout est modifiable dans Paramètres.
     dossiers: {
