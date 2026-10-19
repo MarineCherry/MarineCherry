@@ -284,6 +284,128 @@
     return h('div', { class: 'stack' }, conjoint, logement, donations, legs, av);
   }
 
+  /* ---------- Détail des calculs ---------- */
+  const FRACTIONS = [[1 / 2, '½'], [1 / 3, '⅓'], [1 / 4, '¼'], [2 / 3, '⅔'], [3 / 4, '¾'], [1, 'totalité']];
+  const fraction = (x) => (FRACTIONS.find((f) => Math.abs(f[0] - x) < 1e-9) || [0, fmtPct(x, 2)])[1];
+  // Tableau « libellé / montant » avec sous-totaux en gras.
+  function tableauCalcul(lignes) {
+    return h('div', { class: 'calc-table' }, ui.table([
+      { label: '', render: (x) => (x.indent ? h('span', { class: 'calc-indent' }, x.l) : x.l) },
+      { label: '', render: (x) => h('span', { class: 'small muted' }, x.note || '') },
+      { label: 'Montant', num: true, render: (x) => (x.v === null || x.v === undefined ? '' : fmtEuro(x.v)) },
+    ], lignes.filter(Boolean).map((x) => Object.assign({ __class: x.total ? 'strong' : '' }, x)), { compact: true }));
+  }
+  function detailLiquidation(s, r) {
+    const l = r.liquidation;
+    const reg = l.regime;
+    const biens = s.biens.filter((b) => isNum(b.valeur) && b.valeur);
+    const nom = (b) => b.designation || 'Bien sans désignation';
+    const blocs = [];
+    if (reg.communaute) {
+      const recs = l.recompenses;
+      const lignes = [{ l: 'Biens communs', total: true }]
+        .concat(biens.filter((b) => b.propriete === 'commun').map((b) => ({ l: nom(b), v: b.valeur, indent: true })))
+        .concat([{ l: 'Total des biens communs', v: l.communs, total: true }])
+        .concat(s.passif.filter((x) => x.charge === 'commun' && x.montant).map((x) => ({ l: 'Passif : ' + (x.libelle || 'dette'), v: -x.montant, indent: true })))
+        .concat(recs.filter((x) => x.sens === 'doit' && x.montantCalcule).map((x) => ({ l: 'Récompense due par ' + (x.epoux === 'defunt' ? 'le défunt' : 'le survivant') + ' : ' + (x.libelle || ''), v: x.montantCalcule, indent: true, note: 'réunie à la masse' })))
+        .concat(recs.filter((x) => x.sens === 'du' && x.montantCalcule).map((x) => ({ l: 'Récompense due ' + (x.epoux === 'defunt' ? 'au défunt' : 'au survivant') + ' : ' + (x.libelle || ''), v: -x.montantCalcule, indent: true, note: 'prélevée sur la masse' })))
+        .concat([{ l: 'Masse commune nette', v: l.masseCommune, total: true }])
+        .concat(l.preciput ? [{ l: 'Préciput du survivant', v: -l.preciput, indent: true }, { l: 'Masse à partager', v: l.aPartager, total: true }] : [])
+        .concat(s.avantages.attributionIntegrale
+          ? [{ l: 'Attribution intégrale au survivant', v: null, note: 'aucune part de communauté dans la succession' }]
+          : [{ l: 'Part du défunt', v: l.aPartager * (1 - l.partSurvivant), note: fmtPct(1 - l.partSurvivant, 0) + ' de ' + fmtEuro(l.aPartager), indent: true }]
+            .concat(recs.filter((x) => x.epoux === 'defunt' && x.montantCalcule).map((x) => ({ l: x.sens === 'du' ? 'Plus : récompense due au défunt' : 'Moins : récompense due par le défunt', v: x.sens === 'du' ? x.montantCalcule : -x.montantCalcule, indent: true }))))
+        .concat([{ l: 'Part de communauté revenant à la succession', v: l.partCommunaute, total: true }]);
+      blocs.push(ui.card('1. Liquidation de la communauté', tableauCalcul(lignes)));
+    }
+    const lignes = [{ l: 'Actif de succession', total: true }]
+      .concat(biens.filter((b) => b.propriete === 'defunt').map((b) => ({ l: nom(b), v: b.valeur, indent: true, note: 'propre' })))
+      .concat(biens.filter((b) => b.propriete === 'indivis').map((b) => ({ l: nom(b), v: b.valeur * (b.quoteDefunt || 0), indent: true, note: fmtPct(b.quoteDefunt || 0, 0) + ' de ' + fmtEuro(b.valeur) })))
+      .concat(reg.communaute ? [{ l: 'Part de communauté', v: l.partCommunaute, indent: true }] : [])
+      .concat(l.creanceParticipation ? [{ l: 'Créance de participation', v: l.creanceParticipation, indent: true }] : [])
+      .concat(s.passif.filter((x) => (x.charge !== 'commun' || !reg.communaute) && x.montant).map((x) => ({ l: 'Passif : ' + (x.libelle || 'dette'), v: -x.montant, indent: true })))
+      .concat(l.frais ? [{ l: 'Frais funéraires', v: -l.frais, indent: true }] : [])
+      .concat([{ l: 'Actif net calculé', v: l.calcule, total: true }])
+      .concat(l.manuel ? [{ l: 'Actif net retenu (saisi)', v: l.actifNet, total: true }] : []);
+    blocs.push(ui.card((reg.communaute ? '2' : '1') + '. Actif net de succession', tableauCalcul(lignes)));
+    return blocs;
+  }
+  function detailMasse(s, r) {
+    const sc = r.scenarios[0];
+    if (!sc) return null;
+    const c = sc.rep.calc;
+    const n = r.heritiers.souches.length;
+    const lignes = [
+      { l: 'Actif net de succession (biens existants)', v: c.A },
+      c.Dr ? { l: 'Donations rapportables (en avancement de part)', v: c.Dr, note: 'réunion fictive' } : null,
+      c.Dh ? { l: 'Donations hors part', v: c.Dh, note: 'réunion fictive' } : null,
+      c.Dc ? { l: 'Donations au conjoint', v: c.Dc, note: 'réunion fictive' } : null,
+      { l: 'Masse de calcul (art. 922 C. civ.)', v: c.M, total: true },
+    ];
+    if (n) {
+      lignes.push(
+        { l: 'Quotité disponible ordinaire', v: c.qdo * c.M, note: fraction(c.qdo) + ' (' + n + ' souche' + (n > 1 ? 's' : '') + ' de descendants)' },
+        { l: 'Réserve des descendants', v: c.reserveGlobale, note: fraction(1 - c.qdo) },
+        c.Dr ? { l: 'dont déjà reçue par donations rapportables', v: c.Dr, indent: true } : null,
+        { l: 'Réserve restant à prendre sur les biens existants', v: c.reserveSurBiens, indent: true });
+    }
+    if (c.L) lignes.push({ l: 'Legs à d\'autres bénéficiaires', v: c.L, note: 'pris sur les biens existants' });
+    return ui.card((regimeDe(s).communaute ? '3' : '2') + '. Masse de calcul, réserve et quotité disponible', tableauCalcul(lignes));
+  }
+  function detailOption(s, sc, us) {
+    const c = sc.rep.calc;
+    const conj = sc.conjoint;
+    const lignes = [];
+    if (c.conjBrut !== null && c.conjBrut !== undefined) {
+      const base = sc.code === 'legal-pp' ? 'actif net ' + fmtEuro(c.A) + (c.Dr ? ' + donations rapportables ' + fmtEuro(c.Dr) : '') + ' (art. 758-5)' : 'masse de calcul ' + fmtEuro(c.M);
+      lignes.push({ l: 'Pleine propriété du conjoint', v: c.fraction * c.assiette, note: fraction(c.fraction) + ' × ' + base });
+      if (c.Dc) lignes.push({ l: 'Moins : donations déjà reçues par le conjoint', v: -c.Dc, indent: true, note: 'imputées' });
+      if (c.conjBrut > c.plafond + 0.5) lignes.push({ l: 'Plafond (biens existants, réserve préservée)', v: c.plafond, indent: true });
+    }
+    if (conj.usBase) lignes.push({ l: 'Usufruit du conjoint', v: conj.usValeur, note: fmtPct(us, 0) + ' × ' + fmtEuro(conj.usBase) + ' de biens' });
+    if (conj.viager) {
+      lignes.push(
+        { l: 'dont droit viager d\'habitation et d\'usage', v: conj.viager, indent: true, note: '60 % de l\'usufruit (' + fmtPct(us, 0) + ') sur le logement, imputé (art. 765)' },
+        { l: 'dont pleine propriété', v: conj.pp, indent: true });
+    }
+    lignes.push({ l: 'Total reçu par le conjoint', v: conj.valeur, total: true });
+    if (c.souches) {
+      lignes.push(
+        { l: 'Biens restant aux descendants', v: c.R, note: c.U ? 'dont ' + fmtEuro(c.U) + ' en nue-propriété' : '' },
+        c.Dr ? { l: 'Plus : donations rapportables', v: c.Dr, indent: true } : null,
+        { l: 'Masse à partager entre les souches', v: c.pool, total: true },
+        { l: 'Part de chaque souche', v: c.partNette, note: '÷ ' + c.souches.length });
+      c.souches.forEach((x) => {
+        lignes.push({ l: 'Souche ' + x.nom + (x.membres.length > 1 || x.membres[0] !== x.nom ? ' (' + x.membres.join(', ') + ')' : ''), v: x.net, indent: true, note: x.donations ? 'part − donations rapportées ' + fmtEuro(x.donations) : 'part entière' });
+      });
+    }
+    return ui.card(sc.libelle, tableauCalcul(lignes), { className: 'card-hyp' });
+  }
+  function detailFiscal(s, r, p) {
+    const sc = r.scenarios[0];
+    if (!sc) return null;
+    const A2 = sc.rep.A;
+    const rp = s.abattementRP ? s.biens.find((b) => b.residencePrincipale) : null;
+    const lignes = [{ l: 'Actif net civil', v: A2 }];
+    if (rp) lignes.push({ l: 'Abattement de ' + fmtPct(p.fiscal.abattementRP, 0) + ' sur la résidence principale', v: null, note: rp.designation || '' });
+    if ((s.fraisFuneraires || 0) > p.fiscal.forfaitFuneraire) lignes.push({ l: 'Frais funéraires non déductibles au-delà de ' + fmtEuro(p.fiscal.forfaitFuneraire), v: s.fraisFuneraires - p.fiscal.forfaitFuneraire });
+    lignes.push({ l: 'Coefficient appliqué aux parts reçues', v: null, note: fmtPct(sc.fisc.coef, 2), total: true });
+    return ui.card('Passage à l\'actif fiscal', tableauCalcul(lignes), { subtitle: 'Les droits sont ensuite liquidés pour chaque bénéficiaire (onglet Résultats) : abattement, rappel des donations de moins de ' + p.fiscal.delaiRappel + ' ans, barème selon le lien de parenté.' });
+  }
+  function tabDetail(ctx) {
+    const s = ctx.state;
+    return h('div', { class: 'stack' }, ctx.live((r) => {
+      const p = parametres(ctx.params());
+      return [].concat(
+        detailLiquidation(s, r),
+        detailMasse(s, r),
+        h('h3', { class: 'section-title' }, 'Droits de chacun, option par option'),
+        r.scenarios.map((sc) => detailOption(s, sc, r.usufruit)),
+        detailFiscal(s, r, p),
+      ).filter(Boolean);
+    }));
+  }
+
   /* ---------- Résultats ---------- */
   const LIBELLE_LIEN = Object.fromEntries(engine.LIENS.map((l) => [l.id, l.libelle]));
   function tableRepartition(sc, s, compact) {
@@ -427,6 +549,7 @@
       { id: 'famille', label: 'Famille', render: tabFamille },
       { id: 'patrimoine', label: 'Patrimoine et liquidation', render: tabPatrimoine },
       { id: 'liberalites', label: 'Libéralités', render: tabLiberalites },
+      { id: 'detail', label: 'Détail des calculs', render: tabDetail },
       { id: 'resultats', label: 'Résultats', render: tabResultats },
       { id: 'synthese', label: 'Synthèse client', render: tabSynthese },
     ],

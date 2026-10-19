@@ -244,13 +244,20 @@
     const cant = (code.startsWith('ddv') || code === 'legs-partenaire') && lc.cantonnement && lc.cantonnement.mode !== 'aucun' ? lc.cantonnement : null;
     const valeurBiens = (ids) => sum((d.biens || []).filter((b) => (ids || []).includes(b.id)), (b) => liq.partBien(b));
     const dispo = A - L;
+    // Réserve des descendants (art. 913) et part de réserve à prendre sur les biens existants
+    // (les donations rapportables s'imputent sur la réserve).
+    const reserveGlobale = nbEnf ? (1 - qdo) * M : 0;
+    const reserveSurBiens = clamp0(reserveGlobale - Dr);
+    const calc = { A, L, Dr, Dh, Dc, M, qdo, reserveGlobale, reserveSurBiens, dispo, masse758: A + Dr, conjBrut: null, plafond: null, fraction: null, assiette: null };
     if (regime.marie && nbEnf) {
-      if (code === 'legal-pp') conj.pp = 0.25 * (A + Dr) - Dc;
-      if (code === 'legal-us') conj.usBase = dispo;
-      if (code === 'ddv-qd') conj.pp = qdo * M - Dc;
-      if (code === 'ddv-mixte') conj.pp = 0.25 * M - Dc;
-      if (code === 'ddv-us') conj.usBase = dispo;
-      conj.pp = Math.min(clamp0(conj.pp), dispo);
+      if (code === 'legal-pp') Object.assign(calc, { fraction: 0.25, assiette: A + Dr, conjBrut: 0.25 * (A + Dr) - Dc, plafond: clamp0(dispo - reserveSurBiens) });
+      if (code === 'ddv-qd') Object.assign(calc, { fraction: qdo, assiette: M, conjBrut: qdo * M - Dc, plafond: dispo });
+      if (code === 'ddv-mixte') Object.assign(calc, { fraction: 0.25, assiette: M, conjBrut: 0.25 * M - Dc, plafond: dispo });
+      if (code === 'legal-us' || code === 'ddv-us') conj.usBase = dispo;
+      if (calc.conjBrut !== null) conj.pp = Math.min(clamp0(calc.conjBrut), calc.plafond);
+      if (code === 'legal-pp' && calc.conjBrut > calc.plafond + 0.5) {
+        alertes.push('Le quart légal du conjoint (' + Math.round(calc.conjBrut).toLocaleString('fr-FR') + ' €) est réduit à ' + Math.round(calc.plafond).toLocaleString('fr-FR') + ' € pour préserver la réserve des descendants (art. 758-5 al. 2 C. civ.).');
+      }
       if (code === 'ddv-mixte') conj.usBase = clamp0(dispo - conj.pp);
     }
     const parts = []; // { id, nom, lien, represente, souche, pp, np }
@@ -343,6 +350,7 @@
       }
       const partNette = actives.length ? pool / actives.length : 0;
       const ratioNue = R > 0 ? nueTotale / R : 0;
+      Object.assign(calc, { R, U, pool, partNette, souches: h.souches.map((s) => ({ nom: s.tete.nom, membres: s.membres.map((m) => m.personne.nom), donations: donsSouche.get(s.id), net: actives.includes(s) ? partNette - donsSouche.get(s.id) : 0 })) });
       h.souches.forEach((s) => {
         const net = actives.includes(s) ? partNette - donsSouche.get(s.id) : 0;
         const pp = net * (1 - ratioNue);
@@ -407,7 +415,8 @@
       }
     });
 
-    return { code, us, A, M, qdo, Dr, Dh, Dc, L, conj, parts, alertes };
+    calc.viager = conj.viager;
+    return { code, us, A, M, qdo, Dr, Dh, Dc, L, conj, parts, alertes, calc };
   }
 
   function findPersonne(d, id) {
