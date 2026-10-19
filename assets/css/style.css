@@ -883,3 +883,5 @@ body.avec-fiches .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .calc-table .table td:nth-child(2) { color: var(--ink-3); }
 .calc-table .table thead { display: none; }
 .calc-indent { padding-left: 18px; color: var(--ink-2); }
+.pdf-mode [class*="hyp-"] .table .small { font-size: 6.5pt; }
+@media print { [class*="hyp-"] .table .small { font-size: 6.5pt; } }

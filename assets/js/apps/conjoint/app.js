@@ -485,21 +485,96 @@
       h('h3', { class: 'section-title' }, 'Hypothèses retenues'),
       h('ul', { class: 'bullets small' }, hypotheses(s, r, p).concat(r.alertes).map((x) => h('li', null, x))));
   }
-  function documentSynthese(s, r, p) {
+  // Données saisies, pour le dossier complet.
+  function donneesSaisies(s, r) {
+    const reg = regimeDe(s);
+    const out = [];
+    const t = (titre, cols, rows) => (rows.length ? [h('h3', { class: 'section-title' }, titre), ui.table(cols, rows, { compact: true })] : null);
+    const STAT = { vivant: 'vivant', predecede: 'prédécédé', renonce: 'renonçant' };
+    out.push(t('Défunt et conjoint', [{ label: '', key: 'l' }, { label: '', key: 'v' }], [
+      { l: 'Défunt', v: s.defunt.nom || '—' }, { l: 'Date du décès', v: fmtDate(s.dateDeces) || '—' }, { l: 'Situation', v: reg.libelle },
+      reg.id !== 'aucun' ? { l: reg.id === 'pacs' ? 'Partenaire' : 'Conjoint survivant', v: (s.conjoint.nom || '—') + (isNum(s.conjoint.age) ? ', ' + s.conjoint.age + ' ans' : '') } : null,
+    ].filter(Boolean)));
+    const pers = [].concat(
+      s.enfants.filter((x) => x.nom).map((x) => ({ nom: x.nom, qualite: 'Enfant' + (reg.marie && x.commun === false ? ' (non commun)' : ''), statut: STAT[x.statut || 'vivant'], handicape: x.handicape })),
+      s.petitsEnfants.filter((x) => x.nom).map((x) => ({ nom: x.nom, qualite: 'Petit-enfant, représente ' + ((s.enfants.find((e) => e.id === x.parent) || {}).nom || '—'), statut: '', handicape: x.handicape })),
+      s.pere.vivant ? [{ nom: s.pere.nom || 'Père', qualite: 'Père', statut: 'vivant' }] : [],
+      s.mere.vivant ? [{ nom: s.mere.nom || 'Mère', qualite: 'Mère', statut: 'vivante' }] : [],
+      s.fratrie.filter((x) => x.nom).map((x) => ({ nom: x.nom, qualite: 'Frère ou sœur', statut: STAT[x.statut || 'vivant'], handicape: x.handicape })),
+      s.neveux.filter((x) => x.nom).map((x) => ({ nom: x.nom, qualite: 'Neveu ou nièce, représente ' + ((s.fratrie.find((e) => e.id === x.parent) || {}).nom || '—'), statut: '' })),
+      s.autres.filter((x) => x.nom).map((x) => ({ nom: x.nom, qualite: LIBELLE_LIEN[x.lien] || 'Héritier', statut: '' })));
+    out.push(t('Héritiers', [{ label: 'Nom', key: 'nom' }, { label: 'Qualité', key: 'qualite' }, { label: 'Situation', key: 'statut' }, { label: 'Handicapé', render: (x) => (x.handicape ? 'oui' : '') }], pers));
+    const PROP = { commun: 'Commun', defunt: 'Propre du défunt', conjoint: 'Propre du survivant', indivis: 'Indivis' };
+    out.push(t('Biens', [
+      { label: 'Désignation', render: (x) => x.designation || '—' },
+      { label: 'Propriété', render: (x) => PROP[x.propriete] + (x.propriete === 'indivis' ? ' (' + fmtPct(x.quoteDefunt || 0, 0) + ' au défunt)' : '') },
+      { label: 'Particularités', render: (x) => [x.residencePrincipale ? 'résidence principale' : '', x.familial ? 'bien de famille' : ''].filter(Boolean).join(', ') },
+      { label: 'Valeur', num: true, render: (x) => fmtEuro(x.valeur) },
+    ], s.biens.filter((b) => isNum(b.valeur))));
+    out.push(t('Passif', [{ label: 'Dette', render: (x) => x.libelle || '—' }, { label: 'Charge', render: (x) => (x.charge === 'commun' && reg.communaute ? 'Communauté' : 'Défunt') }, { label: 'Montant', num: true, render: (x) => fmtEuro(x.montant) }],
+      s.passif.filter((x) => isNum(x.montant)).concat(isNum(s.fraisFuneraires) && s.fraisFuneraires ? [{ libelle: 'Frais funéraires', charge: 'defunt', montant: s.fraisFuneraires }] : [])));
+    out.push(t('Récompenses', [
+      { label: 'Objet', render: (x) => x.libelle || '—' },
+      { label: 'Sens', render: (x) => (x.sens === 'du' ? 'Due par la communauté ' : 'Due à la communauté par ') + (x.epoux === 'defunt' ? (x.sens === 'du' ? 'au défunt' : 'le défunt') : (x.sens === 'du' ? 'au survivant' : 'le survivant')) },
+      { label: 'Calcul', render: (x) => (x.mode === 'calcul' ? 'dépense ' + fmtEuro(x.calcul.depense) + ', profit subsistant ' + fmtEuro(engine.recompense(x.calcul).profit) : 'saisie') },
+      { label: 'Montant', num: true, render: (x) => fmtEuro(x.montantCalcule) },
+    ], r.liquidation.recompenses));
+    const nomBenef = (id) => (id === 'conjoint' ? nomConjoint(s) : (beneficiaires(s, true).find((b) => b.value === id) || {}).label || '—');
+    out.push(t('Donations antérieures', [
+      { label: 'Bénéficiaire', render: (x) => nomBenef(x.beneficiaire) }, { label: 'Date', render: (x) => fmtDate(x.date) },
+      { label: 'Nature', render: (x) => (x.horsPart ? 'Hors part' : 'En avancement de part') },
+      { label: 'Valeur au décès', num: true, render: (x) => fmtEuro(x.valeur) }, { label: 'Montant déclaré', num: true, render: (x) => fmtEuro(isNum(x.montantFiscal) ? x.montantFiscal : x.valeur) },
+    ], s.donations.filter((x) => isNum(x.valeur))));
+    const lc = s.liberaliteConjoint;
+    if (lc.type !== 'aucune') {
+      const c = lc.cantonnement || {};
+      out.push(t('Libéralité au conjoint', [{ label: '', key: 'l' }, { label: '', key: 'v' }], [
+        { l: 'Nature', v: lc.type === 'ddv' ? 'Donation entre époux' : 'Testament' },
+        { l: 'Cantonnement', v: c.mode === 'fraction' ? fmtPct(c.fraction || 0, 0) + ' de l\'option choisie' : c.mode === 'biens' ? s.biens.filter((b) => (c.biens || []).includes(b.id)).map((b) => b.designation).join(', ') || '—' : 'Aucun' },
+        s.logementViager.actif ? { l: 'Droit viager au logement', v: 'Oui' } : null,
+      ].filter(Boolean)));
+    }
+    out.push(t('Legs', [
+      { label: 'Bénéficiaire', render: (x) => (x.beneficiaire ? nomBenef(x.beneficiaire) : (x.nom || '—') + ' (' + (LIBELLE_LIEN[x.lien] || '').toLowerCase() + ')') },
+      { label: 'Legs', num: true, render: (x) => (x.mode === 'quotite' ? fmtPct(x.quotite || 0, 2) : fmtEuro(x.montant)) },
+    ], s.legs.filter((x) => x.beneficiaire || x.nom)));
+    out.push(t('Assurance-vie', [
+      { label: 'Bénéficiaire', render: (x) => nomBenef(x.beneficiaire) },
+      { label: 'Capital (primes avant 70 ans)', num: true, render: (x) => fmtEuro(x.capitalAvant70) }, { label: 'Primes après 70 ans', num: true, render: (x) => fmtEuro(x.primesApres70) },
+    ], s.assurancesVie.filter((x) => x.beneficiaire)));
+    return out.filter(Boolean);
+  }
+
+  function documentSynthese(s, r, p, complet) {
+    const body = [vueSynthese(s, r, p)];
+    if (complet) {
+      body.push(
+        h('div', { class: 'page-break' }),
+        h('h2', null, 'Données du dossier'),
+        donneesSaisies(s, r),
+        h('div', { class: 'page-break' }),
+        h('h2', null, 'Détail des calculs'),
+        detailLiquidation(s, r), detailMasse(s, r),
+        r.scenarios.map((sc) => detailOption(s, sc, r.usufruit)),
+        detailFiscal(s, r, p),
+        h('div', { class: 'page-break' }),
+        h('h2', null, 'Résultats détaillés par option'),
+        r.scenarios.map((sc) => h('div', { class: 'hyp-conj' }, h('h3', { class: 'section-title' }, sc.libelle + ' — droits : ' + fmtEuro(sc.totalDroits)), tableRepartition(sc, s), sc.alertes.length ? h('ul', { class: 'bullets small' }, sc.alertes.map((a) => h('li', null, a))) : null)));
+    }
     return ui.printDoc({
-      title: 'Droits du conjoint survivant',
+      title: complet ? 'Droits du conjoint survivant — dossier complet' : 'Droits du conjoint survivant',
       subtitle: s.reference || s.defunt.nom || null,
       meta: [h('div', { class: 'kv' }, h('span', null, 'Édité le'), h('strong', null, fmtDate(todayISO())))],
-      body: vueSynthese(s, r, p),
+      body,
       footer: 'Simulation indicative et non contractuelle, établie d\'après les informations communiquées et la législation en vigueur ; elle ne remplace pas un conseil personnalisé.',
     });
   }
-  async function telechargerPdf(ctx) {
+  async function telechargerPdf(ctx, complet) {
     const s = ctx.state;
-    const nom = 'conjoint-survivant-' + (A.util.slug(s.reference || s.defunt.nom) || 'dossier') + '-' + todayISO() + '.pdf';
+    const nom = (complet ? 'dossier-' : '') + 'conjoint-survivant-' + (A.util.slug(s.reference || s.defunt.nom) || 'dossier') + '-' + todayISO() + '.pdf';
     try {
       ui.toast('Préparation du PDF…');
-      await A.pdf.telecharger(documentSynthese(s, ctx.result, parametres(ctx.params())), nom);
+      await A.pdf.telecharger(documentSynthese(s, ctx.result, parametres(ctx.params()), complet), nom);
       ui.toast('PDF enregistré dans vos téléchargements.');
     } catch (e) {
       console.error(e);
@@ -508,7 +583,9 @@
   }
   function tabSynthese(ctx) {
     return h('div', { class: 'stack' },
-      h('div', { class: 'synthese-actions' }, ui.button('Télécharger la synthèse (PDF)', { icon: 'save', variant: 'primary', onClick: () => telechargerPdf(ctx) })),
+      h('div', { class: 'synthese-actions' },
+        ui.button('Télécharger la synthèse (PDF)', { icon: 'save', variant: 'primary', onClick: () => telechargerPdf(ctx, false) }),
+        ui.button('Dossier complet (PDF)', { icon: 'save', variant: 'soft', onClick: () => telechargerPdf(ctx, true) })),
       ui.card(null, ctx.live((r) => vueSynthese(ctx.state, r, parametres(ctx.params()))), { className: 'card-doc' }));
   }
 
@@ -526,13 +603,16 @@
     }), { className: 'aside-card' });
   }
   async function print(ctx) {
-    const choix = await ui.dialog('Imprimer ou enregistrer en PDF', 'Le PDF est enregistré directement dans vos téléchargements.', [
+    const choix = await ui.dialog('Imprimer ou enregistrer en PDF', 'Le dossier complet reprend la synthèse, les données saisies, le détail des calculs et les résultats de chaque option. Le PDF est enregistré directement dans vos téléchargements.', [
       { label: 'Annuler', value: null, variant: 'ghost' },
-      { label: 'Imprimer', value: 'imprimer', variant: 'soft' },
+      { label: 'Imprimer le dossier complet', value: 'imprimer-complet', variant: 'ghost' },
+      { label: 'Imprimer la synthèse', value: 'imprimer', variant: 'ghost' },
+      { label: 'Dossier complet en PDF', value: 'pdf-complet', variant: 'soft' },
       { label: 'Synthèse en PDF', value: 'pdf', variant: 'primary' },
     ]);
-    if (choix === 'pdf') return telechargerPdf(ctx);
-    if (choix) ui.print(documentSynthese(ctx.state, ctx.result, parametres(ctx.params())), 'Conjoint survivant');
+    if (!choix) return;
+    if (choix.startsWith('pdf')) return telechargerPdf(ctx, choix === 'pdf-complet');
+    ui.print(documentSynthese(ctx.state, ctx.result, parametres(ctx.params()), choix === 'imprimer-complet'), 'Conjoint survivant');
   }
 
   function normalize(s) {
