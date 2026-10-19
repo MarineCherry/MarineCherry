@@ -141,11 +141,48 @@ test('Assurance-vie : 990 I et 757 B', () => {
   near(a.ajout757B, 20000, 'primes après 70 ans au-delà de 30 500');
 });
 
-test('Legs à un tiers au-delà de la quotité disponible : alerte', () => {
+test('Legs à un tiers au-delà de la quotité disponible : réduit à la quotité disponible', () => {
   const r = C.calculer(dossier({ legs: [{ id: 'l', nom: 'Ami', lien: 'tiers', mode: 'montant', montant: 150000 }] }), P);
   const a = scen(r, 'legal-pp');
-  assert.ok(a.alertes.some((x) => /quotité disponible/.test(x)));
-  near(ligne(a, 'Ami').droits, (150000 - 1594) * 0.6, 'droits du légataire');
+  assert.ok(a.alertes.some((x) => /Legs réduits/.test(x)));
+  near(ligne(a, 'Ami').valeur, 100000, 'legs réduit au tiers de 300 000');
+  near(ligne(a, 'Ami').droits, (100000 - 1594) * 0.6, 'droits du légataire');
+  near(a.conjoint.pp, 0, 'plus rien de disponible pour le quart légal');
+  near(ligne(a, 'Alice').valeur, 100000, 'réserve d\'Alice');
+});
+
+test('Donation hors part excédant la quotité disponible : imputée sur la réserve du gratifié', () => {
+  const r = C.calculer(dossier({
+    regime: 'aucun', biens: [{ id: 'b', valeur: 100000, propriete: 'defunt' }],
+    donations: [{ id: 'd', beneficiaire: 'e1', date: '2015-01-01', valeur: 200000, horsPart: true }],
+  }), P);
+  const s = r.scenarios[0];
+  // Masse 300 000, QD 100 000 : excédent 100 000 imputé sur la part d'Alice.
+  assert.ok(s.alertes.some((x) => /réduction de 100\s000 €/.test(x)));
+  near(ligne(s, 'Alice').valeur, 0, 'Alice ne reçoit plus rien');
+  near(ligne(s, 'Bruno').valeur, 100000, 'Bruno reçoit sa réserve');
+});
+
+test('Donation à un non-réservataire excédant la quotité disponible : indemnité de réduction', () => {
+  const r = C.calculer(dossier({
+    regime: 'aucun', biens: [{ id: 'b', valeur: 100000, propriete: 'defunt' }], fratrie: [{ id: 'f1', nom: 'Paul' }],
+    donations: [{ id: 'd', beneficiaire: 'f1', date: '2015-01-01', valeur: 200000, horsPart: true }],
+  }), P);
+  const s = r.scenarios[0];
+  near(s.rep.calc.indemnitesTiers, 100000, 'indemnité due par Paul');
+  near(ligne(s, 'Alice').valeur, 100000, 'Alice : moitié des biens et de l\'indemnité');
+  near(ligne(s, 'Bruno').valeur, 100000, 'Bruno');
+});
+
+test('Rapport : donation supérieure à la part, indemnité due aux cohéritiers', () => {
+  const r = C.calculer(dossier({
+    regime: 'aucun', biens: [{ id: 'b', valeur: 100000, propriete: 'defunt' }],
+    donations: [{ id: 'd', beneficiaire: 'e1', date: '2015-01-01', valeur: 300000 }],
+  }), P);
+  const s = r.scenarios[0];
+  // (100 000 + 300 000) / 2 = 200 000 : Alice doit 100 000 à Bruno, qui reçoit 200 000.
+  near(s.rep.calc.souches[0].indemnite, 100000, 'indemnité due par Alice');
+  near(ligne(s, 'Bruno').valeur, 200000, 'Bruno');
 });
 
 test('Rapport d\'une donation en présence de l\'usufruit du conjoint', () => {

@@ -238,6 +238,67 @@
       L = A;
     }
 
+    /*
+     * Réduction des libéralités excédant la quotité disponible (descendants réservataires).
+     * Ordre (art. 923 C. civ.) : les donations s'imputent de la plus ancienne à la plus récente ;
+     * les legs (et la libéralité au conjoint) ne viennent qu'ensuite et sont réduits les premiers, au prorata.
+     * Indemnité de réduction en valeur (art. 924) : pour un héritier réservataire, l'excédent s'impute
+     * d'abord sur sa part de réserve (il est traité comme une avance sur sa part) ; un tiers verse l'excédent
+     * à la succession.
+     */
+    const reduction = { donations: [], legs: [], imputees: [], indemnitesTiers: 0, excesHeritiers: new Map(), qdRestante: null };
+    const us0 = us;
+    if (nbEnf) {
+      const qdoVal = qdo * M;
+      let restant = qdoVal;
+      dons.filter((x) => !estConjoint(x.beneficiaire) && (x.horsPart || !souchesId.has(x.beneficiaire)))
+        .sort((a, b) => ((a.date || '') < (b.date || '') ? -1 : (a.date || '') > (b.date || '') ? 1 : 0))
+        .forEach((x) => {
+          const v = n(x.valeur);
+          const imp = Math.min(v, clamp0(restant));
+          restant -= imp;
+          const exces = v - imp;
+          const heritier = souchesId.has(x.beneficiaire);
+          reduction.imputees.push({ don: x, valeur: v, impute: imp, exces, heritier });
+          if (exces > 0.5) {
+            reduction.donations.push({ don: x, valeur: v, impute: imp, exces, heritier });
+            if (heritier) {
+              const sid = souchesId.get(x.beneficiaire);
+              reduction.excesHeritiers.set(sid, (reduction.excesHeritiers.get(sid) || 0) + exces);
+            } else reduction.indemnitesTiers += exces;
+          }
+        });
+      restant = clamp0(restant);
+      // Plafond des legs : reste de la quotité disponible ordinaire ; pour une libéralité au conjoint,
+      // le cumul ne peut dépasser la plus forte des quotités disponibles (ordinaire ou spéciale).
+      let lmax = restant;
+      if (code.startsWith('ddv')) {
+        const qds = code === 'ddv-qd' ? qdoVal : code === 'ddv-mixte' ? (0.25 + 0.75 * us0) * M : us0 * M;
+        const cap = Math.max(qdoVal, qds) - (qdoVal - restant) - Dc;
+        let l2 = Infinity;
+        if (code === 'ddv-qd') l2 = cap - clamp0(qdo * M - Dc);
+        if (code === 'ddv-mixte') {
+          const ppc = clamp0(0.25 * M - Dc);
+          l2 = (cap - ppc - us0 * (A - ppc)) / (1 - us0);
+        }
+        if (code === 'ddv-us') l2 = (cap - us0 * A) / (1 - us0);
+        if (l2 < -0.5) alertes.push('La libéralité au conjoint dépasse à elle seule la quotité disponible restante : réduction de la libéralité au conjoint à prévoir (non calculée).');
+        lmax = Math.min(lmax, clamp0(l2));
+      }
+      if (L > lmax + 0.5) {
+        const f = L > 0 ? lmax / L : 0;
+        legs.forEach((x) => {
+          reduction.legs.push({ legs: x.legs, valeur: x.valeur, reduit: x.valeur * f });
+          x.valeur *= f;
+        });
+        L = lmax;
+      }
+      reduction.qdRestante = clamp0(restant - L);
+      reduction.donations.forEach((r) => alertes.push('Donation ' + (r.don.date ? 'du ' + r.don.date.split('-').reverse().join('/') + ' ' : '') + 'au-delà de la quotité disponible : réduction de ' + Math.round(r.exces).toLocaleString('fr-FR') + ' € ' + (r.heritier ? '(imputée sur la part de réserve du gratifié).' : '(indemnité due à la succession).')));
+      if (reduction.legs.length) alertes.push('Legs réduits au prorata de ' + Math.round(sum(reduction.legs, (x) => x.valeur - x.reduit)).toLocaleString('fr-FR') + ' € pour respecter la quotité disponible.');
+    }
+    const excesHeritiers = sum([...reduction.excesHeritiers.values()], (x) => x);
+
     // Conjoint.
     const conj = { pp: 0, usBase: 0, viager: 0, libelle: '' };
     const lc = d.liberaliteConjoint || {};
@@ -247,8 +308,9 @@
     // Réserve des descendants (art. 913) et part de réserve à prendre sur les biens existants
     // (les donations rapportables s'imputent sur la réserve).
     const reserveGlobale = nbEnf ? (1 - qdo) * M : 0;
-    const reserveSurBiens = clamp0(reserveGlobale - Dr);
-    const calc = { A, L, Dr, Dh, Dc, M, qdo, reserveGlobale, reserveSurBiens, dispo, masse758: A + Dr, conjBrut: null, plafond: null, fraction: null, assiette: null };
+    // L'excédent des donations réduites remplit la réserve (imputation ou indemnité versée).
+    const reserveSurBiens = clamp0(reserveGlobale - Dr - excesHeritiers - reduction.indemnitesTiers);
+    const calc = { A, L, Dr, Dh, Dc, M, qdo, reserveGlobale, reserveSurBiens, dispo, masse758: A + Dr, conjBrut: null, plafond: null, fraction: null, assiette: null, reduction };
     if (regime.marie && nbEnf) {
       if (code === 'legal-pp') Object.assign(calc, { fraction: 0.25, assiette: A + Dr, conjBrut: 0.25 * (A + Dr) - Dc, plafond: clamp0(dispo - reserveSurBiens) });
       if (code === 'ddv-qd') Object.assign(calc, { fraction: qdo, assiette: M, conjBrut: qdo * M - Dc, plafond: dispo });
@@ -336,38 +398,26 @@
         const sid = souchesId.get(x.beneficiaire);
         donsSouche.set(sid, donsSouche.get(sid) + n(x.valeur));
       });
-      // Partage égal de (biens + donations rapportables) ; une souche trop gratifiée ne reçoit rien (sans retour).
-      // La part nette de chaque souche est prise en pleine propriété et en nue-propriété dans la proportion des biens.
-      let actives = h.souches.slice();
-      let pool = R + sum(actives, (s) => donsSouche.get(s.id));
-      for (let k = 0; k < 10; k++) {
-        const part = pool / actives.length;
-        const exclues = actives.filter((s) => donsSouche.get(s.id) > part + 0.005);
-        if (!exclues.length) break;
-        exclues.forEach((s) => alertes.push('La donation reçue par ' + s.tete.nom + ' dépasse sa part : rapport en moins prenant limité (réduction éventuelle non calculée).'));
-        actives = actives.filter((s) => !exclues.includes(s));
-        pool = R + sum(actives, (s) => donsSouche.get(s.id));
-      }
-      const partNette = actives.length ? pool / actives.length : 0;
-      const ratioNue = R > 0 ? nueTotale / R : 0;
-      Object.assign(calc, { R, U, pool, partNette, souches: h.souches.map((s) => ({ nom: s.tete.nom, membres: s.membres.map((m) => m.personne.nom), donations: donsSouche.get(s.id), net: actives.includes(s) ? partNette - donsSouche.get(s.id) : 0 })) });
-      h.souches.forEach((s) => {
-        const net = actives.includes(s) ? partNette - donsSouche.get(s.id) : 0;
-        const pp = net * (1 - ratioNue);
-        const np = net * ratioNue;
+      // Réduction d'une donation hors part à un héritier : l'excédent s'impute sur sa part (comme un rapport).
+      reduction.excesHeritiers.forEach((v, sid) => donsSouche.set(sid, donsSouche.get(sid) + v));
+      // Partage égal de (biens + donations rapportées + indemnités versées par des tiers).
+      // Une souche dont les donations dépassent sa part ne reçoit rien et doit l'excédent à ses cohéritiers.
+      const pool = R + reduction.indemnitesTiers + sum(h.souches, (s) => donsSouche.get(s.id));
+      const partNette = pool / h.souches.length;
+      const nets = h.souches.map((s) => partNette - donsSouche.get(s.id));
+      const positif = sum(nets, (x) => clamp0(x));
+      Object.assign(calc, {
+        R, U, pool, partNette, indemnitesTiers: reduction.indemnitesTiers,
+        souches: h.souches.map((s, i) => ({ nom: s.tete.nom, membres: s.membres.map((m) => m.personne.nom), donations: donsSouche.get(s.id), excesReduction: reduction.excesHeritiers.get(s.id) || 0, net: clamp0(nets[i]), indemnite: clamp0(-nets[i]) })),
+      });
+      h.souches.forEach((s, i) => {
+        const net = clamp0(nets[i]);
+        if (nets[i] < -0.5) alertes.push('Les donations reçues par la souche ' + s.tete.nom + ' dépassent sa part de ' + Math.round(-nets[i]).toLocaleString('fr-FR') + ' € : indemnité due à ses cohéritiers.');
+        // La nue-propriété (biens grevés de l'usufruit) est répartie au prorata des parts nettes.
+        const np = positif > 0 ? (U * net) / positif : 0;
+        const pp = net - np;
         s.membres.forEach((m) => ajouter(m.personne, m.lien, m.represente, pp / s.membres.length, np / s.membres.length));
       });
-      // Contrôle de la quotité disponible : libéralités au conjoint et aux autres.
-      const valConj = conj.pp + conj.viager + us * conj.usBase + (code.startsWith('ddv') ? Dc : 0);
-      const autresLib = L + Dh;
-      const qdoVal = qdo * M;
-      const qdsVal = code === 'ddv-qd' ? qdo * M : code === 'ddv-mixte' ? (0.25 + 0.75 * us) * M : code === 'ddv-us' ? us * M : 0;
-      if (code.startsWith('ddv')) {
-        if (autresLib > qdoVal + 0.5) alertes.push('Les libéralités aux autres bénéficiaires dépassent la quotité disponible ordinaire de ' + Math.round(autresLib - qdoVal).toLocaleString('fr-FR') + ' € : réduction à prévoir.');
-        else if (valConj + autresLib > Math.max(qdoVal, qdsVal) + 0.5) alertes.push('Cumul des libéralités au conjoint et aux autres bénéficiaires supérieur à la plus forte des quotités disponibles (dépassement de ' + Math.round(valConj + autresLib - Math.max(qdoVal, qdsVal)).toLocaleString('fr-FR') + ' €) : réduction à prévoir.');
-      } else if (autresLib > qdoVal + 0.5) {
-        alertes.push('Les libéralités dépassent la quotité disponible (' + Math.round(qdoVal).toLocaleString('fr-FR') + ' €) : réduction à prévoir.');
-      }
     } else {
       // Sans conjoint héritier (PACS ou aucun) et sans descendants : parents, frères et sœurs, autres.
       let base = dispo;
@@ -416,6 +466,12 @@
     });
 
     calc.viager = conj.viager;
+    // Indemnité de réduction due par un donataire non héritier réservataire.
+    reduction.donations.filter((r) => !r.heritier).forEach((r) => {
+      const pers = findPersonne(d, r.don.beneficiaire) || { id: r.don.beneficiaire, nom: r.don.beneficiaire };
+      const x = parts.find((y) => y.id === pers.id);
+      if (x) x.indemnite = (x.indemnite || 0) + r.exces;
+    });
     return { code, us, A, M, qdo, Dr, Dh, Dc, L, conj, parts, alertes, calc };
   }
 

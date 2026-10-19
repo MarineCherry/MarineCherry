@@ -370,16 +370,43 @@
     }
     lignes.push({ l: 'Total reçu par le conjoint', v: conj.valeur, total: true });
     if (c.souches) {
+      const excesTotal = sum(c.souches, (x) => x.excesReduction);
       lignes.push(
         { l: 'Biens restant aux descendants', v: c.R, note: c.U ? 'dont ' + fmtEuro(c.U) + ' en nue-propriété' : '' },
         c.Dr ? { l: 'Plus : donations rapportables', v: c.Dr, indent: true } : null,
+        excesTotal ? { l: 'Plus : excédent des donations hors part réduites', v: excesTotal, indent: true, note: 'imputé sur la part du gratifié' } : null,
+        c.indemnitesTiers ? { l: 'Plus : indemnités de réduction dues par des tiers', v: c.indemnitesTiers, indent: true } : null,
         { l: 'Masse à partager entre les souches', v: c.pool, total: true },
         { l: 'Part de chaque souche', v: c.partNette, note: '÷ ' + c.souches.length });
       c.souches.forEach((x) => {
-        lignes.push({ l: 'Souche ' + x.nom + (x.membres.length > 1 || x.membres[0] !== x.nom ? ' (' + x.membres.join(', ') + ')' : ''), v: x.net, indent: true, note: x.donations ? 'part − donations rapportées ' + fmtEuro(x.donations) : 'part entière' });
+        const moins = x.donations ? 'part − ' + fmtEuro(x.donations) + (x.excesReduction ? ' (rapport et réduction)' : ' rapportés') : 'part entière';
+        lignes.push({ l: 'Souche ' + x.nom + (x.membres.length > 1 || x.membres[0] !== x.nom ? ' (' + x.membres.join(', ') + ')' : ''), v: x.net, indent: true, note: moins + (x.indemnite ? ' — doit ' + fmtEuro(x.indemnite) + ' à ses cohéritiers' : '') });
       });
     }
-    return ui.card(sc.libelle, tableauCalcul(lignes), { className: 'card-hyp' });
+    return ui.card(sc.libelle, h('div', { class: 'stack' }, tableauReduction(s, c), tableauCalcul(lignes)), { className: 'card-hyp' });
+  }
+  // Imputation des libéralités sur la quotité disponible et réduction (art. 923 et 924 C. civ.).
+  function tableauReduction(s, c) {
+    const red = c.reduction;
+    if (!red || (!red.imputees.length && !red.legs.length && !c.L)) return null;
+    const nomBenef = (id) => (beneficiaires(s, true).find((b) => b.value === id) || {}).label || id || '—';
+    const rows = red.imputees.map((x) => ({
+      lib: 'Donation' + (x.don.date ? ' du ' + fmtDate(x.don.date) : '') + (x.don.horsPart ? ' hors part' : ''), benef: nomBenef(x.don.beneficiaire), valeur: x.valeur, impute: x.impute, reduction: x.exces,
+      effet: x.exces > 0.5 ? (x.heritier ? 'imputée sur sa part de réserve' : 'indemnité due à la succession') : '',
+    }));
+    if (red.legs.length) {
+      red.legs.forEach((x) => rows.push({ lib: 'Legs', benef: x.legs.beneficiaire ? nomBenef(x.legs.beneficiaire) : x.legs.nom || 'Légataire', valeur: x.valeur, impute: x.reduit, reduction: x.valeur - x.reduit, effet: 'legs réduit' }));
+    } else if (c.L) rows.push({ lib: 'Legs', benef: '', valeur: c.L, impute: c.L, reduction: 0, effet: '' });
+    return h('div', { class: 'stack-sm' },
+      h('h4', { class: 'param-sub' }, 'Imputation sur la quotité disponible (' + fmtEuro(c.qdo * c.M) + ')'),
+      ui.table([
+        { label: 'Libéralité', key: 'lib' }, { label: 'Bénéficiaire', key: 'benef' },
+        { label: 'Valeur', num: true, render: (x) => fmtEuro(x.valeur) },
+        { label: 'Imputé sur la QD', num: true, render: (x) => fmtEuro(x.impute) },
+        { label: 'Réduction', num: true, className: 'col-strong', render: (x) => (x.reduction > 0.5 ? fmtEuro(x.reduction) : '—') },
+        { label: '', render: (x) => h('span', { class: 'small muted' }, x.effet) },
+      ], rows, { compact: true }),
+      h('p', { class: 'small muted' }, 'Les donations s\'imputent de la plus ancienne à la plus récente ; les legs viennent ensuite et sont réduits les premiers, au prorata (art. 923). La réduction se fait en valeur (art. 924).'));
   }
   function detailFiscal(s, r, p) {
     const sc = r.scenarios[0];
