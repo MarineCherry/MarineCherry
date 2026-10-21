@@ -17,6 +17,12 @@
     icon: 'conjoint',
     gradient: 'linear-gradient(150deg, #5b3f7a 0%, #8f74b0 100%)',
   };
+  const NATURES = [
+    { value: 'avancement', label: 'En avancement de part' },
+    { value: 'partage', label: 'Donation-partage' },
+    { value: 'horsPart', label: 'Hors part' },
+  ];
+  const natureCourte = (x) => ({ partage: 'donation-partage', horsPart: 'hors part' })[engine.nature(x)] || '';
   const COULEURS = { conjoint: '#5b3f7a', heritiers: '#2c4f86', droits: '#b08a4f' };
 
   const nouvellePersonne = (o) => Object.assign({ id: uid('p'), nom: '', handicape: false }, o || {});
@@ -251,15 +257,15 @@
       h('div', { class: 'grid-3' }, f('Abattement de 20 % sur la résidence principale', ctx.yesNo(s, 'abattementRP', { small: true }), { help: 'Si elle est occupée par le conjoint ou un enfant mineur à la date du décès (art. 764 bis CGI). Cocher le bien « résidence principale ».' })))) : null;
 
     const donations = ui.card('Donations antérieures consenties par le défunt', h('div', { class: 'stack-sm' },
-      s.donations.map((x) => ligne('minmax(170px,1.2fr) minmax(130px,0.7fr) minmax(120px,0.8fr) minmax(120px,0.8fr) auto 32px',
+      s.donations.map((x) => (x.nature || (x.nature = engine.nature(x)), x)).map((x) => ligne('minmax(170px,1.2fr) minmax(130px,0.7fr) minmax(120px,0.8fr) minmax(120px,0.8fr) auto 32px',
         f('Bénéficiaire', ctx.select(x, 'beneficiaire', benef, { structural: true })),
         f('Date', ctx.date(x, 'date')),
         f('Valeur au décès', ctx.num(x, 'valeur', { suffix: '€' }), { help: 'Pour le calcul civil (rapport, réserve).' }),
         f('Montant déclaré', ctx.num(x, 'montantFiscal', { suffix: '€', placeholder: 'idem' }), { help: 'Pour le rappel fiscal (15 ans).' }),
-        f('Hors part', ctx.yesNo(x, 'horsPart', { small: true })),
+        f('Nature', ctx.select(x, 'nature', NATURES, { structural: true })),
         retirer(ctx, s.donations, x))),
-      ajouter(ctx, 'Ajouter une donation', () => s.donations.push({ id: uid('dn'), beneficiaire: '', date: '', valeur: null, montantFiscal: null, horsPart: false }))),
-    { subtitle: 'Donations en avancement de part : rapportées entre enfants. Hors part (préciput) : imputées sur la quotité disponible.' });
+      ajouter(ctx, 'Ajouter une donation', () => s.donations.push({ id: uid('dn'), beneficiaire: '', date: '', valeur: null, montantFiscal: null, nature: 'avancement' }))),
+    { subtitle: 'En avancement de part : rapportées entre enfants. Donation-partage : imputée sur la réserve, non rapportée (valeur au jour de la donation-partage, art. 1078). Hors part (préciput) : imputée sur la quotité disponible.' });
 
     const legs = ui.card('Legs à d\'autres bénéficiaires', h('div', { class: 'stack-sm' },
       s.legs.map((x) => ligne('minmax(170px,1.2fr) ' + (x.beneficiaire ? '' : 'minmax(150px,1fr) minmax(140px,0.8fr) ') + 'minmax(150px,0.8fr) minmax(120px,0.8fr) 32px',
@@ -338,6 +344,7 @@
     const lignes = [
       { l: 'Actif net de succession (biens existants)', v: c.A },
       c.Dr ? { l: 'Donations rapportables (en avancement de part)', v: c.Dr, note: 'réunion fictive' } : null,
+      c.Dp ? { l: 'Donations-partages', v: c.Dp, note: 'réunion fictive (valeur art. 1078)' } : null,
       c.Dh ? { l: 'Donations hors part', v: c.Dh, note: 'réunion fictive' } : null,
       c.Dc ? { l: 'Donations au conjoint', v: c.Dc, note: 'réunion fictive' } : null,
       { l: 'Masse de calcul (art. 922 C. civ.)', v: c.M, total: true },
@@ -347,6 +354,7 @@
         { l: 'Quotité disponible ordinaire', v: c.qdo * c.M, note: fraction(c.qdo) + ' (' + n + ' souche' + (n > 1 ? 's' : '') + ' de descendants)' },
         { l: 'Réserve des descendants', v: c.reserveGlobale, note: fraction(1 - c.qdo) },
         c.Dr ? { l: 'dont déjà reçue par donations rapportables', v: c.Dr, indent: true } : null,
+        c.DpReserve ? { l: 'dont déjà reçue par donations-partages', v: c.DpReserve, indent: true, note: 'imputées sur la réserve, non rapportées' } : null,
         { l: 'Réserve restant à prendre sur les biens existants', v: c.reserveSurBiens, indent: true });
     }
     if (c.L) lignes.push({ l: 'Legs à d\'autres bénéficiaires', v: c.L, note: 'pris sur les biens existants' });
@@ -391,7 +399,7 @@
     if (!red || (!red.imputees.length && !red.legs.length && !c.L)) return null;
     const nomBenef = (id) => (beneficiaires(s, true).find((b) => b.value === id) || {}).label || id || '—';
     const rows = red.imputees.map((x) => ({
-      lib: 'Donation' + (x.don.date ? ' du ' + fmtDate(x.don.date) : '') + (x.don.horsPart ? ' hors part' : ''), benef: nomBenef(x.don.beneficiaire), valeur: x.valeur, impute: x.impute, reduction: x.exces,
+      lib: 'Donation' + (x.don.date ? ' du ' + fmtDate(x.don.date) : '') + (x.don.surplusPartage ? ' (donation-partage, part excédant la réserve)' : engine.nature(x.don) === 'horsPart' ? ' hors part' : ''), benef: nomBenef(x.don.beneficiaire), valeur: x.valeur, impute: x.impute, reduction: x.exces,
       effet: x.exces > 0.5 ? (x.heritier ? 'imputée sur sa part de réserve' : 'indemnité due à la succession') : '',
     }));
     if (red.legs.length) {
@@ -428,7 +436,7 @@
       h('h4', { class: 'param-sub' }, 'Rappel des donations antérieures (art. 784 CGI)'),
       ui.table([
         { label: 'Bénéficiaire', render: (y) => y.x.nom },
-        { label: 'Donations', render: (y) => h('div', null, y.dons.map((d) => h('div', { class: 'small' }, fmtDate(d.date) + ' — ' + fmtEuro(isNum(d.montantFiscal) ? d.montantFiscal : d.valeur) + (d.horsPart ? ' (hors part)' : '') + (y.recents.includes(d) ? '' : ' : plus de ' + p.fiscal.delaiRappel + ' ans, non rappelée')))) },
+        { label: 'Donations', render: (y) => h('div', null, y.dons.map((d) => h('div', { class: 'small' }, fmtDate(d.date) + ' — ' + fmtEuro(isNum(d.montantFiscal) ? d.montantFiscal : d.valeur) + (natureCourte(d) ? ' (' + natureCourte(d) + ')' : '') + (y.recents.includes(d) ? '' : ' : plus de ' + p.fiscal.delaiRappel + ' ans, non rappelée')))) },
         { label: 'Montant rappelé', num: true, render: (y) => fmtEuro(y.x.rappel) },
         { label: 'Abattement', num: true, render: (y) => fmtEuro(y.x.abattementTotal) },
         { label: 'Abattement restant', num: true, className: 'col-strong', render: (y) => fmtEuro(Math.max(0, y.x.abattementTotal - y.x.rappel)) },
@@ -566,7 +574,7 @@
     const nomBenef = (id) => (id === 'conjoint' ? nomConjoint(s) : (beneficiaires(s, true).find((b) => b.value === id) || {}).label || '—');
     out.push(t('Donations antérieures', [
       { label: 'Bénéficiaire', render: (x) => nomBenef(x.beneficiaire) }, { label: 'Date', render: (x) => fmtDate(x.date) },
-      { label: 'Nature', render: (x) => (x.horsPart ? 'Hors part' : 'En avancement de part') },
+      { label: 'Nature', render: (x) => (NATURES.find((y) => y.value === engine.nature(x)) || NATURES[0]).label },
       { label: 'Valeur au décès', num: true, render: (x) => fmtEuro(x.valeur) }, { label: 'Montant déclaré', num: true, render: (x) => fmtEuro(isNum(x.montantFiscal) ? x.montantFiscal : x.valeur) },
     ], s.donations.filter((x) => isNum(x.valeur))));
     const lc = s.liberaliteConjoint;

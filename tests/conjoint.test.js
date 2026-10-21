@@ -193,3 +193,45 @@ test('Rapport d\'une donation en présence de l\'usufruit du conjoint', () => {
   near(ligne(u, 'Alice').np, 120000, 'nue-propriété d\'Alice');
   near(ligne(u, 'Bruno').np, 180000, 'nue-propriété de Bruno');
 });
+
+// Cas réel anonymisé : donations en avancement de part (2005), hors part et donation-partage (2021).
+function dossierPartage() {
+  return dossier({
+    dateDeces: '2026-05-19', conjoint: { nom: 'Claire', age: 85 },
+    biens: [{ id: 'b', designation: 'Actif', valeur: 152597.14, propriete: 'defunt' }],
+    donations: [
+      { id: 'd1', beneficiaire: 'e1', date: '2005-01-17', valeur: 54900, nature: 'avancement' },
+      { id: 'd2', beneficiaire: 'e2', date: '2005-01-17', valeur: 54900, nature: 'avancement' },
+      { id: 'd3', beneficiaire: 'e1', date: '2021-11-19', valeur: 65000, nature: 'horsPart' },
+      { id: 'd4', beneficiaire: 'e1', date: '2021-12-23', valeur: 26000, nature: 'partage' },
+      { id: 'd5', beneficiaire: 'e2', date: '2021-12-23', valeur: 26000, nature: 'partage' },
+    ],
+  });
+}
+
+test('Donation-partage : réunie à la masse, imputée sur la réserve, non rapportée', () => {
+  const r = C.calculer(dossierPartage(), P);
+  const q = scen(r, 'legal-pp');
+  const c = q.rep.calc;
+  near(c.M, 379397.14, 'masse de calcul');
+  near(c.reserveGlobale, 252931.43, 'réserve');
+  near(c.masse758, 262397.14, 'masse de l\'art. 758-5 (sans la donation-partage)');
+  // Quart légal 65 599,29 plafonné à la QD restante (126 465,71 − 65 000 hors part).
+  near(q.conjoint.pp, 61465.71, 'quart légal plafonné');
+  near(ligne(q, 'Alice').valeur, 45565.71, 'Alice');
+  near(ligne(q, 'Bruno').valeur, 45565.71, 'Bruno');
+  // Réserve de Bruno : 45 565,71 + 54 900 + 26 000 = 126 465,71 (⅓ de la masse).
+  assert.ok(Math.abs(ligne(q, 'Alice').droits - 5507) <= 1, 'droits d\'Alice : ' + ligne(q, 'Alice').droits);
+  near(ligne(q, 'Bruno').droits, 0, 'droits de Bruno');
+
+  const u = scen(r, 'legal-us');
+  near(u.conjoint.valeur, 30519.43, 'usufruit (20 %)');
+  near(ligne(u, 'Alice').valeur, 61038.86, 'nue-propriété d\'Alice');
+  assert.ok(Math.abs(ligne(u, 'Alice').droits - 8602) <= 1, 'droits d\'Alice : ' + ligne(u, 'Alice').droits);
+});
+
+test('Anciens dossiers : l\'indicateur « horsPart » vaut nature hors part', () => {
+  assert.strictEqual(C.nature({ horsPart: true }), 'horsPart');
+  assert.strictEqual(C.nature({}), 'avancement');
+  assert.strictEqual(C.nature({ nature: 'partage', horsPart: true }), 'partage');
+});

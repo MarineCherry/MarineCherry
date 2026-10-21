@@ -201,6 +201,12 @@
     return ['sans'];
   }
 
+  // Nature d'une donation : en avancement de part (rapportable), donation-partage ou hors part.
+  // Les anciens dossiers ne connaissent que l'indicateur « horsPart ».
+  function nature(x) {
+    return x.nature || (x.horsPart ? 'horsPart' : 'avancement');
+  }
+
   function qdOrdinaire(nbEnfants) {
     if (nbEnfants <= 0) return 1;
     return nbEnfants === 1 ? 1 / 2 : nbEnfants === 2 ? 1 / 3 : 1 / 4;
@@ -220,12 +226,32 @@
     h.souches.forEach((s) => s.membres.forEach((m) => souchesId.set(m.personne.id, s.id)));
     h.souches.forEach((s) => souchesId.set(s.id, s.id));
     const Dc = sum(dons.filter((x) => estConjoint(x.beneficiaire)), (x) => n(x.valeur));
-    const Dr = sum(dons.filter((x) => !estConjoint(x.beneficiaire) && !x.horsPart && souchesId.has(x.beneficiaire)), (x) => n(x.valeur));
-    const Dh = sum(dons, (x) => n(x.valeur)) - Dc - Dr;
-    const M = A + Dr + Dh + Dc; // masse de calcul (art. 922)
+    const aHeritier = (x) => !estConjoint(x.beneficiaire) && souchesId.has(x.beneficiaire);
+    const rapportables = dons.filter((x) => aHeritier(x) && nature(x) === 'avancement');
+    // Donation-partage (art. 1075 s.) : réunie à la masse de calcul (valeur fixée selon l'art. 1078),
+    // imputée sur la réserve du gratifié, mais ni rapportée ni comprise dans la masse de l'art. 758-5.
+    const partages = dons.filter((x) => aHeritier(x) && nature(x) === 'partage');
+    const Dr = sum(rapportables, (x) => n(x.valeur));
+    const Dp = sum(partages, (x) => n(x.valeur));
+    const Dh = sum(dons, (x) => n(x.valeur)) - Dc - Dr - Dp;
+    const M = A + Dr + Dp + Dh + Dc; // masse de calcul (art. 922)
     const nbEnf = h.souches.length;
     const qdo = qdOrdinaire(nbEnf);
     const alertes = [];
+    // Part de la donation-partage qui excède la réserve individuelle du gratifié : imputée sur la quotité disponible.
+    const surplusPartage = [];
+    if (nbEnf) {
+      const resInd = ((1 - qdo) * M) / nbEnf;
+      h.souches.forEach((s) => {
+        const ds = partages.filter((x) => souchesId.get(x.beneficiaire) === s.id);
+        const exc = sum(ds, (x) => n(x.valeur)) - resInd;
+        if (exc > 0.5) {
+          const dernier = ds.slice().sort((a, b) => ((a.date || '') < (b.date || '') ? 1 : -1))[0];
+          surplusPartage.push(Object.assign({}, dernier, { valeur: exc, surplusPartage: true }));
+        }
+      });
+    }
+    const DpReserve = Dp - sum(surplusPartage, (x) => x.valeur);
 
     // Legs à d'autres bénéficiaires (préciput ou légataires), pris sur les biens existants.
     let legs = (d.legs || []).filter((l) => l.beneficiaire || (l.nom && l.nom.trim())).map((l) => {
@@ -251,7 +277,8 @@
     if (nbEnf) {
       const qdoVal = qdo * M;
       let restant = qdoVal;
-      dons.filter((x) => !estConjoint(x.beneficiaire) && (x.horsPart || !souchesId.has(x.beneficiaire)))
+      dons.filter((x) => !estConjoint(x.beneficiaire) && !rapportables.includes(x) && !partages.includes(x))
+        .concat(surplusPartage)
         .sort((a, b) => ((a.date || '') < (b.date || '') ? -1 : (a.date || '') > (b.date || '') ? 1 : 0))
         .forEach((x) => {
           const v = n(x.valeur);
@@ -309,8 +336,8 @@
     // (les donations rapportables s'imputent sur la réserve).
     const reserveGlobale = nbEnf ? (1 - qdo) * M : 0;
     // L'excédent des donations réduites remplit la réserve (imputation ou indemnité versée).
-    const reserveSurBiens = clamp0(reserveGlobale - Dr - excesHeritiers - reduction.indemnitesTiers);
-    const calc = { A, L, Dr, Dh, Dc, M, qdo, reserveGlobale, reserveSurBiens, dispo, masse758: A + Dr, conjBrut: null, plafond: null, fraction: null, assiette: null, reduction };
+    const reserveSurBiens = clamp0(reserveGlobale - Dr - DpReserve - excesHeritiers - reduction.indemnitesTiers);
+    const calc = { A, L, Dr, Dp, DpReserve, Dh, Dc, M, qdo, reserveGlobale, reserveSurBiens, dispo, masse758: A + Dr, conjBrut: null, plafond: null, fraction: null, assiette: null, reduction };
     if (regime.marie && nbEnf) {
       if (code === 'legal-pp') Object.assign(calc, { fraction: 0.25, assiette: A + Dr, conjBrut: 0.25 * (A + Dr) - Dc, plafond: clamp0(dispo - reserveSurBiens) });
       if (code === 'ddv-qd') Object.assign(calc, { fraction: qdo, assiette: M, conjBrut: qdo * M - Dc, plafond: dispo });
@@ -387,14 +414,14 @@
       }
       if (code === 'ddv-total') conj.pp = base;
       // Réserve du conjoint (art. 914-1) : ¼ en l'absence de descendants.
-      if (L > 0.75 * (A + Dh + Dr) + 0.005) alertes.push('Legs supérieurs à la quotité disponible : la réserve du conjoint (¼) est atteinte (art. 914-1 C. civ.).');
+      if (L > 0.75 * (A + Dh + Dr + Dp) + 0.005) alertes.push('Legs supérieurs à la quotité disponible : la réserve du conjoint (¼) est atteinte (art. 914-1 C. civ.).');
     } else if (nbEnf) {
       // Descendants : pleine propriété restante et nue-propriété, par souches, rapport en moins prenant.
       const R = clamp0(dispo - conj.pp - conj.viager);
       const U = Math.min(conj.usBase, R);
       const nueTotale = U;
       const donsSouche = new Map(h.souches.map((s) => [s.id, 0]));
-      dons.filter((x) => !estConjoint(x.beneficiaire) && !x.horsPart && souchesId.has(x.beneficiaire)).forEach((x) => {
+      rapportables.forEach((x) => {
         const sid = souchesId.get(x.beneficiaire);
         donsSouche.set(sid, donsSouche.get(sid) + n(x.valeur));
       });
@@ -472,7 +499,7 @@
       const x = parts.find((y) => y.id === pers.id);
       if (x) x.indemnite = (x.indemnite || 0) + r.exces;
     });
-    return { code, us, A, M, qdo, Dr, Dh, Dc, L, conj, parts, alertes, calc };
+    return { code, us, A, M, qdo, Dr, Dp, Dh, Dc, L, conj, parts, alertes, calc };
   }
 
   function findPersonne(d, id) {
@@ -607,5 +634,5 @@
     };
   }
 
-  return { calculer, liquider, heritiers, repartir, fiscalite, recompense, droitsBareme, usufruitParAge, qdOrdinaire, REGIMES, LIENS, OPTIONS };
+  return { calculer, liquider, heritiers, repartir, fiscalite, recompense, droitsBareme, usufruitParAge, qdOrdinaire, nature, REGIMES, LIENS, OPTIONS };
 });
