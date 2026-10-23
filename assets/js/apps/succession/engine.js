@@ -351,8 +351,10 @@
       return s;
     };
 
+    // L'hypothèse D (montage avec les petits-enfants) peut être écartée du dossier.
+    const actives = HYPOTHESES.filter((h) => h.code !== 'D' || d.hypotheseD !== false);
     const brutes = {};
-    HYPOTHESES.forEach((h) => (brutes[h.code] = hypothese(h.code)));
+    actives.forEach((h) => (brutes[h.code] = hypothese(h.code)));
 
     // Mise en forme : par parent (branche) et cumul des deux parents.
     function vue(code) {
@@ -384,10 +386,10 @@
       });
     }
     const hypotheses = {};
-    HYPOTHESES.forEach((h) => (hypotheses[h.code] = vue(h.code)));
+    actives.forEach((h) => (hypotheses[h.code] = vue(h.code)));
 
     const total = sum(biens, (b) => b.valeur);
-    const comparatif = HYPOTHESES.map((h) => {
+    const comparatif = actives.map((h) => {
       const t = hypotheses[h.code].cumul.total;
       return { code: h.code, libelle: h.libelle, court: h.court, donation: t.donation.droits, succession: t.succession.droits, total: t.totalDroits };
     });
@@ -415,14 +417,14 @@
       { libelle: 'Parts des enfants = 100 %', ok: enfants.length > 0 && Math.abs(sommeParts - 1) < 0.0001, message: 'le total des parts est différent de 100 %' },
       { libelle: 'Âges des parents renseignés', ok: actifs.every((g, i) => isNum(((d.parents || [])[i] || {}).age)), message: 'âge manquant' },
       { libelle: 'Patrimoine saisi', ok: total > 0, message: 'aucun bien saisi' },
-      { libelle: 'Donations envisagées', ok: dons.length > 0, message: 'aucune donation saisie : les hypothèses B, C et D sont identiques à A' },
-      { libelle: 'Petits-enfants rattachés à un enfant', ok: petitsEnfants.every((x) => x.branche), message: 'un petit-enfant n\'est rattaché à aucun enfant (ignoré dans l\'hypothèse D)' },
+      { libelle: 'Donations envisagées', ok: dons.length > 0, message: 'aucune donation saisie : les hypothèses ' + actives.slice(1).map((h) => h.code).join(', ').replace(/, (\w)$/, ' et $1') + ' sont identiques à A' },
+      brutes.D ? { libelle: 'Petits-enfants rattachés à un enfant', ok: petitsEnfants.every((x) => x.branche), message: 'un petit-enfant n\'est rattaché à aucun enfant (ignoré dans l\'hypothèse D)' } : null,
       { libelle: 'Montants donnés', ok: alertes.length === 0, message: alertes.join(' ') },
     ];
 
     return {
       parents, enfants, petitsEnfants, biens, lignes, patrimoine, total, montage, limiteRappel: limiteRappel ? new Date(toTime(limiteRappel)).toISOString().slice(0, 10) : null,
-      hypotheses, comparatif, meilleure, parNature, controles, alertes,
+      hypotheses, actives, comparatif, meilleure, parNature, controles: controles.filter(Boolean), alertes,
       patrimoineTotal: total,
     };
   }

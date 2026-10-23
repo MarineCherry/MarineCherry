@@ -31,13 +31,15 @@
     return {
       nomDossier: '', dateSimulation: todayISO(), nbParents: 2,
       parents: [{ nom: '', age: null }, { nom: '', age: null }],
-      enfants: [newEnfant()], petitsEnfants: [],
+      enfants: [newEnfant()], petitsEnfants: [], hypotheseD: false,
       donFamilial: false, deces15ans: false,
       biens: [], donations: [], anterieures: [],
     };
   }
   const isEmpty = (s) => !s.nomDossier && s.enfants.every((e) => !e.nom) && s.biens.every((b) => !b.valeur);
   const compute = (s, p) => engine.calculer(s, p);
+  // Hypothèses étudiées : D (montage avec les petits-enfants) seulement si elle est activée.
+  const hyps = (s) => engine.HYPOTHESES.filter((x) => x.code !== 'D' || s.hypotheseD !== false);
 
   const parentNom = (s, i) => (s.parents[i] && s.parents[i].nom) || 'Parent ' + (i + 1);
   const nomDonateur = (s, g) => (g === 'deux' ? 'Les deux parents' : parentNom(s, g === 'P2' ? 1 : 0));
@@ -79,10 +81,14 @@
         icon: 'trash', iconOnly: true, variant: 'ghost', small: true,
         onClick: () => { s.petitsEnfants.splice(i, 1); ctx.render(); ctx.changed(); },
       })));
-    return ui.card('Les petits-enfants', h('div', { class: 'stack-sm' },
-      rows.length ? h('div', { class: 'rows' }, rows) : h('p', { class: 'muted' }, 'Aucun pour l\'instant.'),
-      ui.button('Ajouter un petit-enfant', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.petitsEnfants.push(newPetitEnfant()); ctx.render(); } })),
-    { subtitle: 'Facultatif. Chaque petit-enfant est rattaché à son parent : dans l\'hypothèse D, chaque branche reçoit le même montant, partagé entre ses enfants.' });
+    const actif = s.hypotheseD !== false;
+    return ui.card('Les petits-enfants (hypothèse D)', h('div', { class: 'stack-sm' },
+      field('Étudier l\'hypothèse D (montage optimisé avec les petits-enfants)', ctx.yesNo(s, 'hypotheseD', { small: true, structural: true })),
+      actif ? [
+        rows.length ? h('div', { class: 'rows' }, rows) : h('p', { class: 'muted' }, 'Aucun pour l\'instant.'),
+        ui.button('Ajouter un petit-enfant', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.petitsEnfants.push(newPetitEnfant()); ctx.render(); } }),
+      ] : null),
+    { subtitle: actif ? 'Chaque petit-enfant est rattaché à son parent : dans l\'hypothèse D, chaque branche reçoit le même montant, partagé entre ses enfants.' : 'Hypothèse D non étudiée : elle n\'apparaît ni dans les résultats ni dans la synthèse.' });
   }
 
   function tabFamille(ctx) {
@@ -225,7 +231,7 @@
             ' ; il conserve ', fmtEuro(pat.resteBrut), '.');
         }),
         r.alertes.map((a) => ui.badge(false, a))))),
-    { subtitle: 'Montant en pleine propriété ; vide = toute la part du donateur dans le bien. B : donné en pleine propriété. C et D : la nue-propriété est donnée, l\'usufruit réservé (les liquidités sont données en pleine propriété).' });
+    { subtitle: 'Montant en pleine propriété ; vide = toute la part du donateur dans le bien. B : donné en pleine propriété. ' + (s.hypotheseD !== false ? 'C et D' : 'C') + ' : la nue-propriété est donnée, l\'usufruit réservé (les liquidités sont données en pleine propriété).' });
 
     const peCard = ui.card('Montage optimisé (hypothèse D)', h('div', { class: 'stack-sm' },
       ui.note('Le logiciel cherche, pour chaque grand-parent et chaque branche, la répartition qui rend les droits de la famille les plus faibles : '
@@ -239,7 +245,7 @@
         h('div', { class: 'detail-d' }, vueHypothese(s, r, 'D'))))),
     { subtitle: s.petitsEnfants.some((x) => x.nom) ? 'Calculé automatiquement à partir des biens désignés ci-dessus.' : 'Sans petits-enfants saisis, le montage porte seulement sur la part donnée aux enfants et celle gardée pour la succession.' });
 
-    return h('div', { class: 'stack' }, enfantsCard, peCard);
+    return h('div', { class: 'stack' }, enfantsCard, s.hypotheseD !== false ? peCard : null);
   }
 
   // Montage de l'hypothèse D, grand-parent par grand-parent : ce qui est donné et ce qui est gardé.
@@ -365,7 +371,7 @@
     const s = ctx.state;
     return h('div', { class: 'stack' },
       ui.note('Résultats présentés branche par branche : chaque parent transmet sa part (biens propres et moitié des biens communs). Colonnes dorées : donation ; bleues : succession sans donation ; vertes : succession résiduelle après donation.'),
-      engine.HYPOTHESES.map((hyp) => ui.card('Hypothèse ' + hyp.code + ' — ' + hyp.libelle, ctx.live((r) => vueHypothese(s, r, hyp.code)), { className: 'card-hyp' })));
+      hyps(s).map((hyp) => ui.card('Hypothèse ' + hyp.code + ' — ' + hyp.libelle, ctx.live((r) => vueHypothese(s, r, hyp.code)), { className: 'card-hyp' })));
   }
 
   /* ---------- Synthèse (document client) ---------- */
@@ -381,12 +387,12 @@
       'Droits en ligne directe (barème de l\'art. 777 CGI) ; abattement de ' + fmtEuro(p.abattEnfant) + ' par parent et par enfant, renouvelé tous les ' + p.delaiRappel + ' ans.',
       "Usufruit viager valorisé selon le barème fiscal de l'article 669 du CGI, à l'âge de chaque parent ; il s'éteint au décès sans droits supplémentaires.",
       'Chaque parent transmet ses biens propres et la moitié des biens communs ; les droits du conjoint survivant ne sont pas modélisés.',
-      'Hypothèse D : montage optimisé en nue-propriété. Pour chaque branche, part des biens désignés donnée à l\'enfant, don aux petits-enfants (même montant par branche, partagé entre eux) et part gardée pour la succession, choisis pour que le total des droits soit le plus faible ; abattement de ' + fmtEuro(p.abattPetitEnfant) + ' par grand-parent et par petit-enfant.',
+      s.hypotheseD === false ? null : 'Hypothèse D : montage optimisé en nue-propriété. Pour chaque branche, part des biens désignés donnée à l\'enfant, don aux petits-enfants (même montant par branche, partagé entre eux) et part gardée pour la succession, choisis pour que le total des droits soit le plus faible ; abattement de ' + fmtEuro(p.abattPetitEnfant) + ' par grand-parent et par petit-enfant.',
       s.deces15ans
         ? 'Décès supposé dans les ' + p.delaiRappel + ' ans suivant la donation : la donation est rappelée fiscalement et consomme l\'abattement.'
         : 'Décès supposé plus de ' + p.delaiRappel + ' ans après la donation : les abattements sont reconstitués.',
       "Valeurs constantes (sans réévaluation) ; frais d'actes, émoluments et frais de partage non inclus.",
-    ];
+    ].filter(Boolean);
   }
 
   function vueSynthese(s, r, p) {
@@ -417,26 +423,26 @@
     const actifs = r.parents.filter((x) => x.actif);
     const parBranche = actifs.length > 1 ? ui.table(
       [{ label: 'Branche', key: 'nom' }, { label: 'Patrimoine', num: true, render: (x) => fmtEuro(x.patrimoine) }]
-        .concat(engine.HYPOTHESES.map((hy) => ({ label: hy.code + ' · ' + hy.court, num: true, render: (x) => fmtEuro(x[hy.code]) }))),
+        .concat(hyps(s).map((hy) => ({ label: hy.code + ' · ' + hy.court, num: true, render: (x) => fmtEuro(x[hy.code]) }))),
       actifs.map((x) => {
         const row = { nom: parentNom(s, x.index), patrimoine: r.patrimoine[x.code].brut };
-        engine.HYPOTHESES.forEach((hy) => (row[hy.code] = r.hypotheses[hy.code].parents[x.index].total.totalDroits));
+        hyps(s).forEach((hy) => (row[hy.code] = r.hypotheses[hy.code].parents[x.index].total.totalDroits));
         return row;
       })) : null;
 
     const detailRows = r.enfants.map((e, k) => {
       const row = { nom: e.nom };
-      engine.HYPOTHESES.forEach((hy) => (row[hy.code] = r.hypotheses[hy.code].cumul.enfants[k].totalDroits));
+      hyps(s).forEach((hy) => (row[hy.code] = r.hypotheses[hy.code].cumul.enfants[k].totalDroits));
       return row;
     });
-    if (r.petitsEnfants.length) {
+    if (r.petitsEnfants.length && r.hypotheses.D) {
       const row = { nom: 'Petits-enfants (donations)' };
-      engine.HYPOTHESES.forEach((hy) => (row[hy.code] = r.hypotheses[hy.code].cumul.petitsEnfants.reduce((t, x) => t + x.droits, 0)));
+      hyps(s).forEach((hy) => (row[hy.code] = r.hypotheses[hy.code].cumul.petitsEnfants.reduce((t, x) => t + x.droits, 0)));
       detailRows.push(row);
     }
     const tot = { nom: 'Total' };
-    engine.HYPOTHESES.forEach((hy) => (tot[hy.code] = detailRows.reduce((t, x) => t + x[hy.code], 0)));
-    const detail = ui.table([{ label: 'Bénéficiaire', key: 'nom' }].concat(engine.HYPOTHESES.map((hy) => ({ label: hy.code + ' · ' + hy.court, num: true, render: (x) => fmtEuro(x[hy.code]) }))),
+    hyps(s).forEach((hy) => (tot[hy.code] = detailRows.reduce((t, x) => t + x[hy.code], 0)));
+    const detail = ui.table([{ label: 'Bénéficiaire', key: 'nom' }].concat(hyps(s).map((hy) => ({ label: hy.code + ' · ' + hy.court, num: true, render: (x) => fmtEuro(x[hy.code]) }))),
       detailRows, { total: tot, empty: 'Aucun enfant saisi.' });
 
     return h('div', { class: 'synthese' },
@@ -449,9 +455,10 @@
       h('div', { class: 'charts' }, bars, donut),
       parBranche ? [h('h3', { class: 'section-title' }, 'Droits par branche'), parBranche] : null,
       h('h3', { class: 'section-title' }, 'Droits à payer par bénéficiaire'), detail,
-      h('h3', { class: 'section-title' }, 'Le montage proposé (hypothèse D)'),
-      h('p', { class: 'field-help' }, 'Part des biens donnée en nue-propriété à chaque enfant, don aux petits-enfants et part gardée pour la succession, pour que les droits de la famille soient les plus faibles.'),
-      tablesMontage(s, r),
+      r.hypotheses.D ? [
+        h('h3', { class: 'section-title' }, 'Le montage proposé (hypothèse D)'),
+        h('p', { class: 'field-help' }, 'Part des biens donnée en nue-propriété à chaque enfant, don aux petits-enfants et part gardée pour la succession, pour que les droits de la famille soient les plus faibles.'),
+        tablesMontage(s, r)] : null,
       h('div', { class: 'resume' }, h('h3', { class: 'section-title' }, 'En résumé'), h('p', null, resume(s, r))),
       h('h3', { class: 'section-title' }, 'Hypothèses retenues'),
       h('ul', { class: 'bullets small' }, hypothesesTexte(s, p).map((x) => h('li', null, x))));
@@ -480,7 +487,7 @@
           { label: 'Bénéficiaire', render: (x) => (x.source.beneficiaire === 'tous' ? 'Tous les enfants' : (r.enfants.find((e) => e.id === x.source.beneficiaire) || {}).nom || '—') },
           { label: 'Montant (pleine propriété)', num: true, render: (x) => fmtEuro(x.total) },
         ], r.lignes.filter((l) => l.total), { compact: true })] : null);
-      engine.HYPOTHESES.forEach((hy) => body.push(h('h2', null, 'Hypothèse ' + hy.code + ' — ' + hy.libelle), vueHypothese(s, r, hy.code, { ouvert: true })));
+      hyps(s).forEach((hy) => body.push(h('h2', null, 'Hypothèse ' + hy.code + ' — ' + hy.libelle), vueHypothese(s, r, hy.code, { ouvert: true })));
     }
     return ui.printDoc({
       title: complet ? 'Simulation de transmission — dossier complet' : 'Simulation de transmission',
@@ -572,6 +579,8 @@
     s.donations = s.donations || [];
     delete s.donsPE;
     s.petitsEnfants = (s.petitsEnfants || []).map((x) => Object.assign({ parent: '' }, x));
+    // Anciens dossiers : hypothèse D étudiée s'il y a des petits-enfants.
+    if (typeof s.hypotheseD !== 'boolean') s.hypotheseD = s.petitsEnfants.some((x) => x.nom);
     migrer(s);
     return s;
   }
@@ -584,7 +593,7 @@
       { id: 'patrimoine', label: 'Patrimoine', render: tabPatrimoine },
       { id: 'donations', label: 'Donations envisagées', render: tabDonations },
       { id: 'anterieures', label: 'Donations antérieures', render: tabAnterieures },
-      { id: 'resultats', label: 'Résultats A · B · C · D', render: tabResultats },
+      { id: 'resultats', label: 'Résultats', render: tabResultats },
       { id: 'synthese', label: 'Synthèse client', render: tabSynthese },
     ],
   });

@@ -111,3 +111,11 @@ test('Contrôle : donation supérieure à la part du donateur', () => {
   assert.strictEqual(r.controles.find((c) => c.libelle === 'Montants donnés').ok, false);
   near(r.hypotheses.B.parents[1].enfants[0].donation.transmis, 0, 'le parent 2 ne possède pas le compte titres');
 });
+
+test('Hypothèse D désactivée : seules A, B et C sont comparées', () => {
+  const r = S.calculer(dossier({ hypotheseD: false }), P);
+  assert.deepStrictEqual(r.comparatif.map((x) => x.code), ['A', 'B', 'C']);
+  assert.strictEqual(r.hypotheses.D, undefined);
+  assert.ok(!r.controles.some((x) => /Petits-enfants/.test(x.libelle)));
+  assert.deepStrictEqual(S.calculer(dossier(), P).comparatif.map((x) => x.code), ['A', 'B', 'C', 'D']);
+});
