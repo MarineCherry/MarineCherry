@@ -366,9 +366,25 @@
     const lignes = [];
     if (c.conjBrut !== null && c.conjBrut !== undefined) {
       const base = sc.code === 'legal-pp' ? 'actif net ' + fmtEuro(c.A) + (c.Dr ? ' + donations rapportables ' + fmtEuro(c.Dr) : '') + ' (art. 758-5)' : 'masse de calcul ' + fmtEuro(c.M);
-      lignes.push({ l: 'Pleine propriété du conjoint', v: c.fraction * c.assiette, note: fraction(c.fraction) + ' × ' + base });
+      lignes.push({ l: 'Droits théoriques en pleine propriété', v: c.fraction * c.assiette, note: fraction(c.fraction) + ' × ' + base });
       if (c.Dc) lignes.push({ l: 'Moins : donations déjà reçues par le conjoint', v: -c.Dc, indent: true, note: 'imputées' });
-      if (c.conjBrut > c.plafond + 0.5) lignes.push({ l: 'Plafond (biens existants, réserve préservée)', v: c.plafond, indent: true });
+    }
+    const ex = c.exercice;
+    if (ex && (sc.code === 'legal-pp' || sc.code === 'ddv-qd')) {
+      const imputees = c.reserveGlobale - ex.reserve;
+      lignes.push(
+        { l: 'Biens existants' + (c.L ? ' (après legs)' : ''), v: ex.biens, note: 'les donations ne sont pas reprises' },
+        { l: 'Moins : réserve restant due aux descendants', v: -ex.reserve, indent: true, note: 'réserve ' + fmtEuro(c.reserveGlobale) + (imputees > 0.5 ? ' − ' + fmtEuro(imputees) + ' déjà reçus par donations imputées sur la réserve' : '') },
+        { l: 'Masse d\'exercice' + (sc.code === 'legal-pp' ? ' (art. 758-5 al. 2)' : ''), v: ex.masse, total: true },
+        { l: 'Pleine propriété du conjoint', v: conj.pp + (conj.viager || 0), note: c.conjBrut > c.plafond + 0.5 ? 'limitée à la masse d\'exercice' : 'droits théoriques (dans la masse d\'exercice)' });
+    } else if (ex && (sc.code === 'ddv-mixte' || sc.code === 'ddv-us')) {
+      const deja = ex.impute + c.Dc + c.L;
+      lignes.push(
+        { l: 'Quotité disponible ' + (ex.special ? 'spéciale (art. 1094-1)' : 'ordinaire') + ', en valeur', v: ex.qd, note: !ex.special ? fraction(c.qdo) + ' × masse de calcul (plus forte que la quotité spéciale)' : sc.code === 'ddv-mixte' ? '(¼ + ¾ × ' + fmtPct(us, 0) + ') × masse de calcul' : fmtPct(us, 0) + ' × masse de calcul' },
+        deja > 0.5 ? { l: 'Moins : libéralités déjà imputées', v: -deja, indent: true, note: 'donations hors part ou à des tiers, au conjoint, legs' } : null,
+        { l: 'Disponible pour le conjoint (masse d\'exercice en valeur)', v: ex.disponible, total: true });
+      if (c.reduitA) lignes.push({ l: 'Libéralité réduite à ce montant', v: c.reduitA, indent: true, note: sc.code === 'ddv-mixte' ? 'la pleine propriété d\'abord' : '' });
+      if (sc.code === 'ddv-mixte') lignes.push({ l: 'Pleine propriété du conjoint', v: conj.pp + (conj.viager || 0) });
     }
     if (conj.usBase) lignes.push({ l: 'Usufruit du conjoint', v: conj.usValeur, note: fmtPct(us, 0) + ' × ' + fmtEuro(conj.usBase) + ' de biens' });
     if (conj.viager) {

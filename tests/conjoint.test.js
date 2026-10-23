@@ -230,6 +230,21 @@ test('Donation-partage : réunie à la masse, imputée sur la réserve, non rapp
   assert.ok(Math.abs(ligne(u, 'Alice').droits - 8602) <= 1, 'droits d\'Alice : ' + ligne(u, 'Alice').droits);
 });
 
+test('Masse d\'exercice des libéralités au conjoint : les donations des enfants ne sont pas reprises', () => {
+  const r = C.calculer(dossierPartage(), P);
+  // Quotité ordinaire : 126 465,71 − 65 000 de donation hors part déjà imputée.
+  const q = scen(r, 'ddv-qd');
+  near(q.conjoint.pp, 61465.71, 'quotité disponible limitée à la masse d\'exercice');
+  near(ligne(q, 'Alice').valeur, 45565.71, 'Alice');
+  // ¼ PP + ¾ US : quotité spéciale 0,4 × 379 397,14 − 65 000 = 86 758,86 ; la pleine propriété est réduite d'abord.
+  const m = scen(r, 'ddv-mixte');
+  near(m.conjoint.valeur, 86758.86, 'valeur reçue par le conjoint');
+  near(m.conjoint.pp, 70299.29, 'pleine propriété réduite');
+  near(m.rep.calc.exercice.disponible, 86758.86, 'disponible');
+  // Usufruit de la totalité : 30 519,43, dans la quotité restante.
+  near(scen(r, 'ddv-us').conjoint.valeur, 30519.43, 'usufruit');
+});
+
 test('Anciens dossiers : l\'indicateur « horsPart » vaut nature hors part', () => {
   assert.strictEqual(C.nature({ horsPart: true }), 'horsPart');
   assert.strictEqual(C.nature({}), 'avancement');

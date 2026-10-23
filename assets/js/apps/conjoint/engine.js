@@ -272,7 +272,7 @@
      * d'abord sur sa part de réserve (il est traité comme une avance sur sa part) ; un tiers verse l'excédent
      * à la succession.
      */
-    const reduction = { donations: [], legs: [], imputees: [], indemnitesTiers: 0, excesHeritiers: new Map(), qdRestante: null };
+    const reduction = { donations: [], legs: [], imputees: [], indemnitesTiers: 0, excesHeritiers: new Map(), qdRestante: null, imputeQD: 0 };
     const us0 = us;
     if (nbEnf) {
       const qdoVal = qdo * M;
@@ -296,6 +296,7 @@
           }
         });
       restant = clamp0(restant);
+      reduction.imputeQD = qdoVal - restant;
       // Plafond des legs : reste de la quotité disponible ordinaire ; pour une libéralité au conjoint,
       // le cumul ne peut dépasser la plus forte des quotités disponibles (ordinaire ou spéciale).
       let lmax = restant;
@@ -309,7 +310,6 @@
           l2 = (cap - ppc - us0 * (A - ppc)) / (1 - us0);
         }
         if (code === 'ddv-us') l2 = (cap - us0 * A) / (1 - us0);
-        if (l2 < -0.5) alertes.push('La libéralité au conjoint dépasse à elle seule la quotité disponible restante : réduction de la libéralité au conjoint à prévoir (non calculée).');
         lmax = Math.min(lmax, clamp0(l2));
       }
       if (L > lmax + 0.5) {
@@ -337,17 +337,52 @@
     const reserveGlobale = nbEnf ? (1 - qdo) * M : 0;
     // L'excédent des donations réduites remplit la réserve (imputation ou indemnité versée).
     const reserveSurBiens = clamp0(reserveGlobale - Dr - DpReserve - excesHeritiers - reduction.indemnitesTiers);
-    const calc = { A, L, Dr, Dp, DpReserve, Dh, Dc, M, qdo, reserveGlobale, reserveSurBiens, dispo, masse758: A + Dr, conjBrut: null, plafond: null, fraction: null, assiette: null, reduction };
+    const calc = { A, L, Dr, Dp, DpReserve, Dh, Dc, M, qdo, reserveGlobale, reserveSurBiens, dispo, masse758: A + Dr, conjBrut: null, plafond: null, fraction: null, assiette: null, exercice: null, reduction };
+    const euros = (v) => Math.round(v).toLocaleString('fr-FR') + ' €';
     if (regime.marie && nbEnf) {
-      if (code === 'legal-pp') Object.assign(calc, { fraction: 0.25, assiette: A + Dr, conjBrut: 0.25 * (A + Dr) - Dc, plafond: clamp0(dispo - reserveSurBiens) });
-      if (code === 'ddv-qd') Object.assign(calc, { fraction: qdo, assiette: M, conjBrut: qdo * M - Dc, plafond: dispo });
+      /*
+       * Masse d'exercice : le conjoint ne prend ses droits que sur les biens existants, sans que les enfants
+       * aient à rendre les donations reçues (art. 758-5 al. 2 ; art. 1094-1 pour les libéralités).
+       * - Pleine propriété (quart légal, quotité ordinaire) : biens existants − legs − réserve restant due
+       *   (réserve − donations déjà imputées sur la réserve).
+       * - Quotité spéciale (¼ PP + ¾ US, usufruit) : valeur de la quotité − libéralités déjà imputées
+       *   (donations hors part ou à des tiers, donations au conjoint, legs).
+       */
+      const qdoVal = qdo * M;
+      const masseExercice = clamp0(dispo - reserveSurBiens);
+      const qds = code === 'ddv-mixte' ? (0.25 + 0.75 * us) * M : code === 'ddv-us' ? us * M : qdoVal;
+      const qdMax = Math.max(qdoVal, qds);
+      const disponibleConjoint = clamp0(qdMax - reduction.imputeQD - Dc - L);
+      calc.exercice = { biens: dispo, reserve: reserveSurBiens, masse: masseExercice, qd: qdMax, special: qds > qdoVal + 0.5, impute: reduction.imputeQD, disponible: disponibleConjoint };
+      if (code === 'legal-pp') Object.assign(calc, { fraction: 0.25, assiette: A + Dr, conjBrut: 0.25 * (A + Dr) - Dc, plafond: masseExercice });
+      if (code === 'ddv-qd') Object.assign(calc, { fraction: qdo, assiette: M, conjBrut: qdoVal - Dc, plafond: masseExercice });
       if (code === 'ddv-mixte') Object.assign(calc, { fraction: 0.25, assiette: M, conjBrut: 0.25 * M - Dc, plafond: dispo });
       if (code === 'legal-us' || code === 'ddv-us') conj.usBase = dispo;
       if (calc.conjBrut !== null) conj.pp = Math.min(clamp0(calc.conjBrut), calc.plafond);
-      if (code === 'legal-pp' && calc.conjBrut > calc.plafond + 0.5) {
-        alertes.push('Le quart légal du conjoint (' + Math.round(calc.conjBrut).toLocaleString('fr-FR') + ' €) est réduit à ' + Math.round(calc.plafond).toLocaleString('fr-FR') + ' € pour préserver la réserve des descendants (art. 758-5 al. 2 C. civ.).');
+      if ((code === 'legal-pp' || code === 'ddv-qd') && calc.conjBrut > calc.plafond + 0.5) {
+        alertes.push((code === 'legal-pp' ? 'Le quart légal' : 'La quotité disponible') + ' du conjoint (' + euros(calc.conjBrut) + ') est limité' + (code === 'legal-pp' ? '' : 'e') + ' à la masse d\'exercice, ' + euros(calc.plafond) + ' : les donations reçues par les enfants ne sont pas remises en cause (' + (code === 'legal-pp' ? 'art. 758-5 al. 2' : 'art. 1094-1') + ' C. civ.).');
       }
-      if (code === 'ddv-mixte') conj.usBase = clamp0(dispo - conj.pp);
+      if (code === 'ddv-mixte') {
+        conj.usBase = clamp0(dispo - conj.pp);
+        const v = conj.pp + us * conj.usBase;
+        if (v > disponibleConjoint + 0.5) {
+          // Réduction : la pleine propriété d'abord, l'usufruit ensuite.
+          if (us * dispo <= disponibleConjoint) {
+            conj.pp = clamp0((disponibleConjoint - us * dispo) / (1 - us));
+            conj.usBase = clamp0(dispo - conj.pp);
+          } else {
+            conj.pp = 0;
+            conj.usBase = us > 0 ? disponibleConjoint / us : 0;
+          }
+          calc.reduitA = disponibleConjoint;
+          alertes.push('¼ en pleine propriété et ¾ en usufruit (' + euros(v) + ') limité à ' + euros(disponibleConjoint) + ', reste de la quotité disponible après les libéralités déjà imputées : pleine propriété ramenée à ' + euros(conj.pp) + ' (art. 1094-1 C. civ.).');
+        }
+      }
+      if (code === 'ddv-us' && us * dispo > disponibleConjoint + 0.5) {
+        alertes.push('Usufruit de la totalité (' + euros(us * dispo) + ') limité à ' + euros(disponibleConjoint) + ', reste de la quotité disponible après les libéralités déjà imputées (art. 1094-1 C. civ.).');
+        conj.usBase = us > 0 ? disponibleConjoint / us : 0;
+        calc.reduitA = disponibleConjoint;
+      }
     }
     const parts = []; // { id, nom, lien, represente, souche, pp, np }
     const ajouter = (personne, lien, represente, pp, np, extra) => {
