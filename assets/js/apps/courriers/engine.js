@@ -629,6 +629,7 @@
       const i = l.findIndex((x) => x.id === c.id);
       // Adresse fournie mise à jour depuis : remplacée tant que l'étude ne l'a pas modifiée.
       if (i >= 0 && (c.anciennes || []).includes(l[i].lignes)) l[i] = Object.assign({}, c);
+      else if (i >= 0 && l[i].lignes === c.lignes) ['email', 'telephone'].forEach((k) => { if (!l[i][k] && c[k]) l[i] = Object.assign({}, l[i], { [k]: c[k] }); });
       else if (i < 0 && !(supprimees || []).includes(c.id)) l.push(Object.assign({}, c));
     });
     return l.map((c) => { const x = Object.assign({}, c); delete x.anciennes; return x; });

@@ -82,7 +82,7 @@
         // « anciennes » : versions précédentes d'une adresse fournie, remplacées si l'étude ne les a pas modifiées.
         { id: 'c-lbp', type: 'banque', nom: 'La Banque Postale', departement: '', lignes: 'LA BANQUE POSTALE\nService Successions\n1 rue Édouard Branly\n45900 LA SOURCE CEDEX 9', email: '', telephone: '04 91 10 26 63',
           anciennes: ['LA BANQUE POSTALE\nService SUCCESSION\n45900 LA SOURCE CEDEX'] },
-        { id: 'c-cardif', type: 'assurance', nom: 'Cardif Assurance Vie', departement: '', lignes: 'CARDIF ASSURANCE VIE\nBNP PARIBAS\nTSA 50 003\n92729 NANTERRE CEDEX', email: '' },
+        { id: 'c-cardif', type: 'assurance', nom: 'Cardif Assurance Vie', departement: '', lignes: 'CARDIF ASSURANCE VIE\nBNP PARIBAS\nTSA 50 003\n92729 NANTERRE CEDEX', email: '', telephone: '01 41 42 83 00' },
         { id: 'c-cd84', type: 'departement', nom: 'Conseil départemental de Vaucluse', departement: '84', lignes: 'CONSEIL DÉPARTEMENTAL DE VAUCLUSE\nService Pôle autonomie et Santé\n6 boulevard Limbert - CS 60517\n84908 AVIGNON CEDEX 9', email: '' },
         { id: 'c-cd05', type: 'departement', nom: 'Conseil départemental des Hautes-Alpes', departement: '05', lignes: 'CONSEIL DÉPARTEMENTAL DES HAUTES-ALPES\nHôtel du Département\nPlace Saint-Arnoux\nCS 66005\n05008 GAP', email: 'successions@hautes-alpes.fr' },
         { id: 'c-sg-toulouse', type: 'banque', nom: 'Société Générale CDS Toulouse', departement: '', lignes: 'SOCIÉTÉ GÉNÉRALE CDS TOULOUSE\nService Successions\n76 rue Saint-Jean\nBP 13196\n31130 BALMA', email: 'cdstoulouse.successions@socgen.com', telephone: '09 69 18 12 94 ou 09 69 32 08 06',
@@ -90,9 +90,13 @@
         { id: 'c-lcl', type: 'banque', nom: 'LCL', departement: '', lignes: 'LCL\nService Successions\n3 bis rue d\'Athènes\n44379 NANTES CEDEX 3', email: '', telephone: '09 69 36 29 53' },
         { id: 'c-ca-alpes-provence', type: 'banque', nom: 'Crédit Agricole Alpes Provence', departement: '13, 84, 05', lignes: 'CRÉDIT AGRICOLE ALPES PROVENCE\nService Successions\n25 chemin des Trois Cyprès\n13080 AIX-EN-PROVENCE', email: 'successions@ca-alpesprovence.fr' },
         { id: 'c-hello-bank', type: 'banque', nom: 'Hello bank!', departement: '', lignes: 'HELLO BANK!\nService Successions\nTSA 80011', email: 'conseiller.succession2@bnpparibas.com', telephone: '01 43 63 15 15' },
-        { id: 'c-ce-cecaz', type: 'banque', nom: 'Caisse d\'Épargne CECAZ', departement: '', lignes: 'CAISSE D\'ÉPARGNE CECAZ\nService Successions', email: 'succession.mail@cecaz.caisse-epargne.fr', telephone: '04 98 07 20 50' },
+        { id: 'c-ce-cecaz', type: 'banque', nom: 'Caisse d\'Épargne Côte d\'Azur (CECAZ)', departement: '06', lignes: 'CAISSE D\'ÉPARGNE CÔTE D\'AZUR\nService Successions\n455 promenade des Anglais\nBP 3297\n06205 NICE CEDEX 3', email: 'succession.mail@cecaz.caisse-epargne.fr', telephone: '04 98 07 20 49 ou 04 98 07 20 50',
+          anciennes: ['CAISSE D\'ÉPARGNE CECAZ\nService Successions'] },
+        { id: 'c-ce-hdf', type: 'banque', nom: 'Caisse d\'Épargne Hauts de France', departement: '59, 62, 80, 02, 60', lignes: 'CAISSE D\'ÉPARGNE HAUTS DE FRANCE\nService Successions Grand Public\n612 rue de la Chaude Rivière\n59800 LILLE', email: 'cehdf-successions@hdf.caisse-epargne.fr' },
         { id: 'c-ce-cepac', type: 'banque', nom: 'Caisse d\'Épargne CEPAC', departement: '13, 84, 04, 05', lignes: 'CAISSE D\'ÉPARGNE CEPAC\nService Successions\nPlace Estrangin-Pastré\n13001 MARSEILLE', email: 'successions.notaires@cepac.caisse-epargne.fr' },
         { id: 'c-bnp', type: 'banque', nom: 'BNP Paribas', departement: '', lignes: 'BNP PARIBAS\nAgence Successions\nTSA 21727\n35517 CESSON-SÉVIGNÉ CEDEX', email: 'conseiller.succession2@bnpparibas.com', telephone: '01 53 75 64 25' },
+        { id: 'c-bnp-fontenay', type: 'banque', nom: 'BNP Paribas (Fontenay-sous-Bois)', departement: '', lignes: 'BNP PARIBAS\nService Successions\nTSA 60227\n94120 FONTENAY-SOUS-BOIS', email: 'agence.successions@bnpparibas.com', telephone: '08 20 89 03 10' },
+        { id: 'c-smc', type: 'banque', nom: 'Société Marseillaise de Crédit', departement: '', lignes: 'SOCIÉTÉ MARSEILLAISE DE CRÉDIT\nService Successions\n430 chemin de l\'Aumône Vieille\nBP 200\n13684 AUBAGNE', email: '', telephone: '04 91 19 01 53 ou 04 91 19 01 52' },
       ],
     },
 
