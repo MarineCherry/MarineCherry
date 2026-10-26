@@ -35,7 +35,7 @@
   function getParams() {
     const saved = read(KEY_PARAMS) || {};
     const d = clone(A.defaults);
-    ['commun', 'plusValue', 'succession', 'origine', 'dossiers', 'conjoint'].forEach((s) => Object.assign(d[s], saved[s] || {}));
+    ['commun', 'plusValue', 'succession', 'origine', 'dossiers', 'conjoint', 'courriers'].forEach((s) => Object.assign(d[s], saved[s] || {}));
     return d;
   }
   function setParams(section, values) {

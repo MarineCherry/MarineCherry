@@ -8,7 +8,7 @@
   const ui = A.ui;
 
   // Ordre d'affichage sur l'écran d'accueil.
-  const ORDER = ['dossiers', 'plus-value', 'succession', 'conjoint', 'origine', 'parametres'];
+  const ORDER = ['dossiers', 'plus-value', 'succession', 'conjoint', 'courriers', 'origine', 'parametres'];
   const appRoot = document.getElementById('app');
 
   function draftLabel(app) {

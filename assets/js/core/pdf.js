@@ -105,5 +105,28 @@
     }
   }
 
-  A.pdf = { telecharger };
+  /*
+   * Pages A4 déjà mises en page (courriers sur papier à en-tête) : chaque page est photographiée
+   * en entier et occupe toute la feuille. Renvoie le PDF (Blob) ; l'enregistre si un nom est donné.
+   */
+  async function pagesA4(pages, nomFichier) {
+    const { html2canvas, jsPDF } = await bibliotheques();
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const zone = h('div', { style: { position: 'fixed', left: '-10000px', top: '0', background: '#fff' } }, pages);
+    document.body.appendChild(zone);
+    try {
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      for (let i = 0; i < pages.length; i++) {
+        if (i) pdf.addPage();
+        const canvas = await html2canvas(pages[i], { scale: 2, backgroundColor: '#ffffff', logging: false });
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, PAGE.largeur, PAGE.hauteur);
+      }
+      if (nomFichier) pdf.save(nomFichier);
+      return pdf.output('blob');
+    } finally {
+      zone.remove();
+    }
+  }
+
+  A.pdf = { telecharger, pagesA4 };
 })(typeof self !== 'undefined' ? self : this);

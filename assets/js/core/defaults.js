@@ -69,6 +69,21 @@
       trames: {},
     },
 
+    // Courriers de succession : textes modifiés par l'étude, papier à en-tête importé, carnet d'adresses.
+    courriers: {
+      modeles: {},
+      papier: null,                   // en-tête de la première page, reproduit à l'écran et dans les PDF
+      paquet: null,                   // courrier Word de l'étude, nettoyé, servant de base aux fichiers .docx
+      nomPapier: '',
+      signataire: '',
+      clercs: [],                     // personnes qui suivent les dossiers : { nom, email }
+      carnet: [
+        { id: 'c-lbp', type: 'banque', nom: 'La Banque Postale', departement: '', lignes: 'LA BANQUE POSTALE\nService SUCCESSION\n45900 LA SOURCE CEDEX', email: '' },
+        { id: 'c-cardif', type: 'assurance', nom: 'Cardif Assurance Vie', departement: '', lignes: 'CARDIF ASSURANCE VIE\nBNP PARIBAS\nTSA 50 003\n92729 NANTERRE CEDEX', email: '' },
+        { id: 'c-cd84', type: 'departement', nom: 'Conseil départemental de Vaucluse', departement: '84', lignes: 'CONSEIL DÉPARTEMENTAL DE VAUCLUSE\nService Pôle autonomie et Santé\n6 boulevard Limbert - CS 60517\n84908 AVIGNON CEDEX 9', email: '' },
+      ],
+    },
+
     // Droits du conjoint survivant : barèmes hors ligne directe et abattements (ligne directe : section Succession).
     conjoint: {
       coefHabitation: 0.6,            // Droit d'usage et d'habitation = 60 % de l'usufruit (art. 762 bis CGI)

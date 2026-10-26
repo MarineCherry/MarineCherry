@@ -23,9 +23,10 @@
     { id: 'succession', title: 'Succession & donation', sub: 'Abattements, barème en ligne directe et régimes particuliers.' },
     { id: 'conjoint', title: 'Conjoint survivant', sub: 'Barèmes et abattements hors ligne directe, assurance-vie, droit au logement (ligne directe : section Succession).' },
     { id: 'origine', title: 'Origine de propriété', sub: 'Présentation des dates et des prix ; trames de rédaction.' },
+    { id: 'courriers', title: 'Courriers de succession', sub: 'Papier à en-tête, textes des courriers et carnet d\'adresses de l\'étude.' },
     { id: 'dossiers', title: 'Suivi des dossiers', sub: 'Pièces attendues à chaque étape ; communes soumises à un arrêté termites ou mérule.' },
   ];
-  const ANCHOR = { 'plus-value': 'plusValue', succession: 'succession', commun: 'commun', origine: 'origine', dossiers: 'dossiers', conjoint: 'conjoint' };
+  const ANCHOR = { 'plus-value': 'plusValue', succession: 'succession', commun: 'commun', origine: 'origine', dossiers: 'dossiers', conjoint: 'conjoint', courriers: 'courriers' };
 
   function mount(container, arg) {
     let params = A.store.getParams();
@@ -207,7 +208,16 @@
         h('h4', { class: 'param-sub' }, 'Barème entre non-parents'), bareme('baremeTiers'));
     }
 
-    const builders = { conjoint: sectionConjoint, commun: sectionCommun, plusValue: sectionPlusValue, succession: sectionSuccession, origine: sectionOrigine, dossiers: sectionDossiers };
+    function sectionCourriers() {
+      const p = params.courriers;
+      const nbModeles = Object.keys(p.modeles || {}).length;
+      return h('div', { class: 'param-list' },
+        row('Papier à en-tête', h('a', { class: 'btn btn-soft btn-sm', href: '#/courriers' }, p.papier ? 'Voir' : 'Importer'), p.papier ? 'Importé depuis « ' + (p.nomPapier || 'courrier Word') + ' ».' : 'Pas encore importé : à faire dans l\'outil, onglet « Modèles et papier à en-tête ».'),
+        row('Textes des courriers', h('a', { class: 'btn btn-soft btn-sm', href: '#/courriers' }, 'Modifier'), nbModeles ? nbModeles + ' modèle(s) modifié(s) sur ce poste.' : 'Textes d\'origine.'),
+        row('Carnet d\'adresses', h('a', { class: 'btn btn-soft btn-sm', href: '#/courriers' }, 'Ouvrir'), (p.carnet || []).length + ' adresse(s) enregistrée(s).'));
+    }
+
+    const builders = { courriers: sectionCourriers, conjoint: sectionConjoint, commun: sectionCommun, plusValue: sectionPlusValue, succession: sectionSuccession, origine: sectionOrigine, dossiers: sectionDossiers };
 
     async function importer() {
       try {
