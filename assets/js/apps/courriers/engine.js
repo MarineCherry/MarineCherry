@@ -625,8 +625,13 @@
   // Carnet de l'étude complété des adresses fournies avec l'outil (sauf celles que l'étude a supprimées).
   function carnetComplet(carnet, fournies, supprimees) {
     const l = (carnet || []).slice();
-    (fournies || []).forEach((c) => { if (!l.some((x) => x.id === c.id) && !(supprimees || []).includes(c.id)) l.push(Object.assign({}, c)); });
-    return l;
+    (fournies || []).forEach((c) => {
+      const i = l.findIndex((x) => x.id === c.id);
+      // Adresse fournie mise à jour depuis : remplacée tant que l'étude ne l'a pas modifiée.
+      if (i >= 0 && (c.anciennes || []).includes(l[i].lignes)) l[i] = Object.assign({}, c);
+      else if (i < 0 && !(supprimees || []).includes(c.id)) l.push(Object.assign({}, c));
+    });
+    return l.map((c) => { const x = Object.assign({}, c); delete x.anciennes; return x; });
   }
 
   // Nom de fichier : « Courrier - LA BANQUE POSTALE - Déblocage des comptes - MARTIN.docx »

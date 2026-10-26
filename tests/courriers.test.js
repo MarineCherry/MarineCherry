@@ -160,6 +160,9 @@ test('Annuaire de l\'administration et carnet d\'adresses', () => {
   assert.strictEqual(E.suggestion(ce, 'banque', 'Caisse d\'epargne', '84').id, 'b');
   assert.strictEqual(E.suggestion(ce, 'banque', 'Caisse d\'epargne', '75').id, 'a');
   assert.deepStrictEqual(E.carnetComplet([{ id: 'x' }], [{ id: 'x' }, { id: 'y' }, { id: 'z' }], ['z']).map((c) => c.id), ['x', 'y']);
+  const maj = E.carnetComplet([{ id: 'x', lignes: 'ancienne' }, { id: 'w', lignes: 'modifiée' }], [{ id: 'x', lignes: 'nouvelle', anciennes: ['ancienne'] }, { id: 'w', lignes: 'nouvelle', anciennes: ['ancienne'] }]);
+  assert.deepStrictEqual(maj.map((c) => c.lignes), ['nouvelle', 'modifiée']);
+  assert.ok(!('anciennes' in maj[0]));
 });
 
 test('Archive ZIP : écriture puis relecture', async () => {
