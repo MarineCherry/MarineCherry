@@ -163,6 +163,8 @@ test('Annuaire de l\'administration et carnet d\'adresses', () => {
   const maj = E.carnetComplet([{ id: 'x', lignes: 'ancienne' }, { id: 'w', lignes: 'modifiée' }], [{ id: 'x', lignes: 'nouvelle', anciennes: ['ancienne'] }, { id: 'w', lignes: 'nouvelle', anciennes: ['ancienne'] }]);
   assert.deepStrictEqual(maj.map((c) => c.lignes), ['nouvelle', 'modifiée']);
   assert.ok(!('anciennes' in maj[0]));
+  const ret = E.carnetComplet([{ id: 'r', lignes: 'L' }, { id: 's', lignes: 'modifiée' }], [{ id: 'r', retiree: true, lignes: 'L' }, { id: 's', retiree: true, lignes: 'L' }, { id: 't', retiree: true, lignes: 'L' }]);
+  assert.deepStrictEqual(ret.map((c) => c.id), ['s']);
 });
 
 test('Archive ZIP : écriture puis relecture', async () => {

@@ -627,6 +627,10 @@
     const l = (carnet || []).slice();
     (fournies || []).forEach((c) => {
       const i = l.findIndex((x) => x.id === c.id);
+      if (c.retiree) {
+        if (i >= 0 && l[i].lignes === c.lignes) l.splice(i, 1);
+        return;
+      }
       // Adresse fournie mise à jour depuis : remplacée tant que l'étude ne l'a pas modifiée.
       if (i >= 0 && (c.anciennes || []).includes(l[i].lignes)) l[i] = Object.assign({}, c);
       else if (i >= 0 && l[i].lignes === c.lignes) ['email', 'telephone'].forEach((k) => { if (!l[i][k] && c[k]) l[i] = Object.assign({}, l[i], { [k]: c[k] }); });

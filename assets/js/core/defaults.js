@@ -87,7 +87,8 @@
         { id: 'c-cd05', type: 'departement', nom: 'Conseil départemental des Hautes-Alpes', departement: '05', lignes: 'CONSEIL DÉPARTEMENTAL DES HAUTES-ALPES\nHôtel du Département\nPlace Saint-Arnoux\nCS 66005\n05008 GAP', email: 'successions@hautes-alpes.fr' },
         { id: 'c-sg-toulouse', type: 'banque', nom: 'Société Générale CDS Toulouse', departement: '', lignes: 'SOCIÉTÉ GÉNÉRALE CDS TOULOUSE\nService Successions\n76 rue Saint-Jean\nBP 13196\n31130 BALMA', email: 'cdstoulouse.successions@socgen.com', telephone: '09 69 18 12 94 ou 09 69 32 08 06',
           anciennes: ['SOCIÉTÉ GÉNÉRALE\nCDS Toulouse - Pôle Succession\n76 rue Saint-Jean\n31130 BALMA'] },
-        { id: 'c-lcl', type: 'banque', nom: 'LCL', departement: '', lignes: 'LCL\nService Successions\n3 bis rue d\'Athènes\n44379 NANTES CEDEX 3', email: '', telephone: '09 69 36 29 53' },
+        // « retiree » : adresse fournie auparavant, retirée du carnet si l'étude ne l'a pas modifiée.
+        { id: 'c-lcl', retiree: true, type: 'banque', nom: 'LCL', departement: '', lignes: 'LCL\nService Successions\n3 bis rue d\'Athènes\n44379 NANTES CEDEX 3', email: '', telephone: '09 69 36 29 53' },
         { id: 'c-ca-alpes-provence', type: 'banque', nom: 'Crédit Agricole Alpes Provence', departement: '13, 84, 05', lignes: 'CRÉDIT AGRICOLE ALPES PROVENCE\nService Successions\n25 chemin des Trois Cyprès\n13080 AIX-EN-PROVENCE', email: 'successions@ca-alpesprovence.fr' },
         { id: 'c-hello-bank', type: 'banque', nom: 'Hello bank!', departement: '', lignes: 'HELLO BANK!\nService Successions\nTSA 80011', email: 'conseiller.succession2@bnpparibas.com', telephone: '01 43 63 15 15' },
         { id: 'c-ce-cecaz', type: 'banque', nom: 'Caisse d\'Épargne Côte d\'Azur (CECAZ)', departement: '06', lignes: 'CAISSE D\'ÉPARGNE CÔTE D\'AZUR\nService Successions\n455 promenade des Anglais\nBP 3297\n06205 NICE CEDEX 3', email: 'succession.mail@cecaz.caisse-epargne.fr', telephone: '04 98 07 20 49 ou 04 98 07 20 50',
@@ -102,7 +103,7 @@
         { id: 'c-bpmed', type: 'banque', nom: 'Banque Populaire Méditerranée', departement: '13, 84, 83, 06, 04, 05, 2A, 2B', lignes: 'BANQUE POPULAIRE MÉDITERRANÉE\n15 avenue de l\'Orme Fourchu\n84093 AVIGNON', email: 'balsuccessions@bpmed.fr', telephone: '04 91 30 24 17' },
         { id: 'c-bpaura', type: 'banque', nom: 'Banque Populaire Auvergne Rhône Alpes', departement: '01, 03, 07, 15, 26, 38, 42, 43, 63, 69, 73, 74', lignes: 'BANQUE POPULAIRE AUVERGNE RHÔNE ALPES\nplace de la Fontaune\n01630 SAINT-GENIS-POUILLY', email: 'bpaura_successions@bpaura.fr', telephone: '04 50 42 26 99 ou 04 38 88 46 91' },
         { id: 'c-credit-mutuel', type: 'banque', nom: 'Crédit Mutuel', departement: '', lignes: 'CRÉDIT MUTUEL\nService Successions\n494 avenue du Prado\nBP 115\n13267 MARSEILLE', email: '', telephone: '04 91 23 71 61' },
-        { id: 'c-lcl-lyon', type: 'banque', nom: 'LCL (Lyon)', departement: '', lignes: 'LCL\nService Successions - 023695-00\n69266 LYON', email: 'service_successions@lcl.fr', telephone: '09 69 36 29 53' },
+        { id: 'c-lcl-lyon', type: 'banque', nom: 'LCL', departement: '', lignes: 'LCL\nService Successions - 023695-00\n69266 LYON', email: 'service_successions@lcl.fr', telephone: '09 69 36 29 53' },
         { id: 'c-smc', type: 'banque', nom: 'Société Marseillaise de Crédit', departement: '', lignes: 'SOCIÉTÉ MARSEILLAISE DE CRÉDIT\nService Successions\n430 chemin de l\'Aumône Vieille\nBP 200\n13684 AUBAGNE', email: '', telephone: '04 91 19 01 53 ou 04 91 19 01 52' },
       ],
     },
