@@ -45,16 +45,14 @@
   const SALUTATIONS = 'Je vous prie de croire, Madame, Monsieur, à l\'assurance de mes salutations distinguées.';
   const MODELES = [
     {
-      id: 'banque-ouverture', type: 'banque', titre: 'Banque — déclaration du décès et avoirs au jour du décès', provisoire: true,
+      id: 'banque-position', type: 'banque', titre: 'Banque — demande de position', provisoire: true,
       appel: 'Madame, Monsieur,',
       texte: [
-        'En ma qualité de notaire chargé du règlement de la succession ci-dessus visée, je vous informe du décès de {defunt} et vous remercie de bien vouloir :',
-        '- bloquer les comptes ouverts à son nom dans vos livres, sous réserve du règlement des frais funéraires ;',
-        '- me faire parvenir un relevé de l\'ensemble de ses avoirs au jour du décès (comptes courants, livrets, comptes-titres valorisés, coffre-fort), en précisant le cas échéant les comptes joints ;',
-        '- m\'indiquer les prêts en cours et le montant des sommes restant dues au jour du décès, ainsi que les assurances qui y sont attachées ;',
-        '- me préciser si {accord : le défunt | la défunte} avait souscrit des contrats d\'assurance-vie par votre intermédiaire.',
+        'En ma qualité de notaire chargé du règlement de la succession ci-dessus visée, je vous remercie de bien vouloir me faire parvenir la position, au jour du décès, de l\'ensemble des comptes et avoirs détenus par {accord : le défunt | la défunte} en votre Établissement (comptes courants, livrets, comptes-titres valorisés, coffre-fort), en précisant le cas échéant les comptes joints, ainsi que le montant des prêts restant dus à cette date.',
         '',
-        'Vous trouverez sous ce pli la copie de l\'extrait d\'acte de décès.',
+        'Je vous remercie également de m\'indiquer si {accord : le défunt | la défunte} avait souscrit des contrats d\'assurance-vie par votre intermédiaire.',
+        '',
+        'A cet effet, je joins à cet envoi la copie de l\'extrait d\'acte de décès.',
         '',
         'Dans cette attente et avec mes remerciements,',
         SALUTATIONS,
@@ -177,7 +175,7 @@
     },
   ];
   // Courriers proposés par défaut pour chaque type de destinataire.
-  const PAR_DEFAUT = { banque: 'banque-ouverture', assurance: 'assurance-vie', mutuelle: 'mutuelle', departement: 'departement-aide-sociale', tresor: 'tresor-bordereau', retraite: 'retraite', ehpad: 'ehpad', autre: 'libre' };
+  const PAR_DEFAUT = { banque: 'banque-position', assurance: 'assurance-vie', mutuelle: 'mutuelle', departement: 'departement-aide-sociale', tresor: 'tresor-bordereau', retraite: 'retraite', ehpad: 'ehpad', autre: 'libre' };
   const modelesPour = (type, modeles) => (modeles || MODELES).filter((m) => m.type === type || (type !== 'autre' && m.type === 'autre'));
 
   // Modèles en vigueur : modèles d'origine, modifiés par l'étude (textes enregistrés sur le poste).
