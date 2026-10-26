@@ -73,7 +73,7 @@
     return { courriers, modeles, papier: p.papier };
   }
   const dossierPourCourrier = (s) => Object.assign({}, s, { signataire: s.signataire || params().signataire || (params().papier && params().papier.signataire) || '' });
-  const optionsCourrier = () => ({ ville: (params().papier && params().papier.ville) || '', signataire: params().signataire || (params().papier && params().papier.signataire) || '' });
+  const optionsCourrier = () => ({ ville: (params().papier && params().papier.ville) || '', signataire: params().signataire || (params().papier && params().papier.signataire) || '', rib: params().rib || '' });
 
   /* ---------- Petits composants ---------- */
   const f = (label, control, opts) => ui.field(label, control, opts);
@@ -241,7 +241,7 @@
       if (d.source === 'saisie' && d.lignes) continue;
       const c = E.suggestion(params().carnet, d.type, d.nom, dom.departement);
       if (c && (d.type !== 'banque' && d.type !== 'assurance' && d.type !== 'mutuelle' ? E.couvre(c, dom.departement) : true)) {
-        Object.assign(d, { nom: d.nom || c.nom, lignes: c.lignes, email: c.email || d.email, telephone: c.telephone || d.telephone, source: 'carnet', aVerifier: !E.couvre(c, dom.departement) });
+        Object.assign(d, { nom: c.nom, carnetId: c.id, recherche: d.recherche || d.nom, lignes: c.lignes, email: c.email || d.email, telephone: c.telephone || d.telephone, source: 'carnet', aVerifier: !E.couvre(c, dom.departement) });
         trouves++;
         continue;
       }
@@ -406,14 +406,21 @@
     const T = E.typeDe(d.type);
     const etab = ['banque', 'assurance', 'mutuelle'].includes(d.type);
     const nom = h('input', { class: 'input', list: etab ? 'noms-etablissements' : null, value: d.nom || '', placeholder: etab ? 'ex. Crédit Agricole' : T.libelle });
-    nom.addEventListener('input', () => { d.nom = nom.value; ctx.changed(); });
+    const appliquer = (c) => Object.assign(d, { nom: c.nom, carnetId: c.id, lignes: c.lignes, email: c.email || '', telephone: c.telephone || '', source: 'carnet', aVerifier: !E.couvre(c, s.defunt.domicile.departement) });
+    nom.addEventListener('input', () => { d.nom = nom.value; d.recherche = nom.value; ctx.changed(); });
     nom.addEventListener('change', () => {
       if (d.source === 'saisie' && d.lignes) return;
       const c = E.suggestion(carnet, d.type, d.nom, s.defunt.domicile.departement);
-      if (c) Object.assign(d, { nom: c.nom, lignes: c.lignes, email: c.email || d.email, telephone: c.telephone || d.telephone, source: 'carnet', aVerifier: !E.couvre(c, s.defunt.domicile.departement) });
+      if (c) appliquer(c);
       ctx.render();
       ctx.changed();
     });
+    // Plusieurs services (régionaux) pour le même établissement : choix de l'adresse.
+    const choix = etab ? E.candidats(carnet, d.type, d.recherche || d.nom) : [];
+    const selecteur = choix.length > 1 ? f('Adresse du carnet', ui.selectInput({
+      value: d.carnetId || '', options: [{ value: '', label: '— Choisir —' }].concat(choix.map((c) => ({ value: c.id, label: c.nom + (c.departement ? ' — ' + c.departement : '') }))),
+      onChange: (v) => { const c = choix.find((x) => x.id === v); if (c) { appliquer(c); ctx.render(); ctx.changed(); } },
+    }), { help: choix.length + ' services pour cet établissement.' }) : null;
     const adresse = zone(d, 'lignes', ctx, { rows: 4, placeholder: 'Nom du destinataire\nService\nAdresse\nCode postal VILLE', aria: 'Adresse', onInput: () => { d.source = 'saisie'; d.aVerifier = false; } });
     const origine = d.source === 'annuaire' ? h('span', { class: 'tag tag-warn' }, '⚠ annuaire : à vérifier')
       : d.source === 'carnet' ? h('span', { class: d.aVerifier ? 'tag tag-warn' : 'tag' }, d.aVerifier ? '⚠ carnet (autre département)' : 'carnet de l\'étude')
@@ -425,10 +432,11 @@
       h('div', { class: 'grid-2' },
         h('div', { class: 'stack-sm' },
           f(etab ? 'Établissement' : 'Nom', nom),
+          selecteur,
           f('Vos références', ctx.text(d, 'vosRef')),
           d.type === 'banque' ? f('Numéros de compte', zone(d, 'comptes', ctx, { rows: 2, placeholder: 'un numéro par ligne' }), { help: 'Repris dans le courrier de déblocage.' }) : null,
           d.type === 'banque' ? f('Montant de l\'acompte', ctx.num(d, 'montant', { suffix: '€' }), { help: 'Pour la demande d\'acompte.' }) : null,
-          d.type === 'retraite' ? f('Numéro d\'assuré', ctx.text(d, 'numero')) : null),
+          d.type === 'retraite' ? f('N° d\'immatriculation', ctx.text(d, 'numero')) : null),
         h('div', { class: 'stack-sm' }, f('Adresse', adresse),
           f('Adresse mail', h('div', { class: 'champ-copie' }, ctx.text(d, 'email'), boutonCopier(d.email)), { help: 'Pour envoyer le courrier en pièce jointe.' }),
           f('Téléphone', ctx.text(d, 'telephone')))));
@@ -463,6 +471,7 @@
     out.push({ el: h('p', { class: 'lc-appel' }, c.appel) });
     c.corps.forEach((l) => out.push({ el: l.length ? p('lc-p', l) : h('p', { class: 'lc-vide' }, ' ') }));
     if (c.signature) out.push({ el: h('p', { class: 'lc-signature' }, c.signature) });
+    if (c.rib) out.push({ el: h('div', { class: 'lc-rib' }, h('div', { style: { fontWeight: '700' } }, 'COORDONNÉES BANCAIRES DE L\'OFFICE NOTARIAL :'), c.rib.map((l) => h('div', null, l || ' '))) });
     if (c.annexe) {
       out.push({ saut: true, el: h('div', { class: 'lc-annexe-tete' }, c.annexe.entete.map((l) => h('div', null, l))) });
       out.push({ el: h('p', { class: 'lc-annexe-titre' }, c.annexe.titre) });
@@ -615,6 +624,7 @@
           h('p', null, 'Importé depuis « ', h('strong', null, p.nomPapier || 'courrier Word'), ' ». Les courriers Word reprennent exactement ce papier ; les PDF le reproduisent.'),
           f('Ville de l\'étude (« ORANGE, le … »)', ui.textInput({ value: p.papier.ville, onChange: (v) => A.store.setParams('courriers', Object.assign({}, params(), { papier: Object.assign({}, params().papier, { ville: v }) })) })),
           f('Signataire', ui.textInput({ value: p.signataire || p.papier.signataire, onChange: (v) => A.store.setParams('courriers', Object.assign({}, params(), { signataire: v })) })))) : ui.note('Importez un courrier Word de l\'étude (n\'importe lequel) : son en-tête, sa colonne de gauche et son pied de page serviront à tous les courriers. Le texte du courrier importé n\'est pas conservé.'),
+      f('Coordonnées bancaires de l\'étude (RIB)', ribZone(), { help: 'Ajoutées sous la signature des courriers qui le prévoient (déblocage, acompte, maison de retraite). Enregistrées sur ce poste uniquement.' }),
       h('div', { class: 'chips' }, ui.button(p.papier ? 'Remplacer le papier à en-tête' : 'Importer un courrier Word de l\'étude', { icon: 'upload', variant: p.papier ? 'ghost' : 'primary', small: !!p.papier, onClick: importer }))),
     { subtitle: 'Enregistré sur ce poste ; inclus dans l\'export des paramètres pour vos collègues.' });
 
@@ -659,13 +669,21 @@
     return h('div', { class: 'stack' }, papier, h('div', { class: 'trames' }, liste, editeur));
   }
 
+  function ribZone() {
+    const t = h('textarea', { class: 'input textarea', rows: 6, placeholder: 'Banque : …\nTitulaire : …\nIBAN : …\nBIC : …' });
+    t.value = params().rib || '';
+    t.addEventListener('input', A.util.debounce(() => A.store.setParams('courriers', Object.assign({}, A.store.getParams().courriers, { rib: t.value })), 400));
+    return t;
+  }
+
   /* ---------- Onglet 5 : carnet d'adresses ---------- */
   function tabCarnet(ctx) {
     const p = params();
     const carnet = (p.carnet || []).slice();
     const enregistrer = A.util.debounce(() => A.store.setParams('courriers', Object.assign({}, params(), { carnet })), 400);
     const lignes = E.TYPES.map((t) => {
-      const items = carnet.filter((c) => c.type === t.id);
+      const q = filtreCarnet.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+      const items = carnet.filter((c) => c.type === t.id && (!q || [c.nom, c.lignes, c.email].join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().includes(q)));
       if (!items.length) return null;
       return [h('h4', { class: 'form-sub' }, t.pluriel), h('div', { class: 'rows' }, items.map((c) => {
         const nom = ui.textInput({ value: c.nom, onChange: (v) => { c.nom = v; enregistrer(); } });
@@ -692,9 +710,34 @@
       A.store.setParams('courriers', Object.assign({}, params(), { carnet }));
       ctx.render();
     } })));
-    return h('div', { class: 'stack' }, ui.card('Carnet d\'adresses de l\'étude', h('div', { class: 'stack-sm' },
-      ui.note('Adresses proposées en priorité dans les courriers : services successions des banques, assureurs, mutuelles, organismes du secteur. Le carnet est enregistré sur ce poste et inclus dans l\'export des paramètres.'),
-      lignes, h('h4', { class: 'form-sub' }, 'Ajouter'), ajout)));
+    return h('div', { class: 'stack' }, nouveauTiers(ctx, carnet), ui.card('Carnet d\'adresses de l\'étude', h('div', { class: 'stack-sm' },
+      ui.note('Adresses proposées en priorité dans les courriers : services successions des banques, assureurs, mutuelles, organismes du secteur. Pour un établissement qui a plusieurs services régionaux, précisez-le entre parenthèses : « LCL (Lyon) », « LCL (Nantes) ». Le carnet est enregistré sur ce poste et inclus dans l\'export des paramètres.'),
+      recherche(ctx), lignes, h('h4', { class: 'form-sub' }, 'Ajouter une ligne vide'), ajout)));
+  }
+  let filtreCarnet = '';
+  function recherche(ctx) {
+    const input = h('input', { class: 'input', type: 'search', placeholder: 'Rechercher dans le carnet (nom, ville…)', value: filtreCarnet });
+    input.addEventListener('change', () => { filtreCarnet = input.value; ctx.render(); });
+    return input;
+  }
+  // Formulaire d'ajout d'un nouveau tiers au carnet.
+  function nouveauTiers(ctx, carnet) {
+    const t = { type: 'banque', nom: '', departement: '', lignes: '', email: '', telephone: '' };
+    const type = ui.selectInput({ value: t.type, options: E.TYPES.map((x) => ({ value: x.id, label: x.libelle })), onChange: (v) => (t.type = v) });
+    const champ = (k, ph) => ui.textInput({ value: '', placeholder: ph || '', onChange: (v) => (t[k] = v) });
+    const adr = h('textarea', { class: 'input textarea', rows: 4, placeholder: 'NOM DE L\'ÉTABLISSEMENT\nService Successions\nAdresse\nCode postal VILLE' });
+    adr.addEventListener('input', () => (t.lignes = adr.value));
+    return ui.card('Ajouter un tiers au carnet', h('div', { class: 'stack-sm' },
+      h('div', { class: 'grid-3' }, f('Type', type), f('Nom', champ('nom', 'ex. LCL (Lyon)')), f('Départements', champ('departement', 'vide : tous'))),
+      h('div', { class: 'grid-2' }, f('Adresse', adr), h('div', { class: 'stack-sm' }, f('Adresse mail', champ('email')), f('Téléphone', champ('telephone')))),
+      h('div', null, ui.button('Ajouter au carnet', { icon: 'plus', variant: 'primary', onClick: () => {
+        if (!t.nom.trim() && !t.lignes.trim()) return ui.toast('Indiquez au moins le nom ou l\'adresse.', 'error');
+        if (!t.nom.trim()) t.nom = t.lignes.split('\n')[0];
+        carnet.push(Object.assign({ id: uid('c') }, t, { nom: t.nom.trim(), departement: t.departement.trim() }));
+        A.store.setParams('courriers', Object.assign({}, params(), { carnet }));
+        ui.toast('« ' + t.nom.trim() + ' » ajouté au carnet.');
+        ctx.render();
+      } }))), { subtitle: 'Banque, assureur, mutuelle, caisse de retraite, maison de retraite… ; il sera proposé dans les prochains dossiers.' });
   }
 
   /* ---------- Panneau latéral et impression ---------- */

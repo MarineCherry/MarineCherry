@@ -59,7 +59,7 @@
       ].join('\n'),
     },
     {
-      id: 'banque-deblocage', type: 'banque', titre: 'Banque — déblocage des comptes',
+      id: 'banque-deblocage', type: 'banque', titre: 'Banque — déblocage des comptes', rib: true,
       appel: 'Madame, Monsieur,',
       texte: [
         'En ma qualité de notaire chargé du règlement de la succession ci-dessus visée, je vous prie de bien vouloir trouver sous ce pli, les pièces héréditaires suivantes :',
@@ -73,7 +73,7 @@
       ].join('\n'),
     },
     {
-      id: 'banque-acompte', type: 'banque', titre: 'Banque — demande d\'acompte',
+      id: 'banque-acompte', type: 'banque', titre: 'Banque — demande d\'acompte', rib: true,
       appel: 'Madame, Monsieur,',
       texte: [
         'En ma qualité de notaire chargé du règlement de la succession ci-dessus visée, et avec l\'accord des ayants droit, je vous remercie de bien vouloir virer en ma comptabilité un acompte d\'un montant de {montant}.',
@@ -100,16 +100,13 @@
       ].join('\n'),
     },
     {
-      id: 'mutuelle', type: 'mutuelle', titre: 'Mutuelle — déclaration du décès', provisoire: true,
+      id: 'mutuelle', type: 'mutuelle', titre: 'Mutuelle — sommes dues',
       appel: 'Madame, Monsieur,',
       texte: [
-        'En ma qualité de notaire chargé du règlement de la succession ci-dessus visée, je vous informe du décès de {defunt}.',
-        '',
-        'Je vous remercie de bien vouloir m\'indiquer si des prestations restent dues (remboursements de soins, capital ou allocation obsèques) et à quel bénéficiaire elles doivent être versées, ainsi que le montant des cotisations restant dues ou trop perçues au jour du décès.',
-        '',
-        'Vous trouverez sous ce pli la copie de l\'extrait d\'acte de décès.',
-        '',
-        'Dans cette attente et avec mes remerciements,',
+        'En ma qualité de notaire chargé du règlement de la succession citée en références, je vous remercie de bien vouloir m\'indiquer si la personne décédée était redevable envers votre établissement d\'une quelconque somme au jour de son décès.',
+        'Par ailleurs, je vous remercie de m\'indiquer si des sommes restent dues à sa succession, à quelque titre que ce soit.',
+        'Vous trouverez ci-joint une copie de l\'extrait d\'acte de décès.',
+        'Dans l\'attente de vous lire et vous en remerciant d\'avance,',
         SALUTATIONS,
       ].join('\n'),
     },
@@ -138,26 +135,32 @@
       ].join('\n'),
     },
     {
-      id: 'retraite', type: 'retraite', titre: 'Caisse de retraite — arrérages et trop-perçu', provisoire: true, annexe: 'attestation',
+      id: 'retraite', type: 'retraite', titre: 'Caisse de retraite — sommes dues et revenus à déclarer',
       appel: 'Madame, Monsieur,',
       texte: [
-        'En ma qualité de notaire chargé du règlement de la succession ci-dessus visée, je vous informe du décès de {defunt}{si numero_retraite}, immatriculé{accord : | e} sous le numéro {numero_retraite}{fin}.',
-        '',
-        'Je vous remercie de bien vouloir me faire connaître le montant des arrérages de pension restant dus au jour du décès ou, le cas échéant, le montant des sommes versées après le décès et à restituer, en me retournant complétée et signée l\'attestation de créancier que vous trouverez sous ce pli.',
-        '',
-        'Dans cette attente et avec mes remerciements,',
+        'En ma qualité de notaire chargé du règlement de la succession citée en référence, au vu des documents qui m\'ont été communiqués, {accord : le défunt | la défunte} serait titulaire d\'une pension de retraite.',
+        'Pour me permettre de mener à bien ma mission, je vous remercie de bien vouloir me préciser :',
+        '- si une somme reste due à la succession et le montant des sommes versées pour la période comprise entre le 1er janvier et le {date_deces} ;',
+        '- dans quelles conditions et sur quelles justifications il vous sera possible de me faire parvenir ces sommes, sous ma propre responsabilité ;',
+        '- le montant des sommes à déclarer au titre de l\'impôt sur le revenu pour la période du 1er janvier au jour du décès.',
+        'En outre, pourriez-vous me préciser si la personne décédée bénéficiait du fonds national de solidarité ou de toutes autres aides faisant l\'objet d\'un recouvrement sur l\'actif successoral.',
+        'Dans cette attente,',
         SALUTATIONS,
       ].join('\n'),
     },
     {
-      id: 'ehpad', type: 'ehpad', titre: 'Maison de retraite — décompte des sommes dues', provisoire: true, annexe: 'attestation',
+      id: 'ehpad', type: 'ehpad', titre: 'Maison de retraite — sommes dues, caution et meubles', annexe: 'attestation', rib: true,
       appel: 'Madame, Monsieur,',
       texte: [
-        'En ma qualité de notaire chargé du règlement de la succession ci-dessus visée, je vous remercie de bien vouloir me faire parvenir le décompte des sommes restant dues par {accord : le défunt | la défunte} au titre de son hébergement, arrêté à la date du décès, en me retournant complétée et signée l\'attestation de créancier que vous trouverez sous ce pli.',
+        'En ma qualité de notaire chargé du règlement de la succession de la personne sus-désignée, je vous remercie de bien vouloir m\'indiquer :',
+        '- le montant des sommes qui étaient dues à votre établissement au jour du décès (attestation de créancier ci-jointe à compléter et me retourner),',
+        '- le montant de la caution éventuelle que vous pouvez détenir.',
+        'Par ailleurs, je vous remercie également de bien vouloir m\'indiquer si {accord : le défunt | la défunte} possédait des meubles en votre établissement.',
+        'Dans la négative, vous voudrez bien me faire parvenir une attestation.',
         '',
-        'Je vous remercie de m\'indiquer également le montant du dépôt de garantie éventuellement versé et les modalités de sa restitution.',
-        '',
-        'Dans cette attente et avec mes remerciements,',
+        'Enfin, vous voudrez bien m\'indiquer si des sommes étaient dues par votre établissement à la succession.',
+        'Auquel cas, vous trouverez ci-après le RIB de l\'Étude, vous permettant de m\'adresser les fonds.',
+        'Dans l\'attente de vous lire,',
         SALUTATIONS,
       ].join('\n'),
     },
@@ -311,6 +314,7 @@
       const nums = dest.comptes.split(/\n|;/).map(txt).filter(Boolean);
       avant.push([{ t: 'NUMÉRO' + (nums.length > 1 ? 'S' : '') + ' DE COMPTE' + (nums.length > 1 ? 'S' : '') + ' : ', b: true }, { t: nums.join(' – ') }]);
     }
+    if (dest && dest.type === 'retraite' && txt(dest.numero)) avant.push([{ t: 'N° d\'immatriculation : ', b: true }, { t: txt(dest.numero), b: true }]);
     const clerc = d.clerc || {};
     const lignesDest = String((dest && dest.lignes) || '').split('\n').map(txt).filter(Boolean);
     return {
@@ -328,6 +332,7 @@
       corps,
       signature: txt(d.signataire) || txt(o.signataire) || '',
       annexe: modele.annexe === 'attestation' ? attestation(d, o) : null,
+      rib: modele.rib && txt(o.rib) ? o.rib.split('\n').map((l) => l.replace(/\s+$/, '')) : null,
       manquants: Array.from(manquants),
     };
   }
@@ -401,6 +406,10 @@
     c.corps.forEach((l) => x.push(para(l, P_CORPS)));
     x.push(para([], P_CORPS), para([], P_CORPS));
     if (c.signature) x.push(para([{ t: c.signature }], P_CENTRE));
+    if (c.rib) {
+      x.push(para([], P_REF), para([], P_REF), para([{ t: 'COORDONNÉES BANCAIRES DE L\'OFFICE NOTARIAL :', b: true }], P_REF));
+      c.rib.forEach((l) => x.push(para([{ t: l }], P_REF)));
+    }
     if (c.annexe) {
       x.push('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
       c.annexe.entete.forEach((l) => x.push(para([{ t: l }], P_CENTRE)));
@@ -613,13 +622,19 @@
   // Départements couverts par une adresse du carnet (« 13, 84, 04 ») ; vide : tous.
   const departements = (c) => String((c && c.departement) || '').split(/[\s,;]+/).filter(Boolean);
   const couvre = (c, departement) => { const l = departements(c); return !l.length || l.includes(departement); };
+  // Adresses du carnet pour un établissement : « LCL » → LCL (Nantes), LCL (Lyon)… (services régionaux).
+  const cleNom = (s) => (s || '').replace(/\([^)]*\)/g, ' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  function candidats(carnet, type, nom) {
+    const n = cleNom(nom);
+    return (carnet || []).filter((c) => c.type === type && (!n || cleNom(c.nom) === n || cleNom(c.nom).includes(n) || n.includes(cleNom(c.nom))));
+  }
   function suggestion(carnet, type, nom, departement) {
-    const cle = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const cle = cleNom;
     const n = cle(nom);
-    const candidats = (carnet || []).filter((c) => c.type === type && (!n || cle(c.nom) === n || cle(c.nom).includes(n) || n.includes(cle(c.nom))));
-    if (!candidats.length) return null;
+    const liste = candidats(carnet, type, nom);
+    if (!liste.length) return null;
     const score = (c) => (departements(c).includes(departement) ? 2 : !departements(c).length ? 1 : 0) + (cle(c.nom) === n ? 1 : 0);
-    return candidats.slice().sort((a, b) => score(b) - score(a))[0];
+    return liste.slice().sort((a, b) => score(b) - score(a))[0];
   }
 
   // Carnet de l'étude complété des adresses fournies avec l'outil (sauf celles que l'étude a supprimées).
@@ -627,13 +642,13 @@
     const l = (carnet || []).slice();
     (fournies || []).forEach((c) => {
       const i = l.findIndex((x) => x.id === c.id);
-      if (c.retiree) {
-        if (i >= 0 && l[i].lignes === c.lignes) l.splice(i, 1);
-        return;
-      }
       // Adresse fournie mise à jour depuis : remplacée tant que l'étude ne l'a pas modifiée.
       if (i >= 0 && (c.anciennes || []).includes(l[i].lignes)) l[i] = Object.assign({}, c);
-      else if (i >= 0 && l[i].lignes === c.lignes) ['email', 'telephone'].forEach((k) => { if (!l[i][k] && c[k]) l[i] = Object.assign({}, l[i], { [k]: c[k] }); });
+      else if (i >= 0 && l[i].lignes === c.lignes) {
+        // Adresse inchangée : le nom et les coordonnées fournis depuis sont repris.
+        l[i] = Object.assign({}, l[i], { nom: c.nom });
+        ['email', 'telephone'].forEach((k) => { if (!l[i][k] && c[k]) l[i][k] = c[k]; });
+      }
       else if (i < 0 && !(supprimees || []).includes(c.id)) l.push(Object.assign({}, c));
     });
     return l.map((c) => { const x = Object.assign({}, c); delete x.anciennes; return x; });
@@ -651,6 +666,6 @@
     TYPES, typeDe, MODELES, PAR_DEFAUT, modeles, modelesPour, REGIMES,
     variables, interpreter, rediger, blocSuccession, montantEnLettres,
     documentXml, docx, paquetMinimal, nettoyerPaquet, extrairePapier, paragraphes, importerPapier, ouvrirPaquet, base64, deBase64,
-    PIVOTS, servicesCompetents, adresseService, suggestion, couvre, carnetComplet, nomFichier, designation,
+    PIVOTS, servicesCompetents, adresseService, suggestion, candidats, couvre, carnetComplet, nomFichier, designation,
   };
 });

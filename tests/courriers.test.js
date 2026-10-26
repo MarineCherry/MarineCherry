@@ -78,6 +78,16 @@ test('Rédaction : bloc « SUCCESSION DE », comptes, acompte en lettres', () =>
   assert.deepStrictEqual(f.manquants, ['montant']);
 });
 
+test('Caisse de retraite (immatriculation) et RIB de l\'étude sous la signature', () => {
+  const c = E.rediger(DOSSIER, { type: 'retraite', numero: '1 44 06 31 000 000' }, modele('retraite'), { rib: 'IBAN : FR00 0000\nBIC : XXXX' });
+  assert.strictEqual(texte(c.avant), 'N° d\'immatriculation : 1 44 06 31 000 000');
+  assert.ok(texte(c.corps).includes('entre le 1er janvier et le 16 juin 2022'));
+  assert.strictEqual(c.rib, null, 'pas de RIB pour ce courrier');
+  const e = E.rediger(DOSSIER, { type: 'ehpad' }, modele('ehpad'), { rib: 'IBAN : FR00 0000\nBIC : XXXX' });
+  assert.deepStrictEqual(e.rib, ['IBAN : FR00 0000', 'BIC : XXXX']);
+  assert.ok(e.annexe);
+});
+
 test('Modèles : conditions, accords, gras et texte modifié par l\'étude', () => {
   const l = E.interpreter('A {si x}avec {x}{sinon}sans{fin} — {accord : il | elle} **gras**', { x: null }, true);
   assert.deepStrictEqual(l, [[{ t: 'A sans — elle ' }, { t: 'gras', b: true }]]);
@@ -163,8 +173,11 @@ test('Annuaire de l\'administration et carnet d\'adresses', () => {
   const maj = E.carnetComplet([{ id: 'x', lignes: 'ancienne' }, { id: 'w', lignes: 'modifiée' }], [{ id: 'x', lignes: 'nouvelle', anciennes: ['ancienne'] }, { id: 'w', lignes: 'nouvelle', anciennes: ['ancienne'] }]);
   assert.deepStrictEqual(maj.map((c) => c.lignes), ['nouvelle', 'modifiée']);
   assert.ok(!('anciennes' in maj[0]));
-  const ret = E.carnetComplet([{ id: 'r', lignes: 'L' }, { id: 's', lignes: 'modifiée' }], [{ id: 'r', retiree: true, lignes: 'L' }, { id: 's', retiree: true, lignes: 'L' }, { id: 't', retiree: true, lignes: 'L' }]);
-  assert.deepStrictEqual(ret.map((c) => c.id), ['s']);
+  // Services régionaux d'un même établissement : tous proposés au choix.
+  const reg = [{ type: 'banque', nom: 'LCL (Nantes)' }, { type: 'banque', nom: 'LCL (Lyon)' }, { type: 'banque', nom: 'BNP Paribas' }];
+  assert.deepStrictEqual(E.candidats(reg, 'banque', 'lcl').map((c) => c.nom), ['LCL (Nantes)', 'LCL (Lyon)']);
+  assert.deepStrictEqual(E.candidats(reg, 'banque', 'LCL (Lyon)').map((c) => c.nom), ['LCL (Nantes)', 'LCL (Lyon)']);
+  assert.strictEqual(E.carnetComplet([{ id: 'r', nom: 'LCL', lignes: 'L' }], [{ id: 'r', nom: 'LCL (Nantes)', lignes: 'L' }])[0].nom, 'LCL (Nantes)');
 });
 
 test('Archive ZIP : écriture puis relecture', async () => {
