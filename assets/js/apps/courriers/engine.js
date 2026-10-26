@@ -610,13 +610,23 @@
   }
 
   // Adresse du carnet la plus adaptée : même type, même nom (banque…), même département de préférence.
+  // Départements couverts par une adresse du carnet (« 13, 84, 04 ») ; vide : tous.
+  const departements = (c) => String((c && c.departement) || '').split(/[\s,;]+/).filter(Boolean);
+  const couvre = (c, departement) => { const l = departements(c); return !l.length || l.includes(departement); };
   function suggestion(carnet, type, nom, departement) {
     const cle = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const n = cle(nom);
     const candidats = (carnet || []).filter((c) => c.type === type && (!n || cle(c.nom) === n || cle(c.nom).includes(n) || n.includes(cle(c.nom))));
     if (!candidats.length) return null;
-    const score = (c) => (c.departement && c.departement === departement ? 2 : !c.departement ? 1 : 0) + (cle(c.nom) === n ? 1 : 0);
+    const score = (c) => (departements(c).includes(departement) ? 2 : !departements(c).length ? 1 : 0) + (cle(c.nom) === n ? 1 : 0);
     return candidats.slice().sort((a, b) => score(b) - score(a))[0];
+  }
+
+  // Carnet de l'étude complété des adresses fournies avec l'outil (sauf celles que l'étude a supprimées).
+  function carnetComplet(carnet, fournies, supprimees) {
+    const l = (carnet || []).slice();
+    (fournies || []).forEach((c) => { if (!l.some((x) => x.id === c.id) && !(supprimees || []).includes(c.id)) l.push(Object.assign({}, c)); });
+    return l;
   }
 
   // Nom de fichier : « Courrier - LA BANQUE POSTALE - Déblocage des comptes - MARTIN.docx »
@@ -631,6 +641,6 @@
     TYPES, typeDe, MODELES, PAR_DEFAUT, modeles, modelesPour, REGIMES,
     variables, interpreter, rediger, blocSuccession, montantEnLettres,
     documentXml, docx, paquetMinimal, nettoyerPaquet, extrairePapier, paragraphes, importerPapier, ouvrirPaquet, base64, deBase64,
-    PIVOTS, servicesCompetents, adresseService, suggestion, nomFichier, designation,
+    PIVOTS, servicesCompetents, adresseService, suggestion, couvre, carnetComplet, nomFichier, designation,
   };
 });

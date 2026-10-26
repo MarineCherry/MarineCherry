@@ -77,10 +77,16 @@
       nomPapier: '',
       signataire: '',
       clercs: [],                     // personnes qui suivent les dossiers : { nom, email }
+      carnetSupprimes: [],            // adresses fournies avec l'outil que l'étude a retirées du carnet
       carnet: [
         { id: 'c-lbp', type: 'banque', nom: 'La Banque Postale', departement: '', lignes: 'LA BANQUE POSTALE\nService SUCCESSION\n45900 LA SOURCE CEDEX', email: '' },
         { id: 'c-cardif', type: 'assurance', nom: 'Cardif Assurance Vie', departement: '', lignes: 'CARDIF ASSURANCE VIE\nBNP PARIBAS\nTSA 50 003\n92729 NANTERRE CEDEX', email: '' },
         { id: 'c-cd84', type: 'departement', nom: 'Conseil départemental de Vaucluse', departement: '84', lignes: 'CONSEIL DÉPARTEMENTAL DE VAUCLUSE\nService Pôle autonomie et Santé\n6 boulevard Limbert - CS 60517\n84908 AVIGNON CEDEX 9', email: '' },
+        { id: 'c-cd05', type: 'departement', nom: 'Conseil départemental des Hautes-Alpes', departement: '05', lignes: 'CONSEIL DÉPARTEMENTAL DES HAUTES-ALPES\nHôtel du Département\nPlace Saint-Arnoux\nCS 66005\n05008 GAP', email: 'successions@hautes-alpes.fr' },
+        { id: 'c-sg-toulouse', type: 'banque', nom: 'Société Générale CDS Toulouse', departement: '', lignes: 'SOCIÉTÉ GÉNÉRALE\nCDS Toulouse - Pôle Succession\n76 rue Saint-Jean\n31130 BALMA', email: 'cdstoulouse.successions@socgen.com', telephone: '09 69 18 12 94' },
+        { id: 'c-ce-cecaz', type: 'banque', nom: 'Caisse d\'Épargne CECAZ', departement: '', lignes: 'CAISSE D\'ÉPARGNE CECAZ\nService Successions', email: 'succession.mail@cecaz.caisse-epargne.fr', telephone: '04 98 07 20 50' },
+        { id: 'c-ce-cepac', type: 'banque', nom: 'Caisse d\'Épargne CEPAC', departement: '13, 84, 04, 05', lignes: 'CAISSE D\'ÉPARGNE CEPAC\nService Successions\nPlace Estrangin-Pastré\n13001 MARSEILLE', email: 'successions.notaires@cepac.caisse-epargne.fr' },
+        { id: 'c-bnp', type: 'banque', nom: 'BNP Paribas', departement: '', lignes: 'BNP PARIBAS\nAgence Successions\nTSA 21727\n35517 CESSON-SÉVIGNÉ CEDEX', email: 'conseiller.succession2@bnpparibas.com', telephone: '01 53 75 64 25' },
       ],
     },
 

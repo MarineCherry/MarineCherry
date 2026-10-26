@@ -35,12 +35,30 @@
     };
   }
   function nouveauDest(type) {
-    return { id: uid('d'), type, nom: '', lignes: '', email: '', vosRef: '', comptes: '', montant: null, numero: '', source: '', aVerifier: false };
+    return { id: uid('d'), type, nom: '', lignes: '', email: '', telephone: '', vosRef: '', comptes: '', montant: null, numero: '', source: '', aVerifier: false };
   }
   const isEmpty = (s) => !s.defunt.nom && !s.reference && s.destinataires.every((d) => !d.lignes);
   const reference = (s) => s.reference || (s.defunt.nom ? 'Succession ' + s.defunt.nom.toUpperCase() : '');
 
-  const params = () => A.store.getParams().courriers;
+  const params = () => {
+    const p = A.store.getParams().courriers;
+    return Object.assign({}, p, { carnet: E.carnetComplet(p.carnet, A.defaults.courriers.carnet, p.carnetSupprimes) });
+  };
+  // Copie dans le presse-papiers (adresse mail à coller dans la messagerie).
+  async function copier(texte) {
+    try {
+      await navigator.clipboard.writeText(texte);
+    } catch (e) {
+      const t = h('textarea', { style: { position: 'fixed', left: '-1000px' } });
+      t.value = texte;
+      document.body.appendChild(t);
+      t.select();
+      document.execCommand('copy');
+      t.remove();
+    }
+    ui.toast('Copié : ' + texte);
+  }
+  const boutonCopier = (texte) => (texte ? ui.button('Copier', { icon: 'copy', variant: 'ghost', small: true, title: 'Copier l\'adresse mail', onClick: (e) => { e.preventDefault(); copier(texte); } }) : null);
   function compute(s) {
     const p = params();
     const modeles = E.modeles(p.modeles);
@@ -222,8 +240,8 @@
     for (const d of s.destinataires) {
       if (d.source === 'saisie' && d.lignes) continue;
       const c = E.suggestion(params().carnet, d.type, d.nom, dom.departement);
-      if (c && (d.type !== 'banque' && d.type !== 'assurance' && d.type !== 'mutuelle' ? !c.departement || c.departement === dom.departement : true)) {
-        Object.assign(d, { nom: d.nom || c.nom, lignes: c.lignes, email: c.email || d.email, source: 'carnet', aVerifier: !!c.departement && c.departement !== dom.departement });
+      if (c && (d.type !== 'banque' && d.type !== 'assurance' && d.type !== 'mutuelle' ? E.couvre(c, dom.departement) : true)) {
+        Object.assign(d, { nom: d.nom || c.nom, lignes: c.lignes, email: c.email || d.email, telephone: c.telephone || d.telephone, source: 'carnet', aVerifier: !E.couvre(c, dom.departement) });
         trouves++;
         continue;
       }
@@ -251,7 +269,7 @@
     const nom = d.nom || (d.lignes || '').split('\n')[0];
     const carnet = (p.carnet || []).slice();
     const i = carnet.findIndex((c) => c.type === d.type && cleNom(c.nom) === cleNom(nom) && (c.departement || '') === (local ? dep : c.departement || ''));
-    const entree = { id: i >= 0 ? carnet[i].id : uid('c'), type: d.type, nom, departement: local ? dep : i >= 0 ? carnet[i].departement : '', lignes: d.lignes, email: d.email || '' };
+    const entree = { id: i >= 0 ? carnet[i].id : uid('c'), type: d.type, nom, departement: local ? dep : i >= 0 ? carnet[i].departement : '', lignes: d.lignes, email: d.email || '', telephone: d.telephone || '' };
     if (i >= 0) carnet[i] = entree; else carnet.push(entree);
     A.store.setParams('courriers', Object.assign({}, p, { carnet }));
     ui.toast('Adresse mémorisée dans le carnet de l\'étude.');
@@ -392,7 +410,7 @@
     nom.addEventListener('change', () => {
       if (d.source === 'saisie' && d.lignes) return;
       const c = E.suggestion(carnet, d.type, d.nom, s.defunt.domicile.departement);
-      if (c) Object.assign(d, { lignes: c.lignes, email: c.email || d.email, source: 'carnet', aVerifier: false });
+      if (c) Object.assign(d, { nom: c.nom, lignes: c.lignes, email: c.email || d.email, telephone: c.telephone || d.telephone, source: 'carnet', aVerifier: !E.couvre(c, s.defunt.domicile.departement) });
       ctx.render();
       ctx.changed();
     });
@@ -411,7 +429,9 @@
           d.type === 'banque' ? f('Numéros de compte', zone(d, 'comptes', ctx, { rows: 2, placeholder: 'un numéro par ligne' }), { help: 'Repris dans le courrier de déblocage.' }) : null,
           d.type === 'banque' ? f('Montant de l\'acompte', ctx.num(d, 'montant', { suffix: '€' }), { help: 'Pour la demande d\'acompte.' }) : null,
           d.type === 'retraite' ? f('Numéro d\'assuré', ctx.text(d, 'numero')) : null),
-        h('div', { class: 'stack-sm' }, f('Adresse', adresse), f('Courriel', ctx.text(d, 'email'), { help: 'Pour mémoire : le courrier part en pièce jointe.' }))));
+        h('div', { class: 'stack-sm' }, f('Adresse', adresse),
+          f('Adresse mail', h('div', { class: 'champ-copie' }, ctx.text(d, 'email'), boutonCopier(d.email)), { help: 'Pour envoyer le courrier en pièce jointe.' }),
+          f('Téléphone', ctx.text(d, 'telephone')))));
   }
 
   /* ---------- Mise en page d'un courrier (aperçu, impression, PDF) ---------- */
@@ -494,7 +514,8 @@
         const lignes = liste.filter((x) => x.dest === d);
         const qui = d.nom || (d.lignes || '').split('\n')[0] || E.typeDe(d.type).libelle;
         return h('div', { class: 'courrier-groupe' },
-          h('div', { class: 'courrier-dest' }, h('strong', null, qui), h('span', { class: 'muted small' }, ' · ' + E.typeDe(d.type).libelle), !d.lignes ? h('span', { class: 'tag tag-warn' }, '⚠ adresse manquante') : null),
+          h('div', { class: 'courrier-dest' }, h('strong', null, qui), h('span', { class: 'muted small' }, ' · ' + E.typeDe(d.type).libelle), !d.lignes ? h('span', { class: 'tag tag-warn' }, '⚠ adresse manquante') : null,
+            d.email ? h('span', { class: 'courrier-mail' }, h('span', { class: 'small' }, d.email), boutonCopier(d.email)) : null),
           lignes.map((x) => {
             const cb = h('input', { type: 'checkbox', checked: x.coche || null, 'aria-label': x.modele.titre });
             cb.addEventListener('change', () => { s.coches[x.cle] = cb.checked; ctx.changed(); });
@@ -653,12 +674,15 @@
         adr.value = c.lignes || '';
         adr.addEventListener('input', () => { c.lignes = adr.value; enregistrer(); });
         const mail = ui.textInput({ value: c.email || '', onChange: (v) => { c.email = v; enregistrer(); } });
+        const tel = ui.textInput({ value: c.telephone || '', onChange: (v) => { c.telephone = v; enregistrer(); } });
         return h('div', { class: 'row-line carnet-ligne' },
-          h('div', { class: 'stack-sm' }, f('Nom', nom), f('Département', dep, { help: 'Vide : proposé quel que soit le domicile.' }), f('Courriel', mail)),
+          h('div', { class: 'stack-sm' }, f('Nom', nom), f('Départements', dep, { help: 'Ex. « 13, 84 ». Vide : proposé quel que soit le domicile.' }), f('Adresse mail', mail), f('Téléphone', tel)),
           f('Adresse', adr),
           ui.button('Supprimer', { icon: 'trash', iconOnly: true, variant: 'ghost', small: true, onClick: async () => {
             if (!(await ui.confirm('Supprimer cette adresse ?', c.nom, 'Supprimer'))) return;
-            A.store.setParams('courriers', Object.assign({}, params(), { carnet: carnet.filter((x) => x !== c) }));
+            const q = A.store.getParams().courriers;
+            const fournie = A.defaults.courriers.carnet.some((x) => x.id === c.id);
+            A.store.setParams('courriers', Object.assign({}, q, { carnet: carnet.filter((x) => x !== c), carnetSupprimes: fournie ? (q.carnetSupprimes || []).concat([c.id]) : q.carnetSupprimes || [] }));
             ctx.render();
           } }));
       }))];

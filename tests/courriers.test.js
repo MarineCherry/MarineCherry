@@ -155,6 +155,11 @@ test('Annuaire de l\'administration et carnet d\'adresses', () => {
   assert.strictEqual(E.suggestion(carnet, 'banque', 'banque exemple', '84').lignes, 'Agence Avignon');
   assert.strictEqual(E.suggestion(carnet, 'banque', 'Autre banque', '84').lignes, 'Siège');
   assert.strictEqual(E.suggestion(carnet, 'mutuelle', 'X', '84'), null);
+  // Adresse couvrant plusieurs départements ; carnet complété des adresses fournies avec l'outil.
+  const ce = [{ id: 'a', type: 'banque', nom: 'Caisse d\'Épargne Nord', departement: '' }, { id: 'b', type: 'banque', nom: 'Caisse d\'Épargne Sud', departement: '13, 84' }];
+  assert.strictEqual(E.suggestion(ce, 'banque', 'Caisse d\'epargne', '84').id, 'b');
+  assert.strictEqual(E.suggestion(ce, 'banque', 'Caisse d\'epargne', '75').id, 'a');
+  assert.deepStrictEqual(E.carnetComplet([{ id: 'x' }], [{ id: 'x' }, { id: 'y' }, { id: 'z' }], ['z']).map((c) => c.id), ['x', 'y']);
 });
 
 test('Archive ZIP : écriture puis relecture', async () => {
