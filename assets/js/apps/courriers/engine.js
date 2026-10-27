@@ -45,17 +45,22 @@
   const SALUTATIONS = 'Je vous prie de croire, Madame, Monsieur, à l\'assurance de mes salutations distinguées.';
   const MODELES = [
     {
-      id: 'banque-position', type: 'banque', titre: 'Banque — demande de position', provisoire: true,
-      appel: 'Madame, Monsieur,',
+      id: 'banque-position', type: 'banque', titre: 'Banque — demande de position',
+      appel: 'Madame, Monsieur le Directeur,',
       texte: [
-        'En ma qualité de notaire chargé du règlement de la succession ci-dessus visée, je vous remercie de bien vouloir me faire parvenir la position, au jour du décès, de l\'ensemble des comptes et avoirs détenus par {accord : le défunt | la défunte} en votre Établissement (comptes courants, livrets, comptes-titres valorisés, coffre-fort), en précisant le cas échéant les comptes joints, ainsi que le montant des prêts restant dus à cette date.',
-        '',
-        'Je vous remercie également de m\'indiquer si {accord : le défunt | la défunte} avait souscrit des contrats d\'assurance-vie par votre intermédiaire.',
-        '',
-        'A cet effet, je joins à cet envoi la copie de l\'extrait d\'acte de décès.',
-        '',
-        'Dans cette attente et avec mes remerciements,',
-        SALUTATIONS,
+        'En ma qualité de notaire chargé du règlement de la succession ci-dessus référencée, je vous remercie de bien vouloir m\'indiquer concernant la personne décédée{si conjoint} et son conjoint{fin} :',
+        '- la liste des comptes individuels, joints ou indivis, plans et livrets ouverts dans l\'une ou plusieurs de vos agences en me précisant leur caractère (compte courant, compte sur livret, compte joint, compte épargne-logement, …) ;',
+        '- et, la position, au jour du décès et à ce jour, de ces comptes ;',
+        '- la liste, la désignation et le cours des différents titres et valeurs détenus en tout ou partie, au jour du décès, à ce jour et la moyenne des 30 derniers jours ;',
+        '- la situation, au jour du décès, de tout emprunt ou ouverture de crédit dont la personne décédée est, le cas échéant, débitrice ou codébitrice en me précisant alors si le remboursement de la dette est pris en charge par une assurance ;',
+        '- le ou les contrats de cautionnement souscrits le cas échéant par la personne décédée et encore en vigueur en me précisant alors leurs caractéristiques ;',
+        '- s\'il existe un coffre-fort dont la personne décédée serait titulaire ou cotitulaire ;',
+        '- les contrats d\'assurance-vie souscrits par {accord : le défunt | la défunte}, en précisant la date de souscription, les références de l\'assurance, les montants et la date des primes versées{si conjoint} et d\'autre part les contrats d\'assurance-vie souscrits par le conjoint {accord : du défunt | de la défunte} quelle que soit la date de souscription, avec indication de la valeur de rachat au jour du décès{fin}.',
+        'J\'attire votre attention sur le fait que ma responsabilité professionnelle ne saurait être recherchée au cas où de tels contrats ne m\'auraient pas été révélés.',
+        'Je vous laisse également le soin de me communiquer les autres renseignements que vous jugeriez pouvoir m\'être utiles.',
+        '{si conjoint}Vous voudrez bien me préciser si vous laissez au conjoint la libre disposition d\'un ou plusieurs comptes.{fin}',
+        'Dans l\'attente de vous lire et vous en remerciant à l\'avance,',
+        'Je vous prie de croire, Madame, Monsieur le Directeur, à l\'assurance de mes salutations distinguées.',
       ].join('\n'),
     },
     {
@@ -234,10 +239,14 @@
   function interpreter(src, vars, feminin, manquants) {
     const jetons = String(src || '').split(/(\{[^{}]*\})/);
     const pile = [{ actif: true, sinon: false, cond: true }];
-    let out = '';
+    // Lignes produites ; une ligne non vide dans le modèle mais vide une fois les conditions appliquées disparaît.
+    const lignes = [];
+    let out = '', source = false;
+    const finLigne = () => { if (!(source && !out.trim())) lignes.push(out); out = ''; source = false; };
     const actif = () => pile.every((x) => x.actif);
     for (const j of jetons) {
       const m = /^\{\s*(si|sinon|fin|accord)\b\s*(.*?)\s*\}$/.exec(j);
+      if (/^\{.*\}$/.test(j)) source = true;
       if (m && m[1] === 'si') {
         const non = /^non\s+/.test(m[2]);
         const nom = m[2].replace(/^non\s+/, '').trim();
@@ -263,9 +272,16 @@
           if (manquants) manquants.add(nom);
           out += '......';
         } else out += v;
-      } else if (actif()) out += j;
+      } else if (actif()) {
+        j.split('\n').forEach((x, k) => {
+          if (k > 0) finLigne();
+          if (x.trim()) source = true;
+          out += x;
+        });
+      }
     }
-    return out.split('\n').map(segments);
+    finLigne();
+    return lignes.map(segments);
   }
   // « texte **gras** texte » → [{ t }, { t, b: true }, { t }]
   function segments(ligne) {

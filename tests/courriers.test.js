@@ -91,6 +91,8 @@ test('Caisse de retraite (immatriculation) et RIB de l\'étude sous la signature
 test('Modèles : conditions, accords, gras et texte modifié par l\'étude', () => {
   const l = E.interpreter('A {si x}avec {x}{sinon}sans{fin} — {accord : il | elle} **gras**', { x: null }, true);
   assert.deepStrictEqual(l, [[{ t: 'A sans — elle ' }, { t: 'gras', b: true }]]);
+  // Ligne entièrement conditionnelle : elle disparaît ; une ligne vide voulue reste.
+  assert.deepStrictEqual(E.interpreter('A\n{si x}B{fin}\n\nC', { x: null }, false).map((l) => l.map((y) => y.t).join('')), ['A', '', 'C']);
   const perso = E.modeles({ 'tresor-bordereau': { appel: 'Madame, Monsieur,', texte: 'Texte de l\'étude.' } });
   const m = perso.find((x) => x.id === 'tresor-bordereau');
   assert.ok(m.modifie);
