@@ -114,7 +114,10 @@
 
   function nettoyer(texte) {
     // Les traits de remplissage des formulaires (« ------ ») sont retirés.
-    return (texte || '').replace(/\r/g, '').replace(/[-_—–]{3,}|\.{4,}/g, ' ').replace(/[ \t ]+/g, ' ').replace(/\s*\n\s*/g, '\n').replace(/-\n(?=[a-zà-ÿ])/g, '').trim();
+    // Les traits de remplissage des formulaires (« ------ ») sont retirés, avec ce que la reconnaissance
+    // de caractères a pu lire à leur suite sur la même ligne.
+    // Le bord de la page est parfois lu comme « | » en début de ligne.
+    return (texte || '').replace(/\r/g, '').replace(/^[ \t]*[|¦!\[\]{}~•·]+[ \t]*/gm, '').replace(/[ \t]*[-_—–]{3,}[^\n]*/g, ' ').replace(/\.{4,}/g, ' ').replace(/[ \t ]+/g, ' ').replace(/\s*\n\s*/g, '\n').replace(/-\n(?=[a-zà-ÿ])/g, '').trim();
   }
   const uneLigne = (s) => s.replace(/\n/g, ' ').replace(/\s+/g, ' ');
 

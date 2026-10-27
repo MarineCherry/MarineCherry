@@ -149,14 +149,29 @@
         ui.toast('Lecture du PDF impossible : ' + e.message, 'error');
       }
     }
-    const r = X.analyser(texte);
+    let r = X.analyser(texte);
+    let parOcr = false;
+    // Acte scanné ou photographié : reconnaissance de caractères sur le poste.
+    if (r.vide) {
+      const attente = attenteOcr();
+      try {
+        texte = await reconnaitre(await imagesActe(fichier, acteCourant.pdf), attente.etape);
+        r = X.analyser(texte);
+        parOcr = true;
+      } catch (e) {
+        console.error(e);
+        ui.toast('Reconnaissance du texte impossible : ' + e.message, 'error');
+      } finally {
+        attente.fermer();
+      }
+    }
     s.lecture.fichier = fichier.name;
     if (r.vide) {
       s.lecture.statut = 'scan';
       s.lecture.aVerifier = ['identite', 'naissance', 'deces', 'domicile', 'situation'];
       ctx.render();
       ctx.changed();
-      return ui.toast('Acte scanné ou manuscrit : saisissez les informations en vous aidant de l\'aperçu.', 'error');
+      return ui.toast('Texte de l\'acte illisible (acte manuscrit ?) : saisissez les informations en vous aidant de l\'aperçu.', 'error');
     }
     const df = s.defunt;
     const poser = (cible, source, cles) => cles.forEach((k) => { if (source[k]) cible[k] = source[k]; });
@@ -167,13 +182,110 @@
     if (r.situation) s.situation = r.situation;
     if (r.conjoint && r.conjoint.nom) Object.assign(s.conjoint, r.conjoint);
     if (!s.nosRef && df.nom) s.nosRef = 'Succession ' + df.nom.toUpperCase();
-    s.lecture.statut = 'texte';
+    s.lecture.statut = parOcr ? 'ocr' : 'texte';
     // Tout ce qui a été lu est à vérifier ; ce qui manque est signalé.
     s.lecture.aVerifier = ['identite', 'naissance', 'deces', 'domicile', 'situation'];
     ctx.render();
     ctx.changed();
     ui.toast(r.manquants.length ? 'Acte lu : complétez les informations signalées.' : 'Acte lu : vérifiez les informations.');
     completerCodes(ctx, true);
+  }
+
+  /* ---------- Reconnaissance de caractères (Tesseract, hors connexion) ---------- */
+  let tesseract = null;
+  async function moteurOcr() {
+    if (!tesseract) {
+      await script('assets/vendor/tesseract/tesseract-core-lstm.wasm.js');
+      await script('assets/vendor/tesseract/fra-traineddata.js');
+      const M = await root.TesseractCore();
+      const gz = E.deBase64(root.ATELIER_TESSDATA_FRA);
+      const donnees = new Uint8Array(await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+      M.FS.writeFile('/fra.traineddata', donnees);
+      const api = new M.TessBaseAPI();
+      if (api.Init('/', 'fra')) throw new Error('initialisation impossible');
+      tesseract = { M, api };
+    }
+    return tesseract;
+  }
+  const canvasEnPng = (c) => new Promise((ok) => c.toBlob((b) => b.arrayBuffer().then((x) => ok(new Uint8Array(x))), 'image/png'));
+  // Images des pages de l'acte (3 premières pages au plus), à une résolution adaptée à la lecture.
+  async function imagesActe(fichier, pdf) {
+    const out = [];
+    if (pdf) {
+      for (let n = 1; n <= Math.min(pdf.numPages, 3); n++) {
+        const page = await pdf.getPage(n);
+        // Page scannée : l'image d'origine est lue telle quelle (meilleure reconnaissance qu'une page redessinée).
+        const scan = await imageDeLaPage(page);
+        if (scan) { out.push(await canvasEnPng(scan)); continue; }
+        const vp = page.getViewport({ scale: 2.5 });
+        const c = h('canvas', { width: Math.round(vp.width), height: Math.round(vp.height) });
+        const g = c.getContext('2d');
+        g.fillStyle = '#fff';
+        g.fillRect(0, 0, c.width, c.height);
+        await page.render({ canvasContext: g, viewport: vp }).promise;
+        out.push(await canvasEnPng(c));
+      }
+    } else {
+      const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ko(new Error('image illisible')); i.src = acteCourant.url; });
+      const k = Math.min(1, 3000 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = h('canvas', { width: Math.round(img.naturalWidth * k), height: Math.round(img.naturalHeight * k) });
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      out.push(await canvasEnPng(c));
+    }
+    return out;
+  }
+  // Image principale d'une page de PDF (scan) dans un canvas, à sa résolution d'origine ; null s'il n'y en a pas.
+  async function imageDeLaPage(page) {
+    try {
+      const lib = await pdfjs();
+      const ops = await page.getOperatorList();
+      let meilleur = null;
+      ops.fnArray.forEach((fn, i) => {
+        if (fn !== lib.OPS.paintImageXObject) return;
+        const [id, l, ht] = ops.argsArray[i];
+        if (!meilleur || l * ht > meilleur.l * meilleur.ht) meilleur = { id, l, ht };
+      });
+      if (!meilleur || meilleur.l < 800) return null;
+      const img = await new Promise((ok) => (page.objs.has(meilleur.id) ? ok(page.objs.get(meilleur.id)) : page.objs.get(meilleur.id, ok)));
+      if (!img) return null;
+      const c = h('canvas', { width: img.width, height: img.height });
+      const g = c.getContext('2d');
+      if (img.bitmap) g.drawImage(img.bitmap, 0, 0);
+      else if (img.data) {
+        const px = g.createImageData(img.width, img.height);
+        const src = img.data, dst = px.data, nb = img.width * img.height;
+        if (img.kind === 3) dst.set(src.subarray(0, nb * 4));
+        else if (img.kind === 2) for (let k = 0, j = 0; k < nb; k++) { dst[j++] = src[k * 3]; dst[j++] = src[k * 3 + 1]; dst[j++] = src[k * 3 + 2]; dst[j++] = 255; }
+        else return null;
+        g.putImageData(px, 0, 0);
+      } else return null;
+      return c;
+    } catch (e) {
+      return null;
+    }
+  }
+  const pause = () => new Promise((ok) => setTimeout(ok, 60));
+  async function reconnaitre(images, etape) {
+    etape('Préparation de la reconnaissance du texte…');
+    await pause();
+    const { M, api } = await moteurOcr();
+    let texte = '';
+    for (let i = 0; i < images.length; i++) {
+      etape('Lecture de la page ' + (i + 1) + ' sur ' + images.length + '… (quelques secondes)');
+      await pause();
+      M.FS.writeFile('/input', images[i]);
+      api.SetImageFile(1, 0);
+      api.Recognize(null);
+      texte += api.GetUTF8Text() + '\n';
+    }
+    return texte;
+  }
+  function attenteOcr() {
+    const texte = h('p', null, 'Acte scanné : reconnaissance du texte en cours…');
+    const overlay = h('div', { class: 'overlay' }, h('div', { class: 'dialog', role: 'dialog', 'aria-modal': 'true' },
+      h('h3', { class: 'dialog-title' }, 'Lecture de l\'acte de décès'), h('div', { class: 'dialog-body' }, texte, h('p', { class: 'small muted' }, 'L\'acte est lu sur ce poste ; rien n\'est envoyé sur internet.'))));
+    document.body.appendChild(overlay);
+    return { etape: (t) => (texte.textContent = t), fermer: () => overlay.remove() };
   }
 
   /* ---------- Annuaires publics (sur demande, si le poste a accès à internet) ---------- */
@@ -319,7 +431,8 @@
     depot.ondrop = (e) => { e.preventDefault(); depot.classList.remove('depot'); lireActe(ctx, e.dataTransfer.files && e.dataTransfer.files[0]); };
 
     const etat = s.lecture.statut === 'scan'
-      ? ui.note('⚠ Acte scanné ou manuscrit (« ' + s.lecture.fichier + ' ») : il ne peut pas être lu automatiquement. Saisissez les informations en vous aidant de l\'aperçu ; les rubriques à remplir sont signalées.', 'warn')
+      ? ui.note('⚠ Acte illisible (« ' + s.lecture.fichier + ' »), manuscrit par exemple : il ne peut pas être lu automatiquement. Saisissez les informations en vous aidant de l\'aperçu ; les rubriques à remplir sont signalées.', 'warn')
+      : s.lecture.statut === 'ocr' ? ui.note('Acte scanné « ' + s.lecture.fichier + ' » lu par reconnaissance de caractères. Les rubriques marquées ⚠ ont été remplies automatiquement : comparez-les attentivement avec l\'aperçu (orthographe des noms, dates), puis cliquez sur « C\'est vérifié ».', 'warn')
       : s.lecture.statut === 'texte' ? ui.note('Acte « ' + s.lecture.fichier + ' » lu. Les rubriques marquées ⚠ ont été remplies à partir de l\'acte : vérifiez-les puis cliquez sur « C\'est vérifié ».') : null;
 
     const identite = ui.card(titreCarte(s, 'identite', 'Le défunt'), h('div', { class: 'grid-3' },
