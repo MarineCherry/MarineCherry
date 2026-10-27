@@ -113,7 +113,8 @@
   const reLieu = new RegExp('([' + MAJ + "][" + MIN + MAJ + "'’ -]+?)\\s*\\(([^)]+)\\)", 'g');
 
   function nettoyer(texte) {
-    return (texte || '').replace(/\r/g, '').replace(/[ \t ]+/g, ' ').replace(/\s*\n\s*/g, '\n').replace(/-\n(?=[a-zà-ÿ])/g, '').trim();
+    // Les traits de remplissage des formulaires (« ------ ») sont retirés.
+    return (texte || '').replace(/\r/g, '').replace(/[-_—–]{3,}|\.{4,}/g, ' ').replace(/[ \t ]+/g, ' ').replace(/\s*\n\s*/g, '\n').replace(/-\n(?=[a-zà-ÿ])/g, '').trim();
   }
   const uneLigne = (s) => s.replace(/\n/g, ' ').replace(/\s+/g, ' ');
 
@@ -148,14 +149,14 @@
     if (!t || t.length < 40) return Object.assign(res, { vide: true, manquants: ['identite', 'naissance', 'deces', 'domicile', 'situation'] });
 
     // Sexe : accords de l'acte.
-    const fem = /\bd[ée]c[ée]d[ée]e(?![a-zà-ÿ])|\bn[ée]e\s+(?:le|à|a)(?=\s)|\bfille de\b|\b[ée]pouse de\b|\bveuve de\b|\bdivorc[ée]e de\b|\bsexe\s*:?\s*f/i.test(t);
+    const fem = /\bd[ée]c[ée]d[ée]e(?![a-zà-ÿ])|\bn[ée]e\s+(?:le|à|a)(?=\s)|\bn[ée]e\s*:|\bfille de\b|\b[ée]pouse de\b|\bveuve de\b|\bdivorc[ée]e de\b|\bsexe\s*:?\s*f/i.test(t);
     res.civilite = fem ? 'Mme' : 'M';
 
     // Identité : extrait (libellés) ou copie intégrale (« …, Prénoms NOM, né(e) … »).
-    const lNom = libelle(texte, 'Nom de naissance|Nom'), lPrenoms = libelle(texte, 'Prénoms|Prénom');
+    const lNom = libelle(texte, 'NOM du défunt|Nom de naissance|Nom'), lPrenoms = libelle(texte, 'Prénoms|Prénom');
     if (lNom && lPrenoms) {
       res.nom = lNom.replace(/\s*(?:épouse|veuve|époux).*/i, '').toUpperCase();
-      res.prenoms = lPrenoms;
+      res.prenoms = lPrenoms.replace(/\s*,\s*/g, ' ').replace(/[.\s]+$/, '');
     } else {
       const reId = new RegExp('((?:' + PRENOM + '\\s+)+?)(' + NOM_MAJ + ')\\s*,?\\s*(?:\\([^)]*\\)\\s*,?\\s*)?n[ée]e?\\s+(?:le|à|a|au)(?=\\s)');
       const m = reId.exec(t);
@@ -176,7 +177,14 @@
     const toutes = dates(t);
     const iNe = t.search(/\bn[ée]e?\s+(?:le|à|a|au)(?=\s)/i);
     const lNaiss = libelle(texte, 'Date et lieu de naissance|Né\\(e\\) le|Née? le');
-    if (iNe >= 0 || lNaiss) {
+    // Formulaire : « Née : le 03 avril 1936 » puis « À : Montfaucon (Gard) ».
+    const fNe = (/(?:^|\n)\s*N[ée]e?\s*(?:\(e\))?\s*:\s*([^\n]+)/i.exec(texte) || [])[1];
+    const fA = (/(?:^|\n)\s*[ÀA]\s*:\s*([^\n]+)/.exec(texte) || [])[1];
+    if (fNe && dates(fNe)[0]) {
+      res.naissance.date = dates(fNe)[0].iso;
+      if (fA) Object.assign(res.naissance, lieu(fA.replace(/[.\s]+$/, '')));
+      res.trouves.push('naissance');
+    } else if (iNe >= 0 || lNaiss) {
       const seg = lNaiss || t.slice(iNe, iNe + 160);
       const offset = lNaiss ? -1 : iNe;
       const d = lNaiss ? dates(lNaiss)[0] : toutes.find((x) => x.index >= iNe && x.index < iNe + 160);
@@ -190,7 +198,7 @@
 
     // Décès : date (« Le … » en tête de l'acte ou libellé), lieu.
     const iDec = t.search(/\best\s+d[ée]c[ée]d[ée]e?(?![a-zà-ÿ])|\bd[ée]c[ée]d[ée]e?\s+(?:le|à|a|au|en)(?=\s)|date du d[ée]c[èe]s/i);
-    const lDate = libelle(texte, 'Date du décès|Décédée? le');
+    const lDate = libelle(texte, 'Date et heure du décès|Date du décès|Décédée? le');
     let dDeces = lDate ? dates(lDate)[0] : null;
     if (!dDeces && iDec >= 0) dDeces = toutes.filter((x) => x.index < iDec).pop() || toutes.find((x) => x.index > iDec && x.index < iDec + 60);
     if (!dDeces && toutes.length) dDeces = toutes[0].iso !== res.naissance.date ? toutes[0] : null;
@@ -222,12 +230,12 @@
     if (res.domicile.commune) res.trouves.push('domicile');
 
     // Situation familiale et conjoint.
-    const reConj = new RegExp('(?:^|[^A-Za-zÀ-ÿ])([ÉéEe]poux|[ÉéEe]pouse|[Vv]euf|[Vv]euve|[Dd]ivorc[ée]e?|[Pp]artenaire(?: lié[e]? par un pacte civil de solidarité)?)\\s+(?:de|d\')\\s*(?:(Monsieur|Madame|M\\.|Mme)\\s+)?((?:' + PRENOM + '\\s+)*?)(' + NOM_MAJ + ')(?:\\s+((?:' + PRENOM + '\\s*)+))?');
+    const reConj = new RegExp('(?:^|[^A-Za-zÀ-ÿ])([ÉéEe]poux|[ÉéEe]pouse|[Vv]euf|[Vv]euve|[Dd]ivorc[ée]e?|[Pp]artenaire(?: lié[e]? par un pacte civil de solidarité)?)\\s+(?:de|d\')\\s*(?:(Monsieur|Madame|M\\.|Mme)\\s+)?((?:' + PRENOM + ',?\\s+)*?)(' + NOM_MAJ + ')(?:\\s+((?:' + PRENOM + '\\s*)+))?');
     const mc = reConj.exec(t);
     if (mc) {
       const k = sansAccent(mc[1]).toLowerCase();
       res.situation = k.startsWith('epou') ? 'marie' : k.startsWith('veu') ? 'veuf' : k.startsWith('divorc') ? 'divorce' : 'pacse';
-      res.conjoint.prenoms = (mc[3] || mc[5] || '').trim();
+      res.conjoint.prenoms = (mc[3] || mc[5] || '').replace(/\s*,\s*/g, ' ').trim();
       res.conjoint.nom = mc[4].trim();
       res.conjoint.civilite = mc[2] ? (/^(madame|mme)/i.test(mc[2]) ? 'Mme' : 'M') : (fem ? 'M' : 'Mme');
     } else if (/c[ée]libataire|non mari[ée]/i.test(t)) res.situation = 'celibataire';

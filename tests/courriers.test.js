@@ -40,6 +40,21 @@ test('Extrait d\'acte de décès (libellés) et décès hors du domicile', () =>
   assert.deepStrictEqual([h.deces.commune, h.domicile.commune, h.domicile.adresse, h.naissance.date, h.situation], ['Carpentras', 'Pertuis', '5 chemin des Vignes', '1940-02-01', 'celibataire']);
 });
 
+test('Acte de décès en formulaire de mairie (rubriques, traits de remplissage)', () => {
+  const r = X.analyser(['Acte de décès - Copie Intégrale', 'Lucienne, Marie, Rose DURAND',
+    'Date et heure du décès : le 4 mars 2026 à 09 heures 15 minutes. -----------------',
+    'Lieu du décès : Avenue de la Gare, Orange (Vaucluse). ------------------------',
+    'NOM du défunt : DURAND -------------------------------', 'Prénom(s) : Lucienne, Marie, Rose ------------------',
+    'Née : le 07 juillet 1940 ---------------------------', 'À : Pertuis (Vaucluse) -----------------------------',
+    'Domicile : 12 rue des Lilas, Pertuis (Vaucluse) -----', 'Fille de : Louis, Paul DURAND, décédé ---------------',
+    'Situation matrimoniale : épouse de Pierre, André ROUX-BLANC ----',
+    'Après lecture et invitation à lire l\'acte, Nous, Anne PETIT, Adjoint administratif.'].join('\n'));
+  assert.deepStrictEqual([r.civilite, r.prenoms, r.nom], ['Mme', 'Lucienne Marie Rose', 'DURAND']);
+  assert.deepStrictEqual([r.deces.date, r.deces.commune, r.naissance.date, r.naissance.commune], ['2026-03-04', 'Orange', '1940-07-07', 'Pertuis']);
+  assert.deepStrictEqual([r.domicile.adresse, r.domicile.commune], ['12 rue des Lilas', 'Pertuis']);
+  assert.deepStrictEqual([r.situation, r.conjoint.prenoms, r.conjoint.nom], ['marie', 'Pierre André', 'ROUX-BLANC']);
+});
+
 test('Acte scanné (sans texte) : tout est à compléter', () => {
   const r = X.analyser('  ');
   assert.ok(r.vide);
