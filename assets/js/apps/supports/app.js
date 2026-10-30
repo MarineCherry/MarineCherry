@@ -32,6 +32,12 @@
     bouclier: '<path d="M12 3 4.5 6v6c0 4.5 3.2 7.6 7.5 9 4.3-1.4 7.5-4.5 7.5-9V6z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/>',
     entreprise: '<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M9 8V5.5h6V8M3 13h18"/>',
     cle: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l2 2M15 8l1.5 1.5"/>',
+    calendrier: '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+    etat: '<path d="M3 20h18M5 20v-8M9.5 20v-8M14.5 20v-8M19 20v-8M2.5 10 12 4l9.5 6z"/>',
+    sablier: '<path d="M6 3h12M6 21h12M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9"/>',
+    plume: '<path d="M20 4c-8 0-13 5-14 12l-2 4 4-2c7-1 12-6 12-14z"/><path d="M6 16 14 8"/>',
+    euro: '<path d="M18 6.5A7 7 0 1 0 18 17.5"/><path d="M4 10h9M4 14h9"/>',
+    gateau: '<path d="M4 20h16v-7H4z"/><path d="M4 15c2 1.5 4-1.5 6 0s4-1.5 6 0 2 1 4 0"/><path d="M12 13V9M12 6.5v.01"/>',
   };
   function dessin(nom, cls) {
     const el = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -419,6 +425,12 @@
   };
 
   const PRESENTATIONS = [CONTRAT, RECOMPOSE];
+  // Les autres présentations (fichiers séparés) s'ajoutent avec ces outils de dessin.
+  A.supports = {
+    ajouter: (pres) => PRESENTATIONS.push(pres),
+    DESSINS,
+    aides: { dessin, e, barre, legende, jeton, fraction, equation, camembert, noeud, champ, COUL_ENF },
+  };
 
   /* ---------- Lecteur de présentation ---------- */
   function lecteur(container, pres) {
@@ -516,7 +528,7 @@
           h('span', { class: 'sv-vignette-dessin' }, dessin(p.icone, 'sv-moyen')),
           h('strong', null, p.titre), h('span', { class: 'small muted' }, p.resume),
           h('span', { class: 'small muted' }, p.diapos.length + ' diapositives'))),
-        h('div', { class: 'sv-vignette sv-bientot' }, h('span', { class: 'sv-vignette-dessin' }, ui.icon('plus', 30)), h('strong', null, 'Prochaine présentation'), h('span', { class: 'small muted' }, 'Donation-partage, démembrement, droits du conjoint… à construire ensemble.')))));
+        h('div', { class: 'sv-vignette sv-bientot' }, h('span', { class: 'sv-vignette-dessin' }, ui.icon('plus', 30)), h('strong', null, 'Prochaine présentation'), h('span', { class: 'small muted' }, 'Donation-partage, acheter à deux sans être mariés… à construire ensemble.')))));
   }
 
   function mount(container, arg) {

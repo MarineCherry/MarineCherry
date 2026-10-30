@@ -51,3 +51,37 @@ test('Famille recomposée : le quart du conjoint ne revient jamais à l\'enfant 
   // Tous les enfants communs : l'option pour l'usufruit existe sans testament.
   assert.strictEqual(S.recompose({ communs: ['A', 'B'], autres: [], succession: 1 }).optionUsufruitLegale, true);
 });
+
+const P = S.PARAMS_DEFAUT;
+test('Démembrement : la nue-propriété réduit les droits (barème 669)', () => {
+  const r = S.demembrement({ valeur: 500000, age: 65, enfants: 2, donateurs: 2 }, P);
+  assert.strictEqual(r.us, 0.4);
+  assert.strictEqual(r.valeurNuePropriete, 300000);
+  // Pleine propriété : 125 000 par parent et par enfant, 25 000 taxables → 3 194,35 € × 4.
+  assert.ok(Math.abs(r.pp.total - 12777.4) < 0.01);
+  assert.strictEqual(r.nuePropriete.total, 0);
+});
+
+test('Abattements renouvelables tous les 15 ans ; don d\'argent avant 80 ans', () => {
+  const r = S.abattements({ donateurs: 2, enfants: 2, petitsEnfants: 3, age: 60, ageMax: 90 }, P);
+  assert.deepStrictEqual(r.cycles.map((c) => c.age), [60, 75, 90]);
+  assert.strictEqual(r.cycles[0].total, 400000 + 6 * 31865 + 4 * 31865);
+  assert.strictEqual(r.cycles[2].donFamilial, 0);
+});
+
+test('Réserve héréditaire et quotité disponible', () => {
+  assert.strictEqual(S.reserve({ masse: 600000, enfants: 2 }).valeurQd, 200000);
+  assert.strictEqual(S.reserve({ masse: 600000, enfants: 4 }).qd, 0.25);
+  assert.strictEqual(S.reserve({ masse: 600000, enfants: 0, conjoint: true }).qd, 0.75);
+  assert.strictEqual(S.reserve({ masse: 600000, enfants: 0 }).qd, 1);
+});
+
+test('Union libre : 60 % après abattement ; donation entre époux ; frais d\'acquisition', () => {
+  assert.ok(Math.abs(S.couple({ montant: 200000 }, P).concubinage.droits - 119043.6) < 0.01);
+  const d = S.donationEpoux({ succession: 400000, enfants: 2, age: 72 }, P);
+  assert.deepStrictEqual(d.options.map((o) => Math.round(o.valeur)), [100000, 120000, 133333, 190000, 120000]);
+  const f = S.frais(S.EXEMPLES.frais);
+  assert.strictEqual(Math.round(f.departement), 12500);
+  assert.ok(Math.abs(f.emoluments - 2394.75) < 0.01);
+  assert.strictEqual(f.csi, 250);
+});

@@ -118,6 +118,158 @@
 
   const EXEMPLE_RECOMPOSE = { defunt: 'Paul', conjoint: 'Julie', communs: ['Emma'], autres: ['Léo'], succession: 400000 };
 
+  /* ---------- Barèmes communs ---------- */
+  function valeurUsufruit(bareme669, age) {
+    let v = bareme669.length ? bareme669[0].usufruit : 0;
+    for (const row of bareme669) if (age >= row.age) v = row.usufruit;
+    return v;
+  }
+  function droits(bareme, base) {
+    let t = 0;
+    for (let i = 0; i < bareme.length; i++) {
+      const ecart = bareme[i].taux - (i > 0 ? bareme[i - 1].taux : 0);
+      if (base > bareme[i].de) t += (base - bareme[i].de) * ecart;
+    }
+    return Math.max(0, t);
+  }
+  const ent = (v, min) => Math.max(min || 0, Math.round(n(v)));
+
+  /*
+   * Démembrement : donation de la nue-propriété d'un bien aux enfants, comparée à la donation en pleine propriété.
+   * Le bien appartient aux donateurs à parts égales ; chaque donateur donne sa part, chaque enfant reçoit autant.
+   */
+  function demembrement(d, p) {
+    const valeur = n(d.valeur), enfants = ent(d.enfants, 1), donateurs = ent(d.donateurs, 1);
+    const us = valeurUsufruit(p.bareme669, n(d.age)), np = 1 - us;
+    const calc = (fraction) => {
+      const parDonateurParEnfant = (valeur * fraction) / donateurs / enfants;
+      const taxable = Math.max(0, parDonateurParEnfant - p.abattEnfant);
+      const droitsParEnfant = droits(p.bareme777, taxable) * donateurs;
+      return { recuParEnfant: parDonateurParEnfant * donateurs, abattementParEnfant: p.abattEnfant * donateurs, taxableParEnfant: taxable * donateurs, droitsParEnfant, total: droitsParEnfant * enfants };
+    };
+    const pp = calc(1), npc = calc(np);
+    return { valeur, us, np, valeurUsufruit: valeur * us, valeurNuePropriete: valeur * np, enfants, donateurs, pp, nuePropriete: npc, economie: pp.total - npc.total };
+  }
+
+  /*
+   * Abattements renouvelables tous les 15 ans : ce qui peut être donné sans droits à chaque « rechargement ».
+   * Le don familial de sommes d'argent (art. 790 G) suppose un donateur de moins de 80 ans.
+   */
+  function abattements(d, p) {
+    const donateurs = ent(d.donateurs, 1), enfants = ent(d.enfants), petits = ent(d.petitsEnfants);
+    const age = n(d.age), annee = ent(d.annee) || new Date().getFullYear(), ageMax = n(d.ageMax) || 90;
+    const cycles = [];
+    for (let k = 0; age + 15 * k <= ageMax && k < 6; k++) {
+      const a = age + 15 * k;
+      const argent = a < p.ageLimiteDonFamilial;
+      const c = {
+        annee: annee + 15 * k, age: a,
+        enfants: donateurs * enfants * p.abattEnfant,
+        petitsEnfants: donateurs * petits * p.abattPetitEnfant,
+        donFamilial: argent ? donateurs * enfants * p.donFamilial : 0,
+      };
+      c.total = c.enfants + c.petitsEnfants + c.donFamilial;
+      cycles.push(c);
+    }
+    return { cycles, total: cycles.reduce((t, c) => t + c.total, 0), parCycle: cycles.length ? cycles[0].total : 0 };
+  }
+
+  /* Réserve héréditaire et quotité disponible (art. 913 et 914-1 C. civ.). */
+  function reserve(d) {
+    const masse = n(d.masse), enfants = ent(d.enfants);
+    let qd, reservataires;
+    if (enfants >= 3) qd = 0.25;
+    else if (enfants === 2) qd = 1 / 3;
+    else if (enfants === 1) qd = 0.5;
+    else qd = d.conjoint ? 0.75 : 1;
+    if (enfants) reservataires = 'enfants';
+    else reservataires = d.conjoint ? 'conjoint' : null;
+    const res = 1 - qd;
+    return { masse, enfants, qd, reserve: res, valeurQd: masse * qd, valeurReserve: masse * res, parEnfant: enfants ? (masse * res) / enfants : 0, reservataires };
+  }
+
+  /* Mariage, pacs, concubinage : droits de succession sur ce que l'on transmet à son partenaire. */
+  function couple(d, p) {
+    const m = n(d.montant);
+    const concubin = droits([{ de: 0, taux: p.tauxTiers }], Math.max(0, m - p.abattTiers));
+    return {
+      montant: m,
+      mariage: { droits: 0, recu: m },
+      pacs: { droits: 0, recu: m },
+      concubinage: { droits: concubin, recu: m - concubin },
+    };
+  }
+
+  /*
+   * Donation entre époux (enfants communs) : valeur de ce que reçoit le conjoint selon l'option,
+   * l'usufruit étant évalué selon son âge (art. 669 CGI).
+   */
+  function donationEpoux(d, p) {
+    const s = n(d.succession), enfants = ent(d.enfants, 1);
+    const us = valeurUsufruit(p.bareme669, n(d.age));
+    const qd = enfants >= 3 ? 0.25 : enfants === 2 ? 1 / 3 : 0.5;
+    const opt = (code, libelle, pp, usBase, ddv) => ({ code, libelle, ddv, pp: pp * s, usufruitSur: usBase * s, valeur: pp * s + usBase * s * us, enfants: s - pp * s - usBase * s * us });
+    return {
+      succession: s, enfants, us, qd,
+      options: [
+        opt('legal-pp', '¼ en pleine propriété', 0.25, 0, false),
+        opt('legal-us', 'Usufruit de tout', 0, 1, false),
+        opt('ddv-qd', 'Quotité disponible en pleine propriété', qd, 0, true),
+        opt('ddv-mixte', '¼ en pleine propriété et ¾ en usufruit', 0.25, 0.75, true),
+        opt('ddv-us', 'Usufruit de tout', 0, 1, true),
+      ],
+    };
+  }
+
+  /*
+   * Frais d'acquisition d'un bien ancien : droits de mutation (département, commune, frais d'assiette de l'État),
+   * émoluments du notaire (barème proportionnel) et TVA, contribution de sécurité immobilière, débours et formalités.
+   */
+  function frais(d) {
+    const prix = n(d.prix), mobilier = Math.min(n(d.mobilier), prix);
+    const assiette = prix - mobilier;
+    const departement = assiette * n(d.tauxDepartement);
+    const commune = assiette * n(d.tauxCommune);
+    const assietteEtat = departement * n(d.fraisAssiette);
+    let emoluments = 0, bas = 0;
+    (d.tranches || []).forEach((t) => {
+      const haut = t.jusqua === null || t.jusqua === undefined ? Infinity : t.jusqua;
+      if (assiette > bas) emoluments += (Math.min(assiette, haut) - bas) * n(t.taux);
+      bas = haut;
+    });
+    const tva = (emoluments + n(d.formalitesHT)) * n(d.tva);
+    const csi = Math.max(15, assiette * n(d.tauxCsi));
+    const postes = [
+      { code: 'departement', libelle: 'Le département', valeur: departement },
+      { code: 'commune', libelle: 'La commune', valeur: commune },
+      { code: 'etat', libelle: 'L\'État (TVA, frais d\'assiette, sécurité immobilière)', valeur: tva + assietteEtat + csi },
+      { code: 'notaire', libelle: 'Le notaire (sa rémunération)', valeur: emoluments + n(d.formalitesHT) },
+      { code: 'debours', libelle: 'Débours (documents, cadastre, géomètre…)', valeur: n(d.debours) },
+    ];
+    const total = postes.reduce((t, x) => t + x.valeur, 0);
+    return { prix, assiette, departement, commune, assietteEtat, emoluments, tva, csi, postes, total, pourcentage: prix ? total / prix : 0, notaire: emoluments + n(d.formalitesHT) };
+  }
+
+  const PARAMS_DEFAUT = {
+    abattEnfant: 100000, abattPetitEnfant: 31865, donFamilial: 31865, ageLimiteDonFamilial: 80,
+    tauxTiers: 0.6, abattTiers: 1594,
+    bareme777: [{ de: 0, taux: 0.05 }, { de: 8072, taux: 0.1 }, { de: 12109, taux: 0.15 }, { de: 15932, taux: 0.2 }, { de: 552324, taux: 0.3 }, { de: 902838, taux: 0.4 }, { de: 1805677, taux: 0.45 }],
+    bareme669: [{ age: 0, usufruit: 0.9 }, { age: 21, usufruit: 0.8 }, { age: 31, usufruit: 0.7 }, { age: 41, usufruit: 0.6 }, { age: 51, usufruit: 0.5 }, { age: 61, usufruit: 0.4 }, { age: 71, usufruit: 0.3 }, { age: 81, usufruit: 0.2 }, { age: 91, usufruit: 0.1 }],
+  };
+
+  const EXEMPLES = {
+    demembrement: { bien: 'Maison familiale', valeur: 500000, age: 65, enfants: 2, donateurs: 2 },
+    abattements: { donateurs: 2, enfants: 2, petitsEnfants: 3, age: 60, ageMax: 90 },
+    reserve: { masse: 600000, enfants: 2, conjoint: true },
+    couple: { montant: 200000, prenomA: 'Sophie', prenomB: 'Marc' },
+    donationEpoux: { succession: 400000, enfants: 2, age: 72, conjoint: 'Hélène', defunt: 'Bernard' },
+    frais: {
+      prix: 250000, mobilier: 0, tauxDepartement: 0.05, tauxCommune: 0.012, fraisAssiette: 0.0237,
+      tranches: [{ jusqua: 6500, taux: 0.0387 }, { jusqua: 17000, taux: 0.01596 }, { jusqua: 60000, taux: 0.01064 }, { jusqua: null, taux: 0.00799 }],
+      tva: 0.2, tauxCsi: 0.001, formalitesHT: 800, debours: 400,
+    },
+  };
+
   const EXEMPLE = {
     a: { prenom: 'Camille', avant: 60000, heritage: 0 },
     b: { prenom: 'Alex', avant: 15000, heritage: 80000 },
@@ -129,5 +281,5 @@
     decede: 'a',
   };
 
-  return { masses, divorce, deces, recompose, EXEMPLE, EXEMPLE_RECOMPOSE };
+  return { masses, divorce, deces, recompose, valeurUsufruit, droits, demembrement, abattements, reserve, couple, donationEpoux, frais, PARAMS_DEFAUT, EXEMPLES, EXEMPLE, EXEMPLE_RECOMPOSE };
 });
