@@ -4,6 +4,6 @@
   "private": true,
   "description": "Outils de calcul pour l'étude notariale",
   "scripts": {
-    "test": "node --test tests/engines.test.js tests/succession.test.js tests/origine.test.js tests/etat.test.js tests/dossiers.test.js tests/extraction.test.js tests/conjoint.test.js tests/courriers.test.js"
+    "test": "node --test tests/engines.test.js tests/succession.test.js tests/origine.test.js tests/etat.test.js tests/dossiers.test.js tests/extraction.test.js tests/conjoint.test.js tests/courriers.test.js tests/supports.test.js"
   }
 }
