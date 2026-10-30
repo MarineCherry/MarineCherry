@@ -108,10 +108,7 @@
       ui.field('Payé par ' + nomA(d), ui.numberInput({ value: x.partA, percent: true, onChange: (v) => { x.partA = v === null ? 0.5 : v; maj(); } })),
       ui.button('Retirer', { icon: 'trash', variant: 'ghost', small: true, onClick: () => { d.acquis.splice(i, 1); refaire(); maj(); } })));
     return [epoux('a'), epoux('b'), ...acquis,
-      ui.button('Ajouter un achat', { icon: 'plus', variant: 'soft', small: true, onClick: () => { d.acquis.push({ libelle: 'Achat', valeur: 0, partA: 0.5 }); refaire(); maj(); } }),
-      h('div', { class: 'sv-panneau-bloc' },
-        ui.field('Enfants communs', ui.numberInput({ value: d.enfants, onChange: (v) => { d.enfants = Math.max(0, Math.round(v || 0)); maj(); } })),
-        ui.field('Décès de', ui.segmented({ value: d.decede, small: true, options: [{ value: 'a', label: nomA(d) }, { value: 'b', label: nomB(d) }], onChange: (v) => { d.decede = v; maj(); } })))];
+      ui.button('Ajouter un achat', { icon: 'plus', variant: 'soft', small: true, onClick: () => { d.acquis.push({ libelle: 'Achat', valeur: 0, partA: 0.5 }); refaire(); maj(); } })];
   }
 
   const CONTRAT = {
@@ -120,7 +117,7 @@
     exemple: E.EXEMPLE,
     panneau: panneauContrat,
     titre: 'Communauté légale ou séparation de biens',
-    resume: 'Les trois masses de biens, puis ce que devient le patrimoine du couple en cas de divorce et en cas de décès.',
+    resume: 'Les trois paniers de biens, à qui appartient chaque bien selon le régime, et qui repart avec quoi en cas de divorce.',
     icone: 'alliances',
     diapos: [
       {
@@ -218,27 +215,6 @@
             e(1, carte(r.communaute, 'Communauté légale', 'commun', true)),
             e(2, carte(r.separation, 'Séparation de biens', 'sep', false)),
             e(3, Math.abs(ecart) > 0.5 ? h('p', { class: 'sv-bulle-info' }, dessin('balance'), 'Avec la communauté, ' + nomDe(d, gagnant) + ' repart avec ' + fmtEuro(Math.abs(ecart)) + ' de plus.') : null));
-        },
-      },
-      {
-        titre: (d) => 'En cas de décès de ' + nomDe(d, d.decede === 'b' ? 'b' : 'a'),
-        etapes: 4,
-        rendu: (d) => {
-          const r = E.deces(d);
-          const v = nomDe(d, r.vivant), mort = nomDe(d, r.mort);
-          const frac = r.fraction < 1 ? '¼' : 'Tout';
-          const ligne = (lib, valeur, cls, detail) => h('div', { class: 'sv-ld ' + (cls || '') }, h('span', { class: 'sv-ld-lib' }, lib), h('span', { class: 'sv-ld-val' }, fmtEuro(valeur)), detail ? h('small', null, detail) : null);
-          const carte = (x, titre, cls, avecCommun) => h('div', { class: 'sv-calcul sv-' + cls }, h('h3', null, titre),
-            ligne(v + ' garde', x.garde, 'sv-ld-' + r.vivant, avecCommun ? 'ses biens ' + fmtEuro(x.dontPropres) + ' + ½ des communs ' + fmtEuro(x.dontCommun) : 'ses biens'),
-            ligne(v + ' hérite', x.herite, 'sv-ld-herite', (frac === 'Tout' ? 'toute' : frac + ' de') + ' la succession de ' + mort + ' (' + fmtEuro(x.succession) + ')'),
-            ligne('Total pour ' + v, x.total, 'sv-ld-total'),
-            d.enfants ? ligne('Les enfants', x.enfants, 'sv-ld-enfants', 'le reste de la succession') : null);
-          const ecart = r.communaute.total - r.separation.total;
-          return h('div', { class: 'sv-col' },
-            h('p', { class: 'sv-intro' }, 'Sans testament : ' + v + ' garde ses biens, puis hérite ' + (r.fraction < 1 ? 'd\'un quart de la succession de ' + mort + '.' : 'de toute la succession (ni enfant, ni père et mère).')),
-            h('div', { class: 'sv-deux' }, e(1, carte(r.communaute, 'Communauté légale', 'commun', true)), e(2, carte(r.separation, 'Séparation de biens', 'sep', false))),
-            e(3, Math.abs(ecart) > 0.5 ? h('p', { class: 'sv-bulle-info' }, dessin('bouclier'), 'Avec la ' + (ecart > 0 ? 'communauté' : 'séparation de biens') + ', ' + v + ' conserve ' + fmtEuro(Math.abs(ecart)) + ' de plus.') : null),
-            e(4, h('p', { class: 'sv-note' }, 'Un testament ou une donation entre époux peut augmenter la part du conjoint, quel que soit le régime.')));
         },
       },
       {
