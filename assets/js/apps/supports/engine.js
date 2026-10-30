@@ -89,6 +89,35 @@
     return { mort, vivant, fraction, communaute: calc(m.communaute), separation: calc(m.separation) };
   }
 
+  /*
+   * Famille recomposée : succession du défunt (sans les biens du conjoint), enfants communs et enfants
+   * d'une autre union. Sans testament, le conjoint reçoit ¼ en pleine propriété (seule option dès qu'un enfant
+   * n'est pas commun, art. 757 C. civ.) ; ce quart passera ensuite aux héritiers du conjoint (ses propres enfants),
+   * jamais aux enfants de l'autre union. Avec un testament ou une donation entre époux en usufruit, le conjoint
+   * profite de tout sa vie durant et les enfants reçoivent la nue-propriété à parts égales, puis la pleine
+   * propriété au décès du conjoint.
+   */
+  function recompose(d) {
+    const s = n(d.succession);
+    const communs = (d.communs || []).filter((x) => (x || '').trim()), autres = (d.autres || []).filter((x) => (x || '').trim());
+    const nb = communs.length + autres.length;
+    const partEnfant = nb ? (0.75 * s) / nb : 0;
+    const quart = nb ? s / 4 : s;
+    // Le quart du conjoint revient ensuite à ses enfants (les enfants communs) ; à défaut, à sa propre famille.
+    const retour = communs.length ? quart / communs.length : 0;
+    const enfants = communs.map((nom) => ({ nom, commun: true, sans: partEnfant, plusTard: retour, totalSans: partEnfant + retour, avec: nb ? s / nb : 0 }))
+      .concat(autres.map((nom) => ({ nom, commun: false, sans: partEnfant, plusTard: 0, totalSans: partEnfant, avec: nb ? s / nb : 0 })));
+    return {
+      succession: s, nbEnfants: nb, communs: communs.length, autres: autres.length,
+      optionUsufruitLegale: nb > 0 && autres.length === 0,
+      sans: { conjoint: quart, versFamilleConjoint: communs.length ? 0 : quart },
+      avec: { usufruit: s },
+      enfants,
+    };
+  }
+
+  const EXEMPLE_RECOMPOSE = { defunt: 'Paul', conjoint: 'Julie', communs: ['Emma'], autres: ['Léo'], succession: 400000 };
+
   const EXEMPLE = {
     a: { prenom: 'Camille', avant: 60000, heritage: 0 },
     b: { prenom: 'Alex', avant: 15000, heritage: 80000 },
@@ -100,5 +129,5 @@
     decede: 'a',
   };
 
-  return { masses, divorce, deces, EXEMPLE };
+  return { masses, divorce, deces, recompose, EXEMPLE, EXEMPLE_RECOMPOSE };
 });

@@ -70,7 +70,14 @@
         const v = props[k];
         if (v === null || v === undefined || v === false || k === '__svg') continue;
         if (k === 'class') el.setAttribute('class', Array.isArray(v) ? v.filter(Boolean).join(' ') : v);
-        else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+        else if (k === 'style' && typeof v === 'object') {
+          // Les variables CSS (« --c ») ne peuvent être posées que par setProperty.
+          for (const p in v) {
+            if (v[p] === null || v[p] === undefined) continue;
+            if (p.startsWith('--')) el.style.setProperty(p, v[p]);
+            else el.style[p] = v[p];
+          }
+        }
         else if (k === 'dataset') Object.assign(el.dataset, v);
         else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
         else if (k === 'html') el.innerHTML = v;

@@ -36,3 +36,18 @@ test('Décès : le conjoint garde ses biens et hérite du quart (enfants communs
   // Sans enfant (ni père et mère) : la totalité.
   assert.strictEqual(S.deces(Object.assign({}, D, { enfants: 0 })).separation.total, 515000);
 });
+
+test('Famille recomposée : le quart du conjoint ne revient jamais à l\'enfant d\'une autre union', () => {
+  const r = S.recompose({ defunt: 'Paul', conjoint: 'Julie', communs: ['Emma'], autres: ['Léo'], succession: 400000 });
+  assert.strictEqual(r.optionUsufruitLegale, false);
+  assert.strictEqual(r.sans.conjoint, 100000);
+  const [emma, leo] = r.enfants;
+  assert.deepStrictEqual([emma.sans, emma.plusTard, emma.totalSans, emma.avec], [150000, 100000, 250000, 200000]);
+  assert.deepStrictEqual([leo.sans, leo.plusTard, leo.totalSans, leo.avec], [150000, 0, 150000, 200000]);
+  // Sans enfant commun : le quart part dans la famille du conjoint.
+  const s = S.recompose({ communs: [], autres: ['Léo', 'Zoé'], succession: 400000 });
+  assert.strictEqual(s.sans.versFamilleConjoint, 100000);
+  assert.deepStrictEqual(s.enfants.map((x) => x.totalSans), [150000, 150000]);
+  // Tous les enfants communs : l'option pour l'usufruit existe sans testament.
+  assert.strictEqual(S.recompose({ communs: ['A', 'B'], autres: [], succession: 1 }).optionUsufruitLegale, true);
+});
