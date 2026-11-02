@@ -1254,3 +1254,4 @@ body.avec-fiches .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .qt-trop { color: var(--warn, #b25e09); font-weight: 600; }
 @media (max-width: 640px) { .qt-vers { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px; } .qt-vers > .field:nth-child(2) { grid-column: 1 / -1; grid-row: 1; } }
 @media (max-width: 640px) { .segmented .segment { white-space: normal; height: auto; min-height: 30px; padding-top: 5px; padding-bottom: 5px; line-height: 1.2; } }
+.qt-vers-type { grid-column: 1 / -1; }

@@ -49,7 +49,7 @@ test('frais du syndic comptés dans le coût et repris dans la clause', () => {
   assert.equal(r.base, 330600);
   assert.ok(r.equilibre);
   const txt = Q.clauseTexte(Q.clauseActe(d, r, (x) => String(x)).blocs);
-  assert.match(txt, /Frais du syndic\t600,00 EUROS/);
+  assert.match(txt, /Provision syndic et taxe foncière\t600,00 EUROS/);
 });
 
 test('versements : dû à l\'étude, déjà versé et reste à verser', () => {
@@ -57,11 +57,17 @@ test('versements : dû à l\'étude, déjà versé et reste à verser', () => {
   const v = Q.versements(Q.EXEMPLE, r);
   // Frais de prêt réglés à la banque : apports 50 000 − 3 500 et 20 000 − 3 500, plus 130 000 de prêt chacun ;
   // somme globale appelée : 323 000 (coût hors frais de prêt).
-  assert.deepStrictEqual(v.lignes.map((l) => [l.apport, l.pret, l.du, l.verse, l.reste]),
-    [[46500, 130000, 176500, 15000, 161500], [16500, 130000, 146500, 0, 146500]]);
+  // Déjà versé par Julie : acompte 15 000 + provision sur frais 500 ; prêt à recevoir à la signature.
+  assert.deepStrictEqual(v.lignes.map((l) => [l.apport, l.pret, l.du, l.verse, l.pretARecevoir, l.virement]),
+    [[46500, 130000, 176500, 15500, 130000, 31000], [16500, 130000, 146500, 0, 130000, 16500]]);
   assert.strictEqual(v.besoin, 323000);
   assert.ok(v.coherent);
-  assert.strictEqual(v.reste, 308000);
+  assert.strictEqual(v.virement, 47500);
+  // Prêt de Thomas déjà débloqué en partie.
+  const d2 = JSON.parse(JSON.stringify(Q.EXEMPLE));
+  d2.acquereurs[1].versements = [{ type: 'pret', libelle: 'Déblocage du prêt', montant: 100000 }];
+  const l2 = Q.versements(d2, Q.calculer(d2)).lignes[1];
+  assert.deepStrictEqual([l2.verse, l2.pretARecevoir, l2.virement], [100000, 30000, 16500]);
   // Frais de prêt appelés par l'étude : l'apport entier.
   const d = Object.assign({}, Q.EXEMPLE, { fraisPretsEtude: true });
   const w = Q.versements(d, Q.calculer(d));

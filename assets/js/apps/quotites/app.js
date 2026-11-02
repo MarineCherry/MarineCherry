@@ -21,7 +21,7 @@
 
   const nouvelAcquereur = (nom) => ({ id: uid('a'), civilite: '', nom: nom || '', versements: [], apports: [{ id: uid('p'), libelle: 'Apport personnel', montant: null }] });
   // Postes du coût de l'opération, dans l'ordre de la clause de l'étude.
-  const POSTES = [['prix', 'Prix'], ['travaux', 'Montant des travaux à effectuer'], ['fraisVente', 'Frais de la vente'], ['fraisNegociation', 'Frais de négociation'], ['fraisSyndic', 'Frais du syndic']];
+  const POSTES = [['prix', 'Prix'], ['travaux', 'Montant des travaux à effectuer'], ['fraisVente', 'Frais de la vente'], ['fraisNegociation', 'Frais de négociation'], ['fraisSyndic', 'Provision syndic et taxe foncière']];
   const emploisDefaut = () => POSTES.map(([code, libelle]) => ({ id: uid('e'), code, libelle, montant: null }));
   function empty() {
     return {
@@ -177,48 +177,68 @@
   }
 
   /* ---------- Versements ---------- */
+  const TYPES = [{ value: 'perso', label: 'Fonds personnels' }, { value: 'pret', label: 'Déblocage du prêt' }];
   function recapVersements(s, r) {
     const v = E.versements(s, r);
     const nom = (l, i) => l.nom || 'Acquéreur ' + (i + 1);
-    const resteTxt = (x) => (x < -0.005 ? h('span', { class: 'qt-trop' }, 'Trop-versé ' + fmtEuro(-x)) : h('strong', null, fmtEuro(Math.max(0, x))));
+    const virementTxt = (x) => (x < -0.005 ? h('span', { class: 'qt-trop' }, 'Trop-versé ' + fmtEuro(-x)) : h('strong', null, fmtEuro(Math.max(0, x))));
     const tableau = ui.table([
       { label: 'Acquéreur', render: (l) => h('span', { class: 'qt-nom', style: { '--c': COULEURS[v.lignes.indexOf(l) % COULEURS.length] } }, h('span', { class: 'qt-pastille' }), nom(l, v.lignes.indexOf(l))) },
-      { label: 'Apport', num: true, render: (l) => fmtEuro(l.apport) },
-      { label: 'Prêt', num: true, render: (l) => fmtEuro(l.pret) },
-      { label: 'À verser à l\'étude', num: true, render: (l) => h('strong', null, fmtEuro(l.du)) },
-      { label: 'Déjà versé', num: true, render: (l) => fmtEuro(l.verse) },
-      { label: 'Reste à verser', num: true, render: (l) => resteTxt(l.reste) },
+      { label: 'Total à verser', num: true, render: (l) => fmtEuro(l.du) },
+      { label: 'Déjà versé', num: true, render: (l) => (l.verse ? '− ' + fmtEuro(l.verse) : '—') },
+      { label: 'Prêt à recevoir', num: true, render: (l) => (l.pretARecevoir ? '− ' + fmtEuro(l.pretARecevoir) : '—') },
+      { label: 'Virement à faire', num: true, render: (l) => virementTxt(l.virement) },
     ], v.lignes);
     tableau.querySelector('table').appendChild(h('tfoot', null, h('tr', { class: 'strong' }, h('td', null, 'Total'),
-      h('td', { class: 'num' }, fmtEuro(v.apport)), h('td', { class: 'num' }, fmtEuro(v.pret)), h('td', { class: 'num' }, fmtEuro(v.du)), h('td', { class: 'num' }, fmtEuro(v.verse)), h('td', { class: 'num' }, resteTxt(v.reste)))));
+      h('td', { class: 'num' }, fmtEuro(v.du)), h('td', { class: 'num' }, v.verse ? '− ' + fmtEuro(v.verse) : '—'),
+      h('td', { class: 'num' }, v.pretARecevoir ? '− ' + fmtEuro(v.pretARecevoir) : '—'), h('td', { class: 'num' }, virementTxt(v.virement)))));
     return { v, tableau, nom };
+  }
+  // Décompte texte de chaque acquéreur (pour un courrier ou un mail).
+  function decompteTexte(s, v, nom) {
+    const ligne = (lib, x) => lib + ' : ' + fmtEuro(x);
+    return [s.reference || 'Décompte des fonds à verser'].concat(v.lignes.map((l, i) => [
+      '', nom(l, i).toUpperCase(),
+      ligne('Total à verser (apport ' + fmtEuro(l.apport) + ' + prêt ' + fmtEuro(l.pret) + ')', l.du),
+      l.versements.length || l.pretARecevoir ? 'Sommes à déduire :' : null,
+      ...l.versements.map((x) => '- ' + (x.libelle || (x.type === 'pret' ? 'Déblocage du prêt' : 'Versement')) + (x.date ? ' du ' + A.util.fmtDate(x.date) : '') + ' : ' + fmtEuro(Number(x.montant))),
+      l.pretARecevoir ? '- Montant du prêt à recevoir à la signature : ' + fmtEuro(l.pretARecevoir) : null,
+      l.virement < -0.005 ? ligne('Trop-versé à restituer', -l.virement) : ligne('Virement à faire avant la signature', Math.max(0, l.virement)),
+    ].filter((x) => x !== null).join('\n'))).join('\n');
   }
   function tabVersements(ctx) {
     const s = ctx.state;
     const saisie = s.acquereurs.map((a, i) => ui.card('Versements de ' + (a.nom || 'l\'acquéreur ' + (i + 1)), h('div', { class: 'qt-acq stack-sm', style: { '--c': COULEURS[i % COULEURS.length] } },
       h('div', { class: 'rows' }, (a.versements || []).map((x) => h('div', { class: 'row-line qt-vers' },
         f('Date', ctx.date(x, 'date')),
-        f('Nature', ctx.text(x, 'libelle', { placeholder: 'ex. dépôt de garantie, virement, déblocage du prêt' })),
+        f('Nature', ctx.text(x, 'libelle', { placeholder: 'ex. acompte, provision sur frais' })),
         f('Montant', ctx.num(x, 'montant', { suffix: '€' })),
-        retirer(ctx, a.versements, x)))),
+        retirer(ctx, a.versements, x),
+        h('div', { class: 'qt-vers-type' }, ui.segmented({ value: x.type, options: TYPES, small: true, onChange: (t) => {
+          x.type = t;
+          if (t === 'pret' && ['', 'acompte', 'provision sur frais', 'virement'].includes((x.libelle || '').toLowerCase())) x.libelle = 'Déblocage du prêt';
+          if (t === 'perso' && x.libelle === 'Déblocage du prêt') x.libelle = 'Virement';
+          ctx.render(); ctx.changed();
+        } }))))),
       !(a.versements || []).length ? h('p', { class: 'small muted' }, 'Aucun versement enregistré.') : null,
       ui.button('Ajouter un versement', { icon: 'plus', variant: 'soft', small: true, onClick: () => {
         a.versements = a.versements || [];
-        a.versements.push({ id: uid('v'), date: A.util.todayISO(), libelle: a.versements.length ? 'Virement' : 'Dépôt de garantie', montant: null });
+        const deja = a.versements.map((x) => (x.libelle || '').toLowerCase());
+        const libelle = !deja.some((x) => x.includes('acompte')) ? 'Acompte' : !deja.some((x) => x.includes('provision')) ? 'Provision sur frais' : 'Virement';
+        a.versements.push({ id: uid('v'), type: 'perso', date: A.util.todayISO(), libelle, montant: null });
         ctx.render(); ctx.changed();
       } }))));
     const recap = ctx.live((r) => {
       const { v, tableau, nom } = recapVersements(s, r);
       const copier = async () => {
-        const txt = [s.reference || 'Fonds à verser à l\'étude'].concat(v.lignes.map((l, i) => nom(l, i) + ' : à verser ' + fmtEuro(l.du) + ' (apport ' + fmtEuro(l.apport) + ' + prêt ' + fmtEuro(l.pret) + '), déjà versé ' + fmtEuro(l.verse)
-          + (l.reste < -0.005 ? ', trop-versé ' + fmtEuro(-l.reste) : ', reste à verser ' + fmtEuro(Math.max(0, l.reste))))).join('\n');
-        try { await navigator.clipboard.writeText(txt); ui.toast('Récapitulatif copié.'); } catch (e) { ui.toast('Copie impossible.', 'error'); }
+        try { await navigator.clipboard.writeText(decompteTexte(s, v, nom)); ui.toast('Décompte copié.'); } catch (e) { ui.toast('Copie impossible.', 'error'); }
       };
-      return ui.card('Reste à verser', h('div', { class: 'stack-sm' }, tableau,
+      return ui.card('Décompte des fonds', h('div', { class: 'stack-sm' }, tableau,
         v.coherent ? null : ui.note('Les apports saisis (' + fmtEuro(v.du) + ') ne correspondent pas aux fonds nécessaires à l\'étude (' + fmtEuro(v.besoin)
           + ' = coût de l\'acquisition' + (v.fraisALaBanque ? ' hors frais de prêt' : '') + ') : écart de ' + fmtEuro(Math.abs(v.ecart)) + '. Vérifiez les apports dans le premier onglet.', 'warn'),
-        h('p', { class: 'small muted' }, 'Somme globale appelée : à verser = apport de chacun' + (v.fraisALaBanque ? ' (moins sa part des frais de prêt, réglés à la banque)' : '') + ' + sa part du prêt, à débloquer entre les mains de l\'étude. Enregistrez le déblocage du prêt comme un versement.'),
-        h('div', { class: 'chips' }, ui.button('Copier le récapitulatif', { icon: 'copy', variant: 'soft', small: true, onClick: copier }))));
+        h('p', { class: 'small muted' }, 'Total à verser = apport de chacun' + (v.fraisALaBanque ? ' (moins sa part des frais de prêt, réglés à la banque)' : '') + ' + sa part du prêt. '
+          + 'On déduit les sommes déjà reçues (acompte, provision sur frais…) et le prêt à recevoir à la signature : reste le virement que chacun doit faire. Un déblocage de prêt déjà reçu se saisit comme versement « Déblocage du prêt ».'),
+        h('div', { class: 'chips' }, ui.button('Copier le décompte', { icon: 'copy', variant: 'soft', small: true, onClick: copier }))));
     });
     const reglage = ui.card('Frais de prêt', f('Les frais de prêt sont', ctx.segmented(s, 'fraisPretsEtude', [{ value: false, label: 'Réglés directement à la banque' }, { value: true, label: 'Appelés par l\'étude' }], { small: true })));
     return h('div', { class: 'stack' }, recap, reglage, saisie);
@@ -242,7 +262,7 @@
         ui.table([{ label: 'Poste', key: 'libelle' }, { label: 'Montant', num: true, render: (x) => fmtEuro(x.montant) }], s.emplois.filter((x) => x.montant), { compact: true, total: { libelle: 'Total', montant: r.baseEmplois } }),
         h('h2', null, 'Financement et quotités'),
         resultat(s, r),
-        ...(E.versements(s, r).verse ? [h('h2', null, 'Fonds versés et reste à verser'), recapVersements(s, r).tableau] : []),
+        ...(E.versements(s, r).verse ? [h('h2', null, 'Décompte des fonds'), recapVersements(s, r).tableau] : []),
         h('div', { class: 'page-break' }),
         clauseHtml(clauseDe(s, r).blocs),
       ],
@@ -262,7 +282,11 @@
       s.fraisDansCout = true;
       s.methode = 2;
     }
-    POSTES.forEach(([code, libelle]) => { if (!s.emplois.some((x) => x.code === code)) s.emplois.push({ id: uid('e'), code, libelle, montant: null }); });
+    POSTES.forEach(([code, libelle]) => {
+      const x = s.emplois.find((e) => e.code === code);
+      if (x) x.libelle = libelle; else s.emplois.push({ id: uid('e'), code, libelle, montant: null });
+    });
+    s.acquereurs.forEach((a) => (a.versements || []).forEach((x) => { if (!x.type) x.type = /pr[eê]t/i.test(x.libelle || '') ? 'pret' : 'perso'; }));
     return s;
   }
 
