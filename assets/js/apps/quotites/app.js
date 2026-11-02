@@ -19,14 +19,18 @@
   };
   const COULEURS = ['#3d7be0', '#ee7552', '#34a483', '#8b5fd6', '#f0b23a', '#2f9aa8'];
 
-  const nouvelAcquereur = (nom) => ({ id: uid('a'), nom: nom || '', apports: [{ id: uid('p'), libelle: 'Apport personnel', montant: null }] });
+  const nouvelAcquereur = (nom) => ({ id: uid('a'), civilite: '', nom: nom || '', apports: [{ id: uid('p'), libelle: 'Apport personnel', montant: null }] });
+  // Postes du coût de l'opération, dans l'ordre de la clause de l'étude.
+  const POSTES = [['prix', 'Prix'], ['travaux', 'Montant des travaux à effectuer'], ['fraisVente', 'Frais de la vente'], ['fraisNegociation', 'Frais de négociation']];
+  const emploisDefaut = () => POSTES.map(([code, libelle]) => ({ id: uid('e'), code, libelle, montant: null }));
   function empty() {
     return {
       reference: '',
       acquereurs: [nouvelAcquereur(), nouvelAcquereur()],
-      emplois: [{ id: uid('e'), libelle: 'Prix de vente', montant: null }, { id: uid('e'), libelle: 'Frais d\'acquisition (droits et émoluments)', montant: null }, { id: uid('e'), libelle: 'Frais d\'agence (à la charge de l\'acquéreur)', montant: null }],
-      prets: [{ id: uid('k'), libelle: 'Prêt immobilier', capital: null, frais: null, egal: true, repartition: {} }],
-      fraisDansCout: false,
+      emplois: emploisDefaut(),
+      prets: [{ id: uid('k'), libelle: 'Prêt immobilier', preteur: '', capital: null, frais: null, egal: true, repartition: {} }],
+      fraisDansCout: true,
+      methode: 2,
     };
   }
   const isEmpty = (s) => !s.reference && s.acquereurs.every((a) => !a.nom) && s.emplois.every((x) => !x.montant);
@@ -42,7 +46,9 @@
 
     const acquereurs = ui.card('Les acquéreurs et leurs apports', h('div', { class: 'stack-sm' },
       s.acquereurs.map((a, i) => h('div', { class: 'qt-acq', style: { '--c': COULEURS[i % COULEURS.length] } },
-        h('div', { class: 'qt-acq-tete' }, h('span', { class: 'qt-pastille' }), f('Nom', ctx.text(a, 'nom', { structural: true, placeholder: 'Acquéreur ' + (i + 1) })),
+        h('div', { class: 'qt-acq-tete' }, h('span', { class: 'qt-pastille' }),
+          f('Civilité', ctx.segmented(a, 'civilite', [{ value: 'M', label: 'Monsieur' }, { value: 'Mme', label: 'Madame' }], { small: true })),
+          f('Prénom et NOM', ctx.text(a, 'nom', { structural: true, placeholder: 'Acquéreur ' + (i + 1) })),
           s.acquereurs.length > 2 ? retirer(ctx, s.acquereurs, a) : null),
         h('div', { class: 'rows' }, a.apports.map((p) => h('div', { class: 'row-line qt-ligne' },
           f('Apport', ctx.text(p, 'libelle', { placeholder: 'ex. épargne, donation, vente d\'un bien' })),
@@ -53,15 +59,17 @@
     { subtitle: 'Indiquez l\'origine des fonds : elle pourra être reprise dans l\'acte (déclaration d\'origine des deniers).' });
 
     const cout = ui.card('Coût de l\'acquisition', h('div', { class: 'stack-sm' },
-      h('div', { class: 'rows' }, s.emplois.map((x) => h('div', { class: 'row-line qt-ligne' },
-        f('Poste', ctx.text(x, 'libelle')), f('Montant', ctx.num(x, 'montant', { suffix: '€' })), retirer(ctx, s.emplois, x)))),
-      ui.button('Ajouter un poste', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.emplois.push({ id: uid('e'), libelle: '', montant: null }); ctx.render(); } })),
-    { subtitle: 'Prix, frais d\'acquisition, frais d\'agence à la charge de l\'acquéreur, travaux financés…' });
+      h('div', { class: 'qt-postes' }, s.emplois.filter((x) => x.code && x.code !== 'autre').map((x) => f(x.libelle, ctx.num(x, 'montant', { suffix: '€' }))),
+        h('div', { class: 'field' }, h('label', { class: 'field-label' }, 'Frais de prêt'), ctx.live((r) => h('div', { class: 'readonly' }, fmtEuro(r.fraisPrets) + (r.fraisDansCout ? '' : ' (non comptés)'))))),
+      h('div', { class: 'rows' }, s.emplois.filter((x) => !x.code || x.code === 'autre').map((x) => h('div', { class: 'row-line qt-ligne' },
+        f('Autre poste', ctx.text(x, 'libelle')), f('Montant', ctx.num(x, 'montant', { suffix: '€' })), retirer(ctx, s.emplois, x)))),
+      ui.button('Ajouter un autre poste', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.emplois.push({ id: uid('e'), code: 'autre', libelle: '', montant: null }); ctx.render(); } })),
+    { subtitle: 'Les frais de prêt viennent de la rubrique « Prêts ». Frais de négociation : honoraires d\'agence à la charge de l\'acquéreur.' });
 
     const prets = ui.card('Prêts', h('div', { class: 'stack-sm' },
       s.prets.map((p) => h('div', { class: 'qt-pret' },
         h('div', { class: 'row-line qt-ligne3' },
-          f('Prêt', ctx.text(p, 'libelle')), f('Capital emprunté', ctx.num(p, 'capital', { suffix: '€' })),
+          f('Prêt', ctx.text(p, 'libelle')), f('Auprès de', ctx.text(p, 'preteur', { placeholder: 'ex. Crédit Agricole Alpes Provence' })), f('Capital emprunté', ctx.num(p, 'capital', { suffix: '€' })),
           f('Frais du prêt', ctx.num(p, 'frais', { suffix: '€' }), { help: 'Garantie, dossier, courtage…' }), retirer(ctx, s.prets, p)),
         h('div', { class: 'qt-repartition' },
           f('Répartition entre les acquéreurs', ctx.segmented(p, 'egal', [{ value: true, label: 'À parts égales' }, { value: false, label: 'Autre répartition' }], { small: true, structural: true })),
@@ -70,8 +78,8 @@
             onChange: (v) => { p.repartition[a.id] = v; ctx.changed(); },
           })))) : null))),
       ui.button('Ajouter un prêt', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.prets.push({ id: uid('k'), libelle: '', capital: null, frais: null, egal: true, repartition: {} }); ctx.render(); } }),
-      f('Frais de prêt', ctx.segmented(s, 'fraisDansCout', [{ value: false, label: 'Payés sur l\'apport de chacun' }, { value: true, label: 'Ajoutés au coût de l\'acquisition' }], { small: true }),
-        { help: 'Par défaut, l\'apport déclaré par chacun comprend sa part des frais de prêt : cette part est déduite de son apport, seul le reste finance le bien.' })),
+      f('Frais de prêt', ctx.segmented(s, 'fraisDansCout', [{ value: true, label: 'Comptés dans le coût de l\'opération' }, { value: false, label: 'Déduits de l\'apport de chacun' }], { small: true, structural: true }),
+        { help: 'Méthode de la clause de l\'étude : les frais de prêt font partie du coût de l\'opération, financé par les apports (frais compris) et les prêts.' })),
     { subtitle: 'Un prêt souscrit ensemble est en principe supporté par moitié ; sinon, indiquez la part de chacun.' });
 
     return h('div', { class: 'stack' }, f('Dossier', ctx.text(s, 'reference', { placeholder: 'ex. Acquisition MARTIN / DURAND' })), acquereurs, cout, prets, ctx.live((r) => resultat(s, r)));
@@ -105,20 +113,63 @@
   }
 
   /* ---------- Clause ---------- */
-  function texteClause(s, r) {
-    const detail = s.emplois.filter((x) => x.montant).map((x) => (x.libelle || 'poste').toLowerCase() + ' ' + Math.round(x.montant).toLocaleString('fr-FR') + ' €').join(', ');
-    return E.clause(r, { detailCout: detail + (r.fraisDansCout && r.fraisPrets ? ', frais de prêt ' + Math.round(r.fraisPrets).toLocaleString('fr-FR') + ' €' : '') });
+  const enLettres = (x) => A.lettres.montant(x, 'EUR', true);
+  const clauseDe = (s, r) => E.clauseActe(s, r, enLettres);
+  // Mise en page de la clause (écran, impression et copie vers Word).
+  function clauseHtml(blocs) {
+    return h('div', { class: 'qt-acte' }, blocs.map((b) => {
+      if (b.type === 'titre') return h('h3', { class: 'qt-acte-titre' }, b.texte);
+      if (b.type === 'sous-titre') return h('h4', { class: 'qt-acte-st' }, b.texte);
+      if (b.type === 'p') return h('p', null, b.texte);
+      return h('table', { class: 'qt-acte-table' },
+        b.entete ? h('thead', null, h('tr', null, b.entete.map((c) => h('th', null, c)))) : null,
+        h('tbody', null, b.lignes.map((l) => h('tr', { class: (b.gras || []).includes(l[0]) ? 'gras' : null }, l.map((c, k) => h('td', { class: k ? 'num' : null }, c))))));
+    }));
+  }
+  // Fichier Word de la clause (tableaux compris).
+  function docxClause(blocs) {
+    const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const run = (t, gras) => '<w:r>' + (gras ? '<w:rPr><w:b/></w:rPr>' : '') + '<w:t xml:space="preserve">' + esc(t) + '</w:t></w:r>';
+    const para = (t, o) => '<w:p><w:pPr>' + (o && o.titre ? '<w:keepNext/><w:spacing w:before="240" w:after="120"/><w:jc w:val="center"/>' : o && o.st ? '<w:keepNext/><w:spacing w:before="200" w:after="80"/>' : '<w:spacing w:after="80"/><w:jc w:val="both"/>') + (o && o.droite ? '<w:jc w:val="right"/>' : '') + '</w:pPr>' + (t ? run(t, o && (o.titre || o.st || o.gras)) : '') + '</w:p>';
+    const bord = '<w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="auto"/></w:tblBorders>';
+    const corps = blocs.map((b) => {
+      if (b.type === 'titre') return para(b.texte.toUpperCase(), { titre: true });
+      if (b.type === 'sous-titre') return para(b.texte, { st: true });
+      if (b.type === 'p') return para(b.texte);
+      const lignes = (b.entete ? [b.entete] : []).concat(b.lignes);
+      return '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/>' + bord + '</w:tblPr>' + lignes.map((l, i) => '<w:tr>' + l.map((c, k) => '<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>'
+        + para(c, { gras: (b.entete && i === 0) || (b.gras || []).includes(l[0]), droite: k > 0 }) + '</w:tc>').join('') + '</w:tr>').join('') + '</w:tbl>' + para('');
+    }).join('');
+    const paquet = A.engines.courriers.paquetMinimal();
+    paquet['word/document.xml'] = paquet['word/document.xml'].replace('<w:body><w:p/>', '<w:body>' + corps);
+    return A.zip.ecrire(paquet);
   }
   function tabClause(ctx) {
     const s = ctx.state;
     return h('div', { class: 'stack' }, ctx.live((r) => {
-      const lignes = texteClause(s, r);
-      const texte = lignes.join('\n');
+      const c = clauseDe(s, r);
+      const vue = clauseHtml(c.blocs);
+      const copier = async () => {
+        const html = '<html><body>' + vue.outerHTML + '</body></html>';
+        try {
+          if (root.ClipboardItem) await navigator.clipboard.write([new root.ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([E.clauseTexte(c.blocs)], { type: 'text/plain' }) })]);
+          else await navigator.clipboard.writeText(E.clauseTexte(c.blocs));
+          ui.toast('Clause copiée : collez-la dans l\'acte (tableaux compris).');
+        } catch (e) { ui.toast('Copie impossible : utilisez « Télécharger en Word ».', 'error'); }
+      };
+      const word = () => {
+        const nom = 'Clause indivision - ' + (s.reference || s.acquereurs.map((a) => a.nom).filter(Boolean).join(' ') || 'acquisition') + '.docx';
+        const url = URL.createObjectURL(new Blob([docxClause(c.blocs)], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
+        const a = h('a', { href: url, download: nom.replace(/[\\/:*?"<>|]+/g, ' ') });
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      };
       return ui.card('Clause pour l\'acte', h('div', { class: 'stack-sm' },
-        h('div', { class: 'qt-clause' }, lignes.map((l) => h('p', null, l))),
-        h('div', null, ui.button('Copier le texte', { icon: 'copy', variant: 'primary', small: true, onClick: async () => {
-          try { await navigator.clipboard.writeText(texte); ui.toast('Clause copiée.'); } catch (e) { ui.toast('Copie impossible : sélectionnez le texte à la main.', 'error'); }
-        } }))), { subtitle: 'À adapter : origine des deniers, déclarations d\'emploi, clause d\'accroissement le cas échéant.' });
+        !r.equilibre ? ui.note('Le financement ne correspond pas au coût de l\'opération (écart de ' + fmtEuro(Math.abs(r.ecart)) + ') : vérifiez les montants avant de reprendre la clause.', 'warn') : null,
+        h('div', { class: 'chips' },
+          ui.button('Copier la clause', { icon: 'copy', variant: 'primary', small: true, onClick: copier }),
+          ui.button('Télécharger en Word', { icon: 'save', variant: 'soft', small: true, onClick: word })),
+        vue), { subtitle: 'Trame de l\'étude « Fixation de la proportion de propriété indivise », complétée avec le dossier.' });
     }));
   }
 
@@ -140,15 +191,26 @@
         ui.table([{ label: 'Poste', key: 'libelle' }, { label: 'Montant', num: true, render: (x) => fmtEuro(x.montant) }], s.emplois.filter((x) => x.montant), { compact: true, total: { libelle: 'Total', montant: r.baseEmplois } }),
         h('h2', null, 'Financement et quotités'),
         resultat(s, r),
-        h('h2', null, 'Clause'),
-        h('div', { class: 'qt-clause' }, texteClause(s, r).map((l) => h('p', null, l))),
+        h('div', { class: 'page-break' }),
+        clauseHtml(clauseDe(s, r).blocs),
       ],
       footer: 'Calcul établi d\'après les montants communiqués ; à vérifier avant reprise dans l\'acte.',
     }), 'Quotités ' + (s.reference || ''));
   }
   function normalize(s) {
     s.acquereurs = (s.acquereurs || []).map((a) => Object.assign(nouvelAcquereur(), a, { apports: a.apports && a.apports.length ? a.apports : nouvelAcquereur().apports }));
-    s.prets = (s.prets || []).map((p) => Object.assign({ egal: true, repartition: {} }, p));
+    s.prets = (s.prets || []).map((p) => Object.assign({ egal: true, repartition: {}, preteur: '' }, p));
+    // Dossiers créés avant la clause de l'étude : postes du coût et méthode de l'étude.
+    if (!(s.emplois || []).some((x) => x.code)) {
+      const anciens = s.emplois || [];
+      const postes = emploisDefaut();
+      ['prix', 'fraisVente', 'fraisNegociation'].forEach((code, i) => { if (anciens[i]) postes.find((x) => x.code === code).montant = anciens[i].montant; });
+      anciens.slice(3).forEach((x) => postes.push(Object.assign({}, x, { code: 'autre' })));
+      s.emplois = postes;
+      s.fraisDansCout = true;
+      s.methode = 2;
+    }
+    POSTES.forEach(([code, libelle]) => { if (!s.emplois.some((x) => x.code === code)) s.emplois.push({ id: uid('e'), code, libelle, montant: null }); });
     return s;
   }
 

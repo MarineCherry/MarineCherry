@@ -96,18 +96,137 @@
     ].concat(det);
   }
 
+  /*
+   * Clause de l'étude « Fixation de la proportion de propriété indivise », complétée avec le dossier.
+   * Renvoie des blocs : { type: 'titre' | 'sous-titre' | 'p' | 'table', texte, lignes }.
+   * enLettres(x) : montant en lettres et en chiffres (« CINQUANTE MILLE EUROS (50 000,00 EUR) »).
+   */
+  const CIVILITES = { M: 'Monsieur', Mme: 'Madame' };
+  function clauseActe(d, r, enLettres) {
+    const lettres = enLettres || ((x) => Math.round(x).toLocaleString('fr-FR') + ' EUROS');
+    const euros = (x) => (Math.round(x * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' EUROS';
+    const eur = (x) => Math.round(x).toLocaleString('fr-FR') + ' €';
+    const acq = (d.acquereurs || []).filter(Boolean);
+    const nomDe = (i) => {
+      const a = acq[i] || {};
+      return [CIVILITES[a.civilite] || '', (a.nom || 'XXXX').trim()].filter(Boolean).join(' ');
+    };
+    const emplois = (d.emplois || []).filter((x) => n(x.montant));
+    const parCode = (code) => somme(emplois.filter((x) => x.code === code), (x) => n(x.montant));
+    const prets = (d.prets || []).filter((x) => n(x.capital));
+    const fraisPrets = somme(d.prets || [], (x) => n(x.frais));
+    const fondsPerso = somme(r.lignes, (l) => l.apports);
+    const fondsEmpr = somme(prets, (x) => n(x.capital));
+    const cout = [
+      ['Prix', parCode('prix')],
+      ['Montant des travaux à effectuer', parCode('travaux')],
+      ['Frais de la vente', parCode('fraisVente')],
+      r.fraisDansCout ? ['Frais de prêt', fraisPrets] : null,
+      ['Frais de négociation', parCode('fraisNegociation')],
+    ].filter(Boolean).concat(emplois.filter((x) => !x.code || x.code === 'autre').map((x) => [x.libelle || 'Autre', n(x.montant)]))
+      .filter((x) => x[1] || ['Prix', 'Frais de la vente'].includes(x[0]));
+    const totalCout = somme(cout, (x) => x[1]);
+    const B = [];
+    const t = (texte) => B.push({ type: 'titre', texte });
+    const st = (texte) => B.push({ type: 'sous-titre', texte });
+    const p = (texte) => B.push({ type: 'p', texte });
+    const pct = (f) => (Math.round(f * 10000) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' %';
+
+    t('Fixation de la proportion de propriété indivise');
+    st('Proportions entre les acquéreurs');
+    p('Les ACQUEREURS font la présente acquisition dans les proportions indivises suivantes :');
+    r.lignes.forEach((l, i) => p(pct(l.quotiteArrondie) + ' en pleine propriété pour ' + nomDe(i)));
+    p('Ces quotités sont définitives et déterminent le droit de propriété de chacun des ACQUEREURS, elles concordent avec la répartition de l\'effort de financement entre eux tel que prévu ci-dessous.');
+
+    st('Détermination de la contribution des acquéreurs au financement');
+    p('Les ACQUEREURS détaillent leurs apports, leurs obligations aux charges vis-à-vis des créanciers et fixent leurs contributions respectives à celles-ci et ce afin d\'établir si nécessaire, lors de la liquidation, selon le cas, de leur régime matrimonial ou de l\'indivision, l\'existence de créances liées à un excès de contribution.');
+    p('Ils déclarent que les quotités d\'acquisition ont été calculées en tenant compte du coût global de l\'opération et de la prise en charge de chacun quant à son financement, ainsi qu\'il est détaillé ci-après.');
+
+    st('Coût et financement de l\'opération');
+    p('Le coût et le financement de l\'opération sont les suivants :');
+    B.push({ type: 'table', lignes: cout.map((x) => [x[0], euros(x[1])]).concat([['Ensemble', euros(totalCout)], ['', ''], ['FINANCEMENT', '']])
+      .concat([['Fonds personnels', euros(fondsPerso)], fondsEmpr ? ['Fonds empruntés', euros(fondsEmpr)] : null].filter(Boolean)).concat([['', ''], ['Ensemble', euros(fondsPerso + fondsEmpr)]]), gras: ['Ensemble', 'FINANCEMENT'] });
+
+    st('Prise en charge du financement de l\'opération');
+    st('A - Fonds personnels');
+    p('Le financement du prix et des frais au moyen de leur apport personnel est réalisé par chacun des ACQUEREURS à concurrence des sommes suivantes :');
+    r.lignes.forEach((l, i) => { if (l.apports) p(nomDe(i) + ' apporte ' + lettres(l.apports) + ' provenant de fonds lui appartenant à titre personnel.'); });
+
+    if (prets.length) {
+      st('B - Fonds empruntés');
+      prets.forEach((k, j) => {
+        const auprès = (k.preteur || '').trim() || '……………';
+        p((j === 0 ? 'A ce financement personnel s\'ajoute un financement extérieur' : 'S\'y ajoute un second financement extérieur') + ' à concurrence d\'une somme empruntée pour un montant de ' + lettres(n(k.capital)) + ' auprès de ' + auprès + '.');
+      });
+      p('Les ACQUEREURS sont, au titre de l\'obligation à la dette, solidaires de leur remboursement.');
+      prets.forEach((k, j) => {
+        const pp = parts(k, acq);
+        p('La prise en charge ' + (prets.length > 1 ? 'des remboursements du prêt ' + ((k.libelle || '').trim() ? '« ' + k.libelle.trim() + ' » ' : 'n° ' + (j + 1) + ' ') : 'de ces remboursements ') + 'sera assurée par eux de la façon suivante :');
+        acq.forEach((a, i) => p(nomDe(i) + ' à concurrence de ' + pct(pp[i])));
+      });
+      p('Cette convention est inopposable au créancier compte tenu de la solidarité rappelée ci-dessus.');
+      p('S\'il est dérogé à cette convention de répartition, il en sera tenu compte au jour de la liquidation de cette indivision, sous réserve d\'en justifier à cette date.');
+      p('L\'assurance décès-invalidité, dans la mesure où elle serait mise en œuvre, profitera en toute hypothèse à l\'indivision et ne sera pas constitutive d\'une créance.');
+    }
+
+    st('Récapitulatif de l\'effort respectif de financement');
+    const entete = [''].concat(r.lignes.map((l, i) => nomDe(i)), ['Total']);
+    const ligne = (lib, f, tot) => [lib].concat(r.lignes.map(f), [tot]);
+    const totalContrib = somme(r.lignes, (l) => l.contribution);
+    B.push({ type: 'table', entete, gras: ['Total', 'Soit en proportion du coût de l\'opération'], lignes: [
+      ligne('Apport personnel', (l) => eur(r.fraisDansCout ? l.apports : l.apports - l.fraisPrets), eur(r.fraisDansCout ? fondsPerso : fondsPerso - r.fraisPrets)),
+      prets.length ? ligne('Prêt', (l) => eur(l.prets), eur(fondsEmpr)) : null,
+      ligne('Total', (l) => eur(l.contribution), eur(totalContrib)),
+      ligne('Soit en proportion du coût de l\'opération', (l) => pct(l.quotiteArrondie), '100 %'),
+    ].filter(Boolean) });
+
+    st('C – Contribution à la dette – Modification');
+    p('Dans le cas où ces modalités de contribution à la dette ne pourraient pas être respectées, les ACQUEREURS pourront en modifier les règles. Mais, dans ce cas, les obligations nées de ce chef resteront néanmoins à la charge définitive des ACQUEREURS en proportion de leurs droits dans l\'indivision.');
+    p('Les ACQUEREURS entendent en outre écarter toute présomption de libéralité indirecte si la contribution effective de chacun d\'eux ne correspondait pas aux quotes-parts acquises. Cette différence constituera en toute hypothèse une créance entre époux ou entre indivisaires.');
+    p('Cette créance entre époux ou entre indivisaires ne sera exigible que lors de la liquidation du régime matrimonial ou de l\'indivision, ou lors de la vente ou du partage du bien.');
+    p('Elle ne pourra pas faire l\'objet d\'une compensation avec l\'obligation aux charges du mariage ou du ménage.');
+
+    st('D - Prise en charge d\'un financement extérieur ultérieur');
+    p('En cas de financement extérieur ultérieur pour des travaux, il est conseillé aux ACQUEREURS d\'établir également une convention de ce type afin de prévenir toute difficulté lors de la liquidation du régime matrimonial ou de l\'indivision. A défaut le financement sera présumé proportionnel aux quotités acquises.');
+
+    st('E - Prise en charge d\'un financement personnel ultérieur');
+    p('Si l\'un des ACQUEREURS améliore l\'état du bien indivis, ou si l\'indivision retire un profit des dépenses nécessaires à la conservation de l\'immeuble réalisées par l\'un des indivisaires seul, ou pour un montant supérieur à sa part dans l\'immeuble, il lui en sera tenu compte conformément aux dispositions de l\'article 815-13 du Code civil.');
+
+    st('F - Industrie personnelle');
+    p('Il est fait observer que l\'industrie personnelle des ACQUEREURS (leur travail) et celle de leurs ayants droit dans les travaux effectués, qu\'ils soient d\'entretien ou non, ne seront ni cause de créance ni cause d\'indemnité.');
+
+    st('G - Répartition lors de la revente ou du partage');
+    p('En cas de revente ou de partage du BIEN, et sauf accord contraire des parties à cette époque, il sera procédé de la manière suivante :');
+    p('a) Si, à cette date, tous les prêts contractés pour le financement de l\'acquisition ont été remboursés, la proportion de propriété déterminée aux présentes sera celle utilisée pour la répartition du prix (ou de la valeur retenue en cas de partage) :');
+    p('Toutes les charges afférentes au BIEN, telles que l\'impôt sur la plus-value, les impôts locaux et taxes exigibles ou à valoir, ainsi que les charges de toutes sortes exigibles ou estimées liées au BIEN et à son utilisation, en ce compris, le cas échéant, les frais attachés à la radiation des inscriptions, seront réparties en proportion des quotités d\'acquisition.');
+    p('Sur la quote-part revenant à chacune des parties seront retenues les sommes dont elles sont redevables l\'une envers l\'autre.');
+    p('b) Si, à cette date, tous les prêts contractés pour le financement de l\'acquisition n\'ont pas été intégralement remboursés, la proportion de propriété déterminée aux présentes sera celle utilisée pour la répartition du prix (ou de la valeur retenue en cas de partage) :');
+    p('Sur la quote-part de prix ainsi définie sera imputé tout ce qui concernera le remboursement du solde du ou des prêts (capital, intérêts, indemnités, etc.) réparti conformément aux proportions fixées ci-dessus quant à la prise en charge de ces remboursements.');
+    p('Toutes les autres charges afférentes au BIEN énumérées ci-dessus au a) seront réparties en proportion des quotités d\'acquisition.');
+    p('Sur la quote-part revenant définitivement à chacune des parties seront retenues les sommes dont elles sont redevables l\'une envers l\'autre.');
+    p('Ces conventions sont acceptées par chacun des ACQUEREURS indivisaires.');
+    p('ETANT PRECISE que les conventions qui précèdent s\'appliqueront à défaut de dispositions contraires contenues dans le contrat de mariage ou le pacte civil de solidarité pouvant lier les ACQUEREURS.');
+    return { blocs: B, totalCout, fondsPerso, fondsEmpr, equilibre: Math.abs(totalCout - (fondsPerso + fondsEmpr) + (r.fraisDansCout ? 0 : fraisPrets)) < 0.5 };
+  }
+
+  // Texte brut (copie) : tableaux en colonnes séparées par des tabulations.
+  function clauseTexte(blocs) {
+    return blocs.map((b) => (b.type === 'table' ? [b.entete].concat(b.lignes).filter(Boolean).map((l) => l.join('\t')).join('\n') : b.texte)).join('\n\n');
+  }
+
   const EXEMPLE = {
     reference: '',
     acquereurs: [
-      { id: 'a1', nom: 'Julie MARTIN', apports: [{ id: 'p1', libelle: 'Épargne', montant: 50000 }] },
-      { id: 'a2', nom: 'Thomas DURAND', apports: [{ id: 'p2', libelle: 'Épargne', montant: 20000 }] },
+      { id: 'a1', civilite: 'Mme', nom: 'Julie MARTIN', apports: [{ id: 'p1', libelle: 'Épargne', montant: 50000 }] },
+      { id: 'a2', civilite: 'M', nom: 'Thomas DURAND', apports: [{ id: 'p2', libelle: 'Épargne', montant: 20000 }] },
     ],
     emplois: [
-      { id: 'e1', libelle: 'Prix de vente', montant: 300000 },
-      { id: 'e2', libelle: 'Frais d\'acquisition (droits et émoluments)', montant: 23000 },
+      { id: 'e1', code: 'prix', libelle: 'Prix', montant: 300000 },
+      { id: 'e2', code: 'fraisVente', libelle: 'Frais de la vente', montant: 23000 },
     ],
-    prets: [{ id: 'k1', libelle: 'Prêt immobilier', capital: 260000, frais: 7000, egal: true, repartition: {} }],
+    prets: [{ id: 'k1', libelle: 'Prêt immobilier', preteur: 'Banque Exemple', capital: 260000, frais: 7000, egal: true, repartition: {} }],
+    fraisDansCout: true,
   };
 
-  return { calculer, parts, arrondir, clause, pct, EXEMPLE };
+  return { calculer, parts, arrondir, clause, clauseActe, clauseTexte, pct, EXEMPLE };
 });
