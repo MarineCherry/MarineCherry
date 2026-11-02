@@ -51,3 +51,18 @@ test('frais du syndic comptés dans le coût et repris dans la clause', () => {
   const txt = Q.clauseTexte(Q.clauseActe(d, r, (x) => String(x)).blocs);
   assert.match(txt, /Frais du syndic\t600,00 EUROS/);
 });
+
+test('versements : dû à l\'étude, déjà versé et reste à verser', () => {
+  const r = Q.calculer(Q.EXEMPLE);
+  const v = Q.versements(Q.EXEMPLE, r);
+  // Frais de prêt réglés à la banque : 50 000 − 3 500 et 20 000 − 3 500 ; 323 000 − 260 000 = 63 000.
+  assert.deepStrictEqual(v.lignes.map((l) => [l.du, l.verse, l.reste]), [[46500, 15000, 31500], [16500, 0, 16500]]);
+  assert.strictEqual(v.besoin, 63000);
+  assert.ok(v.coherent);
+  assert.strictEqual(v.reste, 48000);
+  // Frais de prêt appelés par l'étude : l'apport entier.
+  const d = Object.assign({}, Q.EXEMPLE, { fraisPretsEtude: true });
+  const w = Q.versements(d, Q.calculer(d));
+  assert.deepStrictEqual(w.lignes.map((l) => l.du), [50000, 20000]);
+  assert.strictEqual(w.besoin, 70000);
+});

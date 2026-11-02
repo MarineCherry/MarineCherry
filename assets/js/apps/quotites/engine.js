@@ -210,6 +210,25 @@
     return { blocs: B, totalCout, fondsPerso, fondsEmpr, equilibre: Math.abs(totalCout - (fondsPerso + fondsEmpr) + (r.fraisDansCout ? 0 : fraisPrets)) < 0.5 };
   }
 
+  // Fonds à verser à l'étude par chaque acquéreur et reste à verser.
+  // Dû = apport personnel, moins sa part des frais de prêt lorsqu'ils sont réglés directement à la banque.
+  // Le capital des prêts est supposé débloqué entre les mains de l'étude.
+  function versements(d, r) {
+    const fraisALaBanque = d.fraisPretsEtude !== true;
+    const acq = d.acquereurs || [];
+    const lignes = r.lignes.map((l, i) => {
+      const liste = ((acq[i] || {}).versements || []).filter((v) => n(v.montant));
+      const du = l.apports - (fraisALaBanque ? l.fraisPrets : 0);
+      const verse = somme(liste, (v) => n(v.montant));
+      return { id: l.id, nom: l.nom, du, verse, reste: du - verse, versements: liste };
+    });
+    const capital = somme(d.prets || [], (p) => n(p.capital));
+    const besoin = r.baseEmplois + (fraisALaBanque ? 0 : r.fraisPrets) - capital;
+    const du = somme(lignes, (l) => l.du);
+    const verse = somme(lignes, (l) => l.verse);
+    return { lignes, fraisALaBanque, capital, besoin, du, verse, reste: du - verse, ecart: du - besoin, coherent: Math.abs(du - besoin) < 0.5 };
+  }
+
   // Texte brut (copie) : tableaux en colonnes séparées par des tabulations.
   function clauseTexte(blocs) {
     return blocs.map((b) => (b.type === 'table' ? [b.entete].concat(b.lignes).filter(Boolean).map((l) => l.join('\t')).join('\n') : b.texte)).join('\n\n');
@@ -228,6 +247,7 @@
     prets: [{ id: 'k1', libelle: 'Prêt immobilier', preteur: 'Banque Exemple', capital: 260000, frais: 7000, egal: true, repartition: {} }],
     fraisDansCout: true,
   };
+  EXEMPLE.acquereurs[0].versements = [{ id: 'v1', date: '2026-09-15', libelle: 'Dépôt de garantie', montant: 15000 }];
 
-  return { calculer, parts, arrondir, clause, clauseActe, clauseTexte, pct, EXEMPLE };
+  return { calculer, parts, arrondir, clause, clauseActe, clauseTexte, versements, pct, EXEMPLE };
 });

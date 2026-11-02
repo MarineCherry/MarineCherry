@@ -19,7 +19,7 @@
   };
   const COULEURS = ['#3d7be0', '#ee7552', '#34a483', '#8b5fd6', '#f0b23a', '#2f9aa8'];
 
-  const nouvelAcquereur = (nom) => ({ id: uid('a'), civilite: '', nom: nom || '', apports: [{ id: uid('p'), libelle: 'Apport personnel', montant: null }] });
+  const nouvelAcquereur = (nom) => ({ id: uid('a'), civilite: '', nom: nom || '', versements: [], apports: [{ id: uid('p'), libelle: 'Apport personnel', montant: null }] });
   // Postes du coût de l'opération, dans l'ordre de la clause de l'étude.
   const POSTES = [['prix', 'Prix'], ['travaux', 'Montant des travaux à effectuer'], ['fraisVente', 'Frais de la vente'], ['fraisNegociation', 'Frais de négociation'], ['fraisSyndic', 'Frais du syndic']];
   const emploisDefaut = () => POSTES.map(([code, libelle]) => ({ id: uid('e'), code, libelle, montant: null }));
@@ -30,6 +30,7 @@
       emplois: emploisDefaut(),
       prets: [{ id: uid('k'), libelle: 'Prêt immobilier', preteur: '', capital: null, frais: null, egal: true, repartition: {} }],
       fraisDansCout: true,
+      fraisPretsEtude: false,
       methode: 2,
     };
   }
@@ -176,6 +177,52 @@
     }));
   }
 
+  /* ---------- Versements ---------- */
+  function recapVersements(s, r) {
+    const v = E.versements(s, r);
+    const nom = (l, i) => l.nom || 'Acquéreur ' + (i + 1);
+    const resteTxt = (x) => (x < -0.005 ? h('span', { class: 'qt-trop' }, 'Trop-versé ' + fmtEuro(-x)) : h('strong', null, fmtEuro(Math.max(0, x))));
+    const tableau = ui.table([
+      { label: 'Acquéreur', render: (l) => h('span', { class: 'qt-nom', style: { '--c': COULEURS[v.lignes.indexOf(l) % COULEURS.length] } }, h('span', { class: 'qt-pastille' }), nom(l, v.lignes.indexOf(l))) },
+      { label: 'À verser à l\'étude', num: true, render: (l) => fmtEuro(l.du) },
+      { label: 'Déjà versé', num: true, render: (l) => fmtEuro(l.verse) },
+      { label: 'Reste à verser', num: true, render: (l) => resteTxt(l.reste) },
+    ], v.lignes);
+    tableau.querySelector('table').appendChild(h('tfoot', null, h('tr', { class: 'strong' }, h('td', null, 'Total'),
+      h('td', { class: 'num' }, fmtEuro(v.du)), h('td', { class: 'num' }, fmtEuro(v.verse)), h('td', { class: 'num' }, resteTxt(v.reste)))));
+    return { v, tableau, nom };
+  }
+  function tabVersements(ctx) {
+    const s = ctx.state;
+    const saisie = s.acquereurs.map((a, i) => ui.card('Versements de ' + (a.nom || 'l\'acquéreur ' + (i + 1)), h('div', { class: 'qt-acq stack-sm', style: { '--c': COULEURS[i % COULEURS.length] } },
+      h('div', { class: 'rows' }, (a.versements || []).map((x) => h('div', { class: 'row-line qt-vers' },
+        f('Date', ctx.date(x, 'date')),
+        f('Nature', ctx.text(x, 'libelle', { placeholder: 'ex. dépôt de garantie, virement' })),
+        f('Montant', ctx.num(x, 'montant', { suffix: '€' })),
+        retirer(ctx, a.versements, x)))),
+      !(a.versements || []).length ? h('p', { class: 'small muted' }, 'Aucun versement enregistré.') : null,
+      ui.button('Ajouter un versement', { icon: 'plus', variant: 'soft', small: true, onClick: () => {
+        a.versements = a.versements || [];
+        a.versements.push({ id: uid('v'), date: A.util.todayISO(), libelle: a.versements.length ? 'Virement' : 'Dépôt de garantie', montant: null });
+        ctx.render(); ctx.changed();
+      } }))));
+    const recap = ctx.live((r) => {
+      const { v, tableau, nom } = recapVersements(s, r);
+      const copier = async () => {
+        const txt = [s.reference || 'Fonds à verser à l\'étude'].concat(v.lignes.map((l, i) => nom(l, i) + ' : à verser ' + fmtEuro(l.du) + ', déjà versé ' + fmtEuro(l.verse)
+          + (l.reste < -0.005 ? ', trop-versé ' + fmtEuro(-l.reste) : ', reste à verser ' + fmtEuro(Math.max(0, l.reste))))).join('\n');
+        try { await navigator.clipboard.writeText(txt); ui.toast('Récapitulatif copié.'); } catch (e) { ui.toast('Copie impossible.', 'error'); }
+      };
+      return ui.card('Reste à verser', h('div', { class: 'stack-sm' }, tableau,
+        v.coherent ? null : ui.note('Les apports saisis (' + fmtEuro(v.du) + ') ne correspondent pas aux fonds nécessaires à l\'étude (' + fmtEuro(v.besoin)
+          + ' = coût' + (v.fraisALaBanque ? ' hors frais de prêt' : '') + ' moins les prêts) : écart de ' + fmtEuro(Math.abs(v.ecart)) + '. Vérifiez les apports dans le premier onglet.', 'warn'),
+        h('p', { class: 'small muted' }, 'À verser = apport de chacun' + (v.fraisALaBanque ? ', moins sa part des frais de prêt (réglés à la banque)' : '') + '. Le capital des prêts est supposé débloqué entre les mains de l\'étude.'),
+        h('div', { class: 'chips' }, ui.button('Copier le récapitulatif', { icon: 'copy', variant: 'soft', small: true, onClick: copier }))));
+    });
+    const reglage = ui.card('Frais de prêt', f('Les frais de prêt sont', ctx.segmented(s, 'fraisPretsEtude', [{ value: false, label: 'Réglés directement à la banque' }, { value: true, label: 'Appelés par l\'étude' }], { small: true })));
+    return h('div', { class: 'stack' }, recap, reglage, saisie);
+  }
+
   /* ---------- Panneau et impression ---------- */
   function aside(ctx) {
     return ui.card('En un coup d\'œil', ctx.live((r) => [
@@ -194,6 +241,7 @@
         ui.table([{ label: 'Poste', key: 'libelle' }, { label: 'Montant', num: true, render: (x) => fmtEuro(x.montant) }], s.emplois.filter((x) => x.montant), { compact: true, total: { libelle: 'Total', montant: r.baseEmplois } }),
         h('h2', null, 'Financement et quotités'),
         resultat(s, r),
+        ...(E.versements(s, r).verse ? [h('h2', null, 'Fonds versés et reste à verser'), recapVersements(s, r).tableau] : []),
         h('div', { class: 'page-break' }),
         clauseHtml(clauseDe(s, r).blocs),
       ],
@@ -222,6 +270,7 @@
     reference: (s) => s.reference || s.acquereurs.map((a) => a.nom).filter(Boolean).join(' / '),
     tabs: [
       { id: 'saisie', label: 'Financement et quotités', render: tabSaisie },
+      { id: 'versements', label: 'Versements', render: tabVersements },
       { id: 'clause', label: 'Clause pour l\'acte', render: tabClause },
     ],
   });

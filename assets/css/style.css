@@ -579,7 +579,7 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.92em;
 body.avec-fiches .sim { margin-right: 46vw; }
 body.avec-fiches .toolbar .btn span { display: none; }
 body.avec-fiches .toolbar .btn { width: 38px; padding: 0; }
-body.avec-fiches .sim-body { grid-template-columns: 1fr; }
+body.avec-fiches .sim-body { grid-template-columns: minmax(0, 1fr); }
 body.avec-fiches .sim-aside { position: static; order: -1; }
 body.avec-fiches .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 920px) {
@@ -621,7 +621,7 @@ body.avec-fiches .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 /* ---------- Écrans moyens et petits ---------- */
 @media (max-width: 1180px) {
-  .sim-body { grid-template-columns: 1fr; }
+  .sim-body { grid-template-columns: minmax(0, 1fr); }
   .sim-aside { position: static; order: -1; }
   .aside-card .card-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; align-items: start; }
   .aside-card .card-body > * + * { margin-top: 0; }
@@ -1250,3 +1250,7 @@ body.avec-fiches .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .qt-acte-table td, .qt-acte-table th { border: 1px solid #555; padding: 3px 10px; }
 .qt-acte-table td.num { text-align: right; white-space: nowrap; }
 .qt-acte-table tr.gras td, .qt-acte-table th { font-weight: 700; }
+.qt-vers { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr) minmax(0, 1fr) 32px; }
+.qt-trop { color: var(--warn, #b25e09); font-weight: 600; }
+@media (max-width: 640px) { .qt-vers { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px; } .qt-vers > .field:nth-child(2) { grid-column: 1 / -1; grid-row: 1; } }
+@media (max-width: 640px) { .segmented .segment { white-space: normal; height: auto; min-height: 30px; padding-top: 5px; padding-bottom: 5px; line-height: 1.2; } }
