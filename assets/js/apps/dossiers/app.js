@@ -250,7 +250,7 @@
     }
     const d = nouveau(r.res.type);
     A.engines.extraction.fusionner(d, r.res, r.choix.groupes, opts);
-    if (/promesse|compromis/i.test(r.lu.sujet || '')) d.etape = 'promesse';
+    if (/promesse|compromis/i.test((r.lu.sujet || '') + ' ' + (r.lu.corps || '').slice(0, 600))) d.etape = 'promesse';
     await S().enregistrer(d);
     ui.toast('Dossier créé à partir de « ' + r.lu.nom + ' ».');
     location.hash = '#/dossiers/' + encodeURIComponent(d.id);

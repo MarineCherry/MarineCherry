@@ -95,7 +95,9 @@
           }
         } catch (e) { /* pas un mail : ancien document Word */ }
       }
-      const t = X().texteDocBinaire(octets);
+      let t = '';
+      try { t = X().texteDoc(octets) || ''; } catch (e) { t = ''; }
+      if (t.length < 40) t = X().texteDocBinaire(octets);
       if (t.length < 40) throw new Error('« ' + nom + ' » n\'a pas pu être lu. Ouvrez-le dans Word et enregistrez-le en .docx, puis importez-le.');
       return doc(t);
     }

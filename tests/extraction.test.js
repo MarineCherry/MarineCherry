@@ -231,3 +231,32 @@ test('RTF, OpenOffice et ancien Word (.doc) : texte reconstitué', () => {
   const b = Buffer.concat([Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0, 1, 2, 3]), Buffer.from(t, 'utf16le'), Buffer.from([0, 0, 0xff, 0xfe])]);
   assert.ok(X.texteDocBinaire(new Uint8Array(b)).includes('Adresse du bien vendu: 12 rue des Lilas 84000 Avignon'));
 });
+
+test('Lettre d\'agence rédigée en phrases (données fictives)', () => {
+  const corps = [
+    '10, avenue de la Gare', '84000 AVIGNON', 'Avignon le 5 mai 2026,', 'Maître,',
+    'Je me permets de vous donner les renseignements par écrit pour la signature d\'une promesse de vente.',
+    'Signature d\'une promesse concernant la vente Mme MARTIN (Vendeur) / M. DUPONT (Acquéreur)',
+    'Dossier concernant la vente :', 'Maison à usage d\'habitation avec terrain 1 200m²',
+    'Sise N°12 chemin des Vignes 84 420 PIOLENC', 'Cadastre ci-joint B N°97',
+    'Coordonnées de Mme Hélène MARTIN : 06.00.00.00.01', 'Coordonnées de M. Théo DUPONT : 06.00.00.00.02',
+    'Le prix de vente est de 250 000€ net vendeur + 10 000€ Frais d\'agence charge vendeur (mandat de vente N°1234) soit 260 000€ FAI',
+    'Condition suspensive de l\'obtention d\'un prêt',
+    'Veuillez agréer, Maître, mes salutations distinguées.', 'Julie LEROY',
+  ].join('\n');
+  const r = X.extraire({ sujet: 'Lettre', expediteur: '', corps, piecesJointes: [] });
+  assert.deepStrictEqual(r.vendeurs.map((x) => [x.civilite, x.nom, x.telephone]), [['Mme', 'Hélène MARTIN', '06.00.00.00.01']]);
+  assert.deepStrictEqual(r.acquereurs.map((x) => [x.civilite, x.nom, x.telephone]), [['M.', 'Théo DUPONT', '06.00.00.00.02']]);
+  assert.deepStrictEqual([r.bien.adresse, r.bien.codePostal, r.bien.commune, r.bien.type, r.bien.cadastre], ['N°12 chemin des Vignes', '84420', 'PIOLENC', 'maison', 'B 97']);
+  assert.deepStrictEqual(r.prix, { prix: 250000, prixFAI: 260000, honoraires: 10000, chargeHonoraires: 'vendeur' });
+  assert.strictEqual(r.financement.pret, true);
+  assert.strictEqual(r.agence.contact, 'Julie LEROY');
+  assert.strictEqual(r.agence.mandat, '1234');
+});
+
+test('Ancien Word (.doc) : lecture du fichier composé et du texte (document fictif)', () => {
+  const t = X.texteDoc(new Uint8Array(require('fs').readFileSync(__dirname + '/fichiers/offre-fictive.doc')));
+  assert.ok(t.startsWith('Bonjour Maître,\nNous vous transmettons l\'offre d\'achat'));
+  const r = X.extraire({ sujet: 'offre', expediteur: '', corps: t, piecesJointes: [] });
+  assert.deepStrictEqual([r.vendeurs.length, r.acquereurs.length, r.prix.prix, r.bien.commune], [1, 1, 200000, 'Avignon']);
+});

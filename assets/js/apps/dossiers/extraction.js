@@ -212,7 +212,7 @@
     let rubrique = null;
     let courant = null;
     const valeurs = {};
-    const fin = /^(bien cordialement|cordialement|bien [àa] vous|sinc[eè]res salutations|respectueusement|salutations distingu[ée]es|--)/i;
+    const fin = /^(bien cordialement|cordialement|bien [àa] vous|sinc[eè]res salutations|respectueusement|salutations distingu[ée]es|veuillez agr[ée]er|je vous prie d.?agr[ée]er|--)/i;
     // Mail transféré : l'expéditeur d'origine est dans le corps (« De : … »).
     let debut = 0;
     let expediteurOrigine = '';
@@ -313,6 +313,50 @@
         if (!(cle in valeurs)) valeurs[cle] = v;
       }
     }
+    // Lettre rédigée en phrases (sans rubriques « VENDEURS : »).
+    // « la vente Mme MARTIN (Vendeur) / M. DUPONT (Acquéreur) »
+    const reRole = /(?:(Monsieur|Madame|Mademoiselle|Mme|Mlle|M\.|Mr)\s+)?((?:[A-ZÀ-Ý][a-zà-ÿ'-]+\s+){0,3}[A-ZÀ-Ý][A-ZÀ-Ý'’-]+(?:\s+[A-ZÀ-Ý][A-ZÀ-Ý'’-]+)*)\s*\(([Vv]endeurs?|[Vv]enderesses?|[Aa]cqu[ée]reurs?|[Aa]cheteurs?|VENDEURS?|ACQU[EÉ]REURS?)\)/g;
+    let mr;
+    while ((mr = reRole.exec(texte))) {
+      const r = /^vend/i.test(mr[3]) ? 'vendeurs' : 'acquereurs';
+      const nom = prenomAvantNom(mr[2].trim());
+      if (res[r].some((x) => x.nom.toUpperCase().includes(nom.toUpperCase()))) continue;
+      res[r].push(Object.assign(personneVide(nom), { civilite: mr[1] ? (/^(madame|mme|mademoiselle|mlle)/i.test(mr[1]) ? 'Mme' : 'M.') : '' }));
+    }
+    // « Coordonnées de Mme Hélène MARTIN : 06 00 00 00 00 » : nom complet et téléphone de la partie.
+    lignes.forEach((l) => {
+      const m = /^coordonn[ée]es\s+(?:de\s+)?(.+?)\s*:\s*(.+)$/i.exec(l);
+      if (!m) return;
+      const n = lireNom(m[1]);
+      const majs = n.nom.split(/\s+/).filter((x) => x.length > 1 && x === x.toUpperCase());
+      const p = res.vendeurs.concat(res.acquereurs).find((x) => majs.some((w) => x.nom.toUpperCase().split(/\s+/).includes(w)));
+      if (!p) return;
+      if (n.nom.split(/\s+/).length > p.nom.split(/\s+/).length) p.nom = n.nom;
+      if (!p.civilite && n.civilite) p.civilite = n.civilite;
+      const tel = /(?:\+33\s?|0)[1-9](?:[\s.-]?\d{2}){4}/.exec(m[2]);
+      if (tel && !p.telephone) p.telephone = tel[0];
+      const em = EMAIL.exec(m[2]);
+      if (em && !p.email) p.email = em[0];
+    });
+    lignes.forEach((l, i) => {
+      // « Sise N°12 chemin des Vignes 84420 PIOLENC », la nature du bien étant sur la ligne précédente.
+      const sise = /^(?:sise?s?|situ[ée]e?s?)\b\s*(?:au|[àa])?\s*:?\s*(.+)$/i.exec(l);
+      if (sise && !valeurs.adresseBien && /\d{2}\s?\d{3}\s+\S/.test(sise[1])) {
+        valeurs.adresseBien = sise[1];
+        const avant = lignes.slice(0, i).reverse().find(Boolean) || '';
+        if (!valeurs.typeBien && /maison|appartement|villa|terrain|local|immeuble|studio|propri[ée]t[ée]|mas\b/i.test(avant)) valeurs.typeBien = avant;
+      }
+      // « Cadastre ci-joint B N°971 », « Cadastré section AB n° 12 »
+      if (!valeurs.cadastre && /^cadastr/i.test(l) && /\d/.test(l)) valeurs.cadastre = l.replace(/^cadastr\S*\s*(?:ci-joint\s*)?:?\s*/i, '');
+      // « Le prix de vente est de 250 000 € net vendeur + 10 000 € frais d'agence … soit 260 000 € FAI »
+      if (!valeurs.prix && /\bprix\b/i.test(l) && montant(l)) valeurs.prix = l.replace(/^.*?\bprix\b[^\d]*/i, '');
+    });
+    if (!valeurs.financement) {
+      const cs = /condition suspensive[^.\n]{0,40}(pr[eê]t|cr[ée]dit|financement)/i.exec(texte);
+      if (cs) valeurs.financement = 'Condition suspensive d\'obtention d\'un prêt';
+      else if (/sans (condition suspensive de )?(pr[eê]t|cr[ée]dit)|paiement comptant/i.test(texte)) valeurs.financement = 'Sans prêt';
+    }
+
     // Les membres d'une société représentante ne sont pas des parties : on garde leurs coordonnées sur la société.
     ['vendeurs', 'acquereurs'].forEach((r) => res[r].forEach((x) => {
       delete x.representantsEnCours;
@@ -607,5 +651,120 @@
       .replace(/[\r\x0b]/g, '\n').split('\n').map((l) => l.replace(/[\x07\x01-\x08\x0e-\x1f]/g, ' ').replace(/[ \t]+/g, ' ').trim()).filter(Boolean).join('\n');
   }
 
-  return { lireEml, extraire, fusionner, htmlEnTexte, piecesReconnues, adresse, montant, texteDocx, texteOdt, texteRtf, texteDocBinaire };
+  /*
+   * Fichier composé Microsoft (format des anciens .doc et des .msg) : lecture des flux par leur nom.
+   * Renvoie une fonction flux(nom) → Uint8Array | null.
+   */
+  function fichierCompose(octets) {
+    const b = octets instanceof Uint8Array ? octets : new Uint8Array(octets);
+    const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
+    if (v.getUint32(0, true) !== 0xe011cfd0) return null;
+    const taille = 1 << v.getUint16(30, true), tailleMini = 1 << v.getUint16(32, true);
+    const secteur = (n) => 512 + n * taille;
+    const fatSecteurs = [];
+    for (let i = 0; i < 109; i++) { const x = v.getInt32(76 + i * 4, true); if (x >= 0) fatSecteurs.push(x); }
+    let difat = v.getInt32(68, true);
+    for (let k = 0; difat >= 0 && k < 1000; k++) {
+      const o = secteur(difat);
+      for (let i = 0; i < taille / 4 - 1; i++) { const x = v.getInt32(o + i * 4, true); if (x >= 0) fatSecteurs.push(x); }
+      difat = v.getInt32(o + taille - 4, true);
+    }
+    const fat = [];
+    fatSecteurs.forEach((sec) => { const o = secteur(sec); for (let i = 0; i < taille / 4; i++) fat.push(o + i * 4 + 4 <= b.length ? v.getInt32(o + i * 4, true) : -1); });
+    const chaine = (debut, table) => { const l = []; for (let x = debut; x >= 0 && l.length < 100000 && x < table.length; x = table[x]) l.push(x); if (debut >= 0 && !l.length) l.push(debut); return l; };
+    const lire = (debut, n) => {
+      const out = new Uint8Array(n);
+      let k = 0;
+      for (const sec of chaine(debut, fat)) { const o = secteur(sec); const m = Math.min(taille, n - k); if (m <= 0) break; out.set(b.subarray(o, o + m), k); k += m; }
+      return out;
+    };
+    // Répertoire.
+    const dir = [];
+    const repertoire = chaine(v.getInt32(48, true), fat);
+    repertoire.forEach((sec) => {
+      for (let i = 0; i < taille / 128; i++) {
+        const o = secteur(sec) + i * 128;
+        if (o + 128 > b.length) return;
+        const lg = v.getUint16(o + 64, true);
+        const nom = lg >= 2 ? new TextDecoder('utf-16le').decode(b.subarray(o, o + lg - 2)) : '';
+        dir.push({ nom, type: b[o + 66], debut: v.getInt32(o + 116, true), taille: v.getUint32(o + 120, true) });
+      }
+    });
+    const racine = dir.find((x) => x.type === 5);
+    let mini = null, minifat = null;
+    const flux = (nom) => {
+      const e = dir.find((x) => x.nom === nom && x.type === 2);
+      if (!e) return null;
+      if (e.taille >= v.getUint32(56, true)) return lire(e.debut, e.taille);
+      if (!mini) {
+        mini = lire(racine.debut, racine.taille);
+        const mf = lire(v.getInt32(60, true), v.getUint32(64, true) * taille);
+        minifat = [];
+        for (let i = 0; i < mf.length / 4; i++) minifat.push(new DataView(mf.buffer).getInt32(i * 4, true));
+      }
+      const out = new Uint8Array(e.taille);
+      let k = 0;
+      for (const sec of chaine(e.debut, minifat)) { const m = Math.min(tailleMini, e.taille - k); if (m <= 0) break; out.set(mini.subarray(sec * tailleMini, sec * tailleMini + m), k); k += m; }
+      return out;
+    };
+    return flux;
+  }
+
+  // Ancien format Word (.doc) : texte du document principal, d'après la table des morceaux de texte (« piece table »).
+  function texteDoc(octets) {
+    const flux = fichierCompose(octets);
+    if (!flux) return null;
+    const wd = flux('WordDocument');
+    if (!wd || wd.length < 512) return null;
+    const v = new DataView(wd.buffer, wd.byteOffset, wd.byteLength);
+    if (v.getUint16(0, true) !== 0xa5ec) return null;
+    const table = flux((v.getUint16(0x0a, true) & 0x0200) ? '1Table' : '0Table');
+    if (!table) return null;
+    let o = 32;
+    const csw = v.getUint16(o, true); o += 2 + csw * 2;
+    const cslw = v.getUint16(o, true);
+    const ccpText = v.getInt32(o + 2 + 3 * 4, true);
+    o += 2 + cslw * 4 + 2;
+    const fcClx = v.getUint32(o + 33 * 8, true), lcbClx = v.getUint32(o + 33 * 8 + 4, true);
+    const t = new DataView(table.buffer, table.byteOffset, table.byteLength);
+    let p = fcClx;
+    while (p < fcClx + lcbClx && table[p] === 1) p += 3 + t.getInt16(p + 1, true);
+    if (table[p] !== 2) return null;
+    const lcb = t.getUint32(p + 1, true);
+    p += 5;
+    const nb = (lcb - 4) / 12;
+    const cp = (i) => t.getUint32(p + i * 4, true);
+    const CP = { 0x80: '€', 0x82: '‚', 0x84: '„', 0x85: '…', 0x91: '‘', 0x92: '’', 0x93: '“', 0x94: '”', 0x96: '–', 0x97: '—', 0x8c: 'Œ', 0x9c: 'œ' };
+    let brut = '';
+    for (let i = 0; i < nb && brut.length < ccpText; i++) {
+      const n = Math.min(cp(i + 1), ccpText) - cp(i);
+      if (n <= 0) continue;
+      const fcBrut = t.getUint32(p + (nb + 1) * 4 + i * 8 + 2, true);
+      if (fcBrut & 0x40000000) {
+        const fc = (fcBrut & 0x3fffffff) / 2;
+        for (let k = 0; k < n && fc + k < wd.length; k++) { const c = wd[fc + k]; brut += CP[c] || String.fromCharCode(c); }
+      } else {
+        for (let k = 0; k < n && fcBrut + 2 * k + 1 < wd.length; k++) brut += String.fromCharCode(v.getUint16(fcBrut + 2 * k, true));
+      }
+    }
+    // Champs : on garde le résultat affiché, pas l'instruction ; marques de paragraphe, cellules, sauts.
+    let out = '', niveau = 0;
+    const instr = [];
+    for (const c of brut) {
+      const k = c.charCodeAt(0);
+      if (k === 0x13) { niveau++; instr.push(true); continue; }
+      if (k === 0x14) { if (instr.length) instr[instr.length - 1] = false; continue; }
+      if (k === 0x15) { niveau = Math.max(0, niveau - 1); instr.pop(); continue; }
+      if (instr.length && instr[instr.length - 1]) continue;
+      if (k === 0x0d || k === 0x0b || k === 0x0c) out += '\n';
+      else if (k === 0x07) out += '\t';
+      else if (k === 0x09) out += ' ';
+      else if (k === 0x1e) out += '-';
+      else if (k === 0xa0) out += ' ';
+      else if (k >= 0x20 && k !== 0x1f) out += c;
+    }
+    return out.split('\n').map((l) => l.replace(/\t+$/, '').replace(/\t/g, ' : ').replace(/[ \t]+/g, ' ').trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  return { lireEml, extraire, fusionner, htmlEnTexte, piecesReconnues, adresse, montant, texteDocx, texteOdt, texteRtf, texteDocBinaire, texteDoc, fichierCompose };
 });
