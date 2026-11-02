@@ -108,9 +108,8 @@
     const barre = h('div', { class: 'qt-barre' }, r.lignes.map((l, i) => h('div', { class: 'qt-morceau', style: { '--c': COULEURS[i % COULEURS.length], flex: Math.max(l.quotite, 0.0001) } }, h('span', null, nom(l, i)), h('strong', null, pct2(l.quotiteArrondie)))));
     const controle = r.equilibre ? ui.badge(true, 'Le financement correspond au coût de l\'acquisition (' + fmtEuro(r.base) + ').')
       : ui.note('Le financement' + (r.fraisDansCout ? '' : ', net des frais de prêt,') + ' (' + fmtEuro(r.total) + ') ' + (r.ecart > 0 ? 'dépasse' : 'n\'atteint pas') + ' le coût de l\'acquisition (' + fmtEuro(r.base) + ') : écart de ' + fmtEuro(Math.abs(r.ecart)) + '. Vérifiez les montants ; les quotités sont calculées sur le financement saisi.', 'warn');
-    const sPrets = s.prets.reduce((t, p) => t + (Number(p.capital) || 0), 0);
-    const appel = r.fraisPrets && r.fraisDansCout ? h('p', { class: 'small muted' }, 'Fonds à verser à l\'étude : ' + fmtEuro(r.baseEmplois - sPrets)
-      + ' (coût hors frais de prêt, moins les prêts débloqués). Les frais de prêt (' + fmtEuro(r.fraisPrets) + ') sont réglés à la banque : ils ne servent qu\'au calcul des pourcentages.') : null;
+    const appel = r.fraisPrets && r.fraisDansCout && !s.fraisPretsEtude ? h('p', { class: 'small muted' }, 'Somme globale à appeler par l\'étude (apports et prêts) : ' + fmtEuro(r.baseEmplois)
+      + '. Les frais de prêt (' + fmtEuro(r.fraisPrets) + ') sont réglés à la banque : ils ne servent qu\'au calcul des pourcentages. Détail dans l\'onglet « Versements ».') : null;
     return ui.card('Quotités', h('div', { class: 'stack-sm' }, barre, tableau, controle, appel,
       r.negatif ? ui.note('Un acquéreur a une contribution négative : vérifiez ses apports et sa part des frais de prêt.', 'warn') : null,
       h('p', { class: 'small muted' }, 'Quotités arrondies au centième de pourcent ; le total fait exactement 100 %.')), { className: 'qt-resultat' });
@@ -184,12 +183,14 @@
     const resteTxt = (x) => (x < -0.005 ? h('span', { class: 'qt-trop' }, 'Trop-versé ' + fmtEuro(-x)) : h('strong', null, fmtEuro(Math.max(0, x))));
     const tableau = ui.table([
       { label: 'Acquéreur', render: (l) => h('span', { class: 'qt-nom', style: { '--c': COULEURS[v.lignes.indexOf(l) % COULEURS.length] } }, h('span', { class: 'qt-pastille' }), nom(l, v.lignes.indexOf(l))) },
-      { label: 'À verser à l\'étude', num: true, render: (l) => fmtEuro(l.du) },
+      { label: 'Apport', num: true, render: (l) => fmtEuro(l.apport) },
+      { label: 'Prêt', num: true, render: (l) => fmtEuro(l.pret) },
+      { label: 'À verser à l\'étude', num: true, render: (l) => h('strong', null, fmtEuro(l.du)) },
       { label: 'Déjà versé', num: true, render: (l) => fmtEuro(l.verse) },
       { label: 'Reste à verser', num: true, render: (l) => resteTxt(l.reste) },
     ], v.lignes);
     tableau.querySelector('table').appendChild(h('tfoot', null, h('tr', { class: 'strong' }, h('td', null, 'Total'),
-      h('td', { class: 'num' }, fmtEuro(v.du)), h('td', { class: 'num' }, fmtEuro(v.verse)), h('td', { class: 'num' }, resteTxt(v.reste)))));
+      h('td', { class: 'num' }, fmtEuro(v.apport)), h('td', { class: 'num' }, fmtEuro(v.pret)), h('td', { class: 'num' }, fmtEuro(v.du)), h('td', { class: 'num' }, fmtEuro(v.verse)), h('td', { class: 'num' }, resteTxt(v.reste)))));
     return { v, tableau, nom };
   }
   function tabVersements(ctx) {
@@ -197,7 +198,7 @@
     const saisie = s.acquereurs.map((a, i) => ui.card('Versements de ' + (a.nom || 'l\'acquéreur ' + (i + 1)), h('div', { class: 'qt-acq stack-sm', style: { '--c': COULEURS[i % COULEURS.length] } },
       h('div', { class: 'rows' }, (a.versements || []).map((x) => h('div', { class: 'row-line qt-vers' },
         f('Date', ctx.date(x, 'date')),
-        f('Nature', ctx.text(x, 'libelle', { placeholder: 'ex. dépôt de garantie, virement' })),
+        f('Nature', ctx.text(x, 'libelle', { placeholder: 'ex. dépôt de garantie, virement, déblocage du prêt' })),
         f('Montant', ctx.num(x, 'montant', { suffix: '€' })),
         retirer(ctx, a.versements, x)))),
       !(a.versements || []).length ? h('p', { class: 'small muted' }, 'Aucun versement enregistré.') : null,
@@ -209,14 +210,14 @@
     const recap = ctx.live((r) => {
       const { v, tableau, nom } = recapVersements(s, r);
       const copier = async () => {
-        const txt = [s.reference || 'Fonds à verser à l\'étude'].concat(v.lignes.map((l, i) => nom(l, i) + ' : à verser ' + fmtEuro(l.du) + ', déjà versé ' + fmtEuro(l.verse)
+        const txt = [s.reference || 'Fonds à verser à l\'étude'].concat(v.lignes.map((l, i) => nom(l, i) + ' : à verser ' + fmtEuro(l.du) + ' (apport ' + fmtEuro(l.apport) + ' + prêt ' + fmtEuro(l.pret) + '), déjà versé ' + fmtEuro(l.verse)
           + (l.reste < -0.005 ? ', trop-versé ' + fmtEuro(-l.reste) : ', reste à verser ' + fmtEuro(Math.max(0, l.reste))))).join('\n');
         try { await navigator.clipboard.writeText(txt); ui.toast('Récapitulatif copié.'); } catch (e) { ui.toast('Copie impossible.', 'error'); }
       };
       return ui.card('Reste à verser', h('div', { class: 'stack-sm' }, tableau,
         v.coherent ? null : ui.note('Les apports saisis (' + fmtEuro(v.du) + ') ne correspondent pas aux fonds nécessaires à l\'étude (' + fmtEuro(v.besoin)
-          + ' = coût' + (v.fraisALaBanque ? ' hors frais de prêt' : '') + ' moins les prêts) : écart de ' + fmtEuro(Math.abs(v.ecart)) + '. Vérifiez les apports dans le premier onglet.', 'warn'),
-        h('p', { class: 'small muted' }, 'À verser = apport de chacun' + (v.fraisALaBanque ? ', moins sa part des frais de prêt (réglés à la banque)' : '') + '. Le capital des prêts est supposé débloqué entre les mains de l\'étude.'),
+          + ' = coût de l\'acquisition' + (v.fraisALaBanque ? ' hors frais de prêt' : '') + ') : écart de ' + fmtEuro(Math.abs(v.ecart)) + '. Vérifiez les apports dans le premier onglet.', 'warn'),
+        h('p', { class: 'small muted' }, 'Somme globale appelée : à verser = apport de chacun' + (v.fraisALaBanque ? ' (moins sa part des frais de prêt, réglés à la banque)' : '') + ' + sa part du prêt, à débloquer entre les mains de l\'étude. Enregistrez le déblocage du prêt comme un versement.'),
         h('div', { class: 'chips' }, ui.button('Copier le récapitulatif', { icon: 'copy', variant: 'soft', small: true, onClick: copier }))));
     });
     const reglage = ui.card('Frais de prêt', f('Les frais de prêt sont', ctx.segmented(s, 'fraisPretsEtude', [{ value: false, label: 'Réglés directement à la banque' }, { value: true, label: 'Appelés par l\'étude' }], { small: true })));

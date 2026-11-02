@@ -55,14 +55,16 @@ test('frais du syndic comptés dans le coût et repris dans la clause', () => {
 test('versements : dû à l\'étude, déjà versé et reste à verser', () => {
   const r = Q.calculer(Q.EXEMPLE);
   const v = Q.versements(Q.EXEMPLE, r);
-  // Frais de prêt réglés à la banque : 50 000 − 3 500 et 20 000 − 3 500 ; 323 000 − 260 000 = 63 000.
-  assert.deepStrictEqual(v.lignes.map((l) => [l.du, l.verse, l.reste]), [[46500, 15000, 31500], [16500, 0, 16500]]);
-  assert.strictEqual(v.besoin, 63000);
+  // Frais de prêt réglés à la banque : apports 50 000 − 3 500 et 20 000 − 3 500, plus 130 000 de prêt chacun ;
+  // somme globale appelée : 323 000 (coût hors frais de prêt).
+  assert.deepStrictEqual(v.lignes.map((l) => [l.apport, l.pret, l.du, l.verse, l.reste]),
+    [[46500, 130000, 176500, 15000, 161500], [16500, 130000, 146500, 0, 146500]]);
+  assert.strictEqual(v.besoin, 323000);
   assert.ok(v.coherent);
-  assert.strictEqual(v.reste, 48000);
+  assert.strictEqual(v.reste, 308000);
   // Frais de prêt appelés par l'étude : l'apport entier.
   const d = Object.assign({}, Q.EXEMPLE, { fraisPretsEtude: true });
   const w = Q.versements(d, Q.calculer(d));
-  assert.deepStrictEqual(w.lignes.map((l) => l.du), [50000, 20000]);
-  assert.strictEqual(w.besoin, 70000);
+  assert.deepStrictEqual(w.lignes.map((l) => l.du), [180000, 150000]);
+  assert.strictEqual(w.besoin, 330000);
 });

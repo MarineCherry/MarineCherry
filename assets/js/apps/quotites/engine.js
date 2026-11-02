@@ -210,23 +210,27 @@
     return { blocs: B, totalCout, fondsPerso, fondsEmpr, equilibre: Math.abs(totalCout - (fondsPerso + fondsEmpr) + (r.fraisDansCout ? 0 : fraisPrets)) < 0.5 };
   }
 
-  // Fonds à verser à l'étude par chaque acquéreur et reste à verser.
-  // Dû = apport personnel, moins sa part des frais de prêt lorsqu'ils sont réglés directement à la banque.
-  // Le capital des prêts est supposé débloqué entre les mains de l'étude.
+  // Fonds à verser à l'étude par chaque acquéreur (appel de la somme globale) et reste à verser.
+  // Dû = apport personnel (moins sa part des frais de prêt lorsqu'ils sont réglés directement à la banque)
+  // + sa part du capital des prêts, à débloquer entre les mains de l'étude.
   function versements(d, r) {
     const fraisALaBanque = d.fraisPretsEtude !== true;
     const acq = d.acquereurs || [];
     const lignes = r.lignes.map((l, i) => {
       const liste = ((acq[i] || {}).versements || []).filter((v) => n(v.montant));
-      const du = l.apports - (fraisALaBanque ? l.fraisPrets : 0);
+      const apport = l.apports - (fraisALaBanque ? l.fraisPrets : 0);
+      const du = apport + l.prets;
       const verse = somme(liste, (v) => n(v.montant));
-      return { id: l.id, nom: l.nom, du, verse, reste: du - verse, versements: liste };
+      return { id: l.id, nom: l.nom, apport, pret: l.prets, du, verse, reste: du - verse, versements: liste };
     });
-    const capital = somme(d.prets || [], (p) => n(p.capital));
-    const besoin = r.baseEmplois + (fraisALaBanque ? 0 : r.fraisPrets) - capital;
+    const besoin = r.baseEmplois + (fraisALaBanque ? 0 : r.fraisPrets);
     const du = somme(lignes, (l) => l.du);
     const verse = somme(lignes, (l) => l.verse);
-    return { lignes, fraisALaBanque, capital, besoin, du, verse, reste: du - verse, ecart: du - besoin, coherent: Math.abs(du - besoin) < 0.5 };
+    return {
+      lignes, fraisALaBanque, besoin, du, verse, reste: du - verse,
+      apport: somme(lignes, (l) => l.apport), pret: somme(lignes, (l) => l.pret),
+      ecart: du - besoin, coherent: Math.abs(du - besoin) < 0.5,
+    };
   }
 
   // Texte brut (copie) : tableaux en colonnes séparées par des tabulations.
