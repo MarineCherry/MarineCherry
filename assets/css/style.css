@@ -1218,3 +1218,24 @@ body.avec-fiches .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .sv-ld-indivis { --c: var(--sv-indivis); }
 .sv-personne.sv-personne-large { grid-template-columns: calc(var(--u) * 30) 1fr; }
 .sv-personne-large .sv-personne-nom { white-space: normal; font-size: .9em; }
+
+/* ---------- Quotités d'acquisition ---------- */
+.qt-acq { border-left: 4px solid var(--c); padding: 10px 0 10px 14px; display: flex; flex-direction: column; gap: 10px; }
+.qt-acq-tete { display: flex; align-items: flex-end; gap: 10px; }
+.qt-acq-tete .field { flex: 1; }
+.qt-pastille { width: 12px; height: 12px; border-radius: 50%; background: var(--c); display: inline-block; flex: none; margin-bottom: 14px; }
+.qt-nom { display: inline-flex; align-items: center; gap: 8px; }
+.qt-nom .qt-pastille { margin: 0; }
+.qt-ligne { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 32px; }
+.qt-ligne3 { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) 32px; }
+.qt-pret { display: flex; flex-direction: column; gap: 10px; padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
+.qt-repartition { display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap; }
+.qt-parts { display: flex; gap: 12px; flex-wrap: wrap; }
+.qt-parts .field { width: 150px; }
+.qt-barre { display: flex; height: 54px; border-radius: 12px; overflow: hidden; }
+.qt-morceau { background: var(--c); color: #fff; display: flex; flex-direction: column; justify-content: center; padding: 0 14px; min-width: 0; overflow: hidden; white-space: nowrap; transition: flex .5s; }
+.qt-morceau span { font-size: 12px; opacity: .9; overflow: hidden; text-overflow: ellipsis; }
+.qt-morceau strong { font-size: 17px; }
+.qt-quotite { font-size: 1.05em; }
+.qt-clause { background: var(--surface-2); border-radius: 12px; padding: 14px 18px; font-family: var(--serif); line-height: 1.6; }
+.qt-clause p { margin: 0 0 6px; }
