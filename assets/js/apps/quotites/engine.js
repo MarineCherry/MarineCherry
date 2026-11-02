@@ -123,6 +123,7 @@
       ['Frais de la vente', parCode('fraisVente')],
       r.fraisDansCout ? ['Frais de prêt', fraisPrets] : null,
       ['Frais de négociation', parCode('fraisNegociation')],
+      ['Frais du syndic', parCode('fraisSyndic')],
     ].filter(Boolean).concat(emplois.filter((x) => !x.code || x.code === 'autre').map((x) => [x.libelle || 'Autre', n(x.montant)]))
       .filter((x) => x[1] || ['Prix', 'Frais de la vente'].includes(x[0]));
     const totalCout = somme(cout, (x) => x[1]);

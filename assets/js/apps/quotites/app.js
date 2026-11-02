@@ -21,7 +21,7 @@
 
   const nouvelAcquereur = (nom) => ({ id: uid('a'), civilite: '', nom: nom || '', apports: [{ id: uid('p'), libelle: 'Apport personnel', montant: null }] });
   // Postes du coût de l'opération, dans l'ordre de la clause de l'étude.
-  const POSTES = [['prix', 'Prix'], ['travaux', 'Montant des travaux à effectuer'], ['fraisVente', 'Frais de la vente'], ['fraisNegociation', 'Frais de négociation']];
+  const POSTES = [['prix', 'Prix'], ['travaux', 'Montant des travaux à effectuer'], ['fraisVente', 'Frais de la vente'], ['fraisNegociation', 'Frais de négociation'], ['fraisSyndic', 'Frais du syndic']];
   const emploisDefaut = () => POSTES.map(([code, libelle]) => ({ id: uid('e'), code, libelle, montant: null }));
   function empty() {
     return {
@@ -78,8 +78,8 @@
             onChange: (v) => { p.repartition[a.id] = v; ctx.changed(); },
           })))) : null))),
       ui.button('Ajouter un prêt', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.prets.push({ id: uid('k'), libelle: '', capital: null, frais: null, egal: true, repartition: {} }); ctx.render(); } }),
-      f('Frais de prêt', ctx.segmented(s, 'fraisDansCout', [{ value: true, label: 'Comptés dans le coût de l\'opération' }, { value: false, label: 'Déduits de l\'apport de chacun' }], { small: true, structural: true }),
-        { help: 'Méthode de la clause de l\'étude : les frais de prêt font partie du coût de l\'opération, financé par les apports (frais compris) et les prêts.' })),
+      f('Frais de prêt', ctx.segmented(s, 'fraisDansCout', [{ value: true, label: 'Pris en compte dans le calcul' }, { value: false, label: 'Déduits de l\'apport de chacun' }], { small: true, structural: true }),
+        { help: 'Méthode de la clause de l\'étude : les frais de prêt comptent dans le coût de l\'opération pour le calcul des pourcentages, même s\'ils sont réglés directement à la banque et non appelés par l\'étude.' })),
     { subtitle: 'Un prêt souscrit ensemble est en principe supporté par moitié ; sinon, indiquez la part de chacun.' });
 
     return h('div', { class: 'stack' }, f('Dossier', ctx.text(s, 'reference', { placeholder: 'ex. Acquisition MARTIN / DURAND' })), acquereurs, cout, prets, ctx.live((r) => resultat(s, r)));
@@ -107,7 +107,10 @@
     const barre = h('div', { class: 'qt-barre' }, r.lignes.map((l, i) => h('div', { class: 'qt-morceau', style: { '--c': COULEURS[i % COULEURS.length], flex: Math.max(l.quotite, 0.0001) } }, h('span', null, nom(l, i)), h('strong', null, pct2(l.quotiteArrondie)))));
     const controle = r.equilibre ? ui.badge(true, 'Le financement correspond au coût de l\'acquisition (' + fmtEuro(r.base) + ').')
       : ui.note('Le financement' + (r.fraisDansCout ? '' : ', net des frais de prêt,') + ' (' + fmtEuro(r.total) + ') ' + (r.ecart > 0 ? 'dépasse' : 'n\'atteint pas') + ' le coût de l\'acquisition (' + fmtEuro(r.base) + ') : écart de ' + fmtEuro(Math.abs(r.ecart)) + '. Vérifiez les montants ; les quotités sont calculées sur le financement saisi.', 'warn');
-    return ui.card('Quotités', h('div', { class: 'stack-sm' }, barre, tableau, controle,
+    const sPrets = s.prets.reduce((t, p) => t + (Number(p.capital) || 0), 0);
+    const appel = r.fraisPrets && r.fraisDansCout ? h('p', { class: 'small muted' }, 'Fonds à verser à l\'étude : ' + fmtEuro(r.baseEmplois - sPrets)
+      + ' (coût hors frais de prêt, moins les prêts débloqués). Les frais de prêt (' + fmtEuro(r.fraisPrets) + ') sont réglés à la banque : ils ne servent qu\'au calcul des pourcentages.') : null;
+    return ui.card('Quotités', h('div', { class: 'stack-sm' }, barre, tableau, controle, appel,
       r.negatif ? ui.note('Un acquéreur a une contribution négative : vérifiez ses apports et sa part des frais de prêt.', 'warn') : null,
       h('p', { class: 'small muted' }, 'Quotités arrondies au centième de pourcent ; le total fait exactement 100 %.')), { className: 'qt-resultat' });
   }

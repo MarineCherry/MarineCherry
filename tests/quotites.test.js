@@ -40,3 +40,14 @@ test('Clause de l\'étude complétée : quotités, coût, fonds personnels, prê
   assert.ok(t.includes('Soit en proportion du coût de l\'opération\t54,55 %\t45,45 %\t100 %'));
   assert.ok(c.equilibre);
 });
+
+test('frais du syndic comptés dans le coût et repris dans la clause', () => {
+  const d = JSON.parse(JSON.stringify(Q.EXEMPLE));
+  d.emplois.push({ code: 'fraisSyndic', montant: 600 });
+  d.acquereurs[0].apports[0].montant += 600;
+  const r = Q.calculer(d);
+  assert.equal(r.base, 330600);
+  assert.ok(r.equilibre);
+  const txt = Q.clauseTexte(Q.clauseActe(d, r, (x) => String(x)).blocs);
+  assert.match(txt, /Frais du syndic\t600,00 EUROS/);
+});
