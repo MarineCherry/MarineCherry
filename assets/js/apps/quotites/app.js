@@ -70,8 +70,8 @@
             onChange: (v) => { p.repartition[a.id] = v; ctx.changed(); },
           })))) : null))),
       ui.button('Ajouter un prêt', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.prets.push({ id: uid('k'), libelle: '', capital: null, frais: null, egal: true, repartition: {} }); ctx.render(); } }),
-      f('Frais de prêt', ctx.segmented(s, 'fraisDansCout', [{ value: false, label: 'Déduits de la part de chacun' }, { value: true, label: 'Ajoutés au coût de l\'acquisition' }], { small: true }),
-        { help: 'Par défaut, les frais de prêt ne font pas partie de la valeur du bien : la part de chaque emprunteur dans ces frais est déduite de sa contribution.' })),
+      f('Frais de prêt', ctx.segmented(s, 'fraisDansCout', [{ value: false, label: 'Payés sur l\'apport de chacun' }, { value: true, label: 'Ajoutés au coût de l\'acquisition' }], { small: true }),
+        { help: 'Par défaut, l\'apport déclaré par chacun comprend sa part des frais de prêt : cette part est déduite de son apport, seul le reste finance le bien.' })),
     { subtitle: 'Un prêt souscrit ensemble est en principe supporté par moitié ; sinon, indiquez la part de chacun.' });
 
     return h('div', { class: 'stack' }, f('Dossier', ctx.text(s, 'reference', { placeholder: 'ex. Acquisition MARTIN / DURAND' })), acquereurs, cout, prets, ctx.live((r) => resultat(s, r)));
@@ -82,15 +82,19 @@
     const nom = (l, i) => l.nom || 'Acquéreur ' + (i + 1);
     const tableau = ui.table([
       { label: 'Acquéreur', render: (l) => h('span', { class: 'qt-nom', style: { '--c': COULEURS[r.lignes.indexOf(l) % COULEURS.length] } }, h('span', { class: 'qt-pastille' }), nom(l, r.lignes.indexOf(l))) },
-      { label: 'Apports', num: true, render: (l) => fmtEuro(l.apports) },
+      { label: 'Apport', num: true, render: (l) => fmtEuro(l.apports) },
+      r.fraisDansCout ? null : { label: 'dont frais de prêt', num: true, render: (l) => (l.fraisPrets ? '− ' + fmtEuro(l.fraisPrets) : '—') },
+      r.fraisDansCout ? null : { label: 'Apport net', num: true, render: (l) => fmtEuro(l.apports - l.fraisPrets) },
       { label: 'Part des prêts', num: true, render: (l) => fmtEuro(l.prets) },
-      r.fraisDansCout ? null : { label: 'Part des frais de prêt', num: true, render: (l) => (l.fraisPrets ? '− ' + fmtEuro(l.fraisPrets) : '—') },
       { label: 'Contribution', num: true, render: (l) => h('strong', null, fmtEuro(l.contribution)) },
       { label: 'Quotité', num: true, render: (l) => h('strong', { class: 'qt-quotite' }, pct2(l.quotiteArrondie)) },
     ].filter(Boolean), r.lignes);
     // Ligne de total.
-    const tot = h('tr', { class: 'strong' }, h('td', null, 'Total'), h('td', { class: 'num' }, fmtEuro(r.lignes.reduce((t, l) => t + l.apports, 0))), h('td', { class: 'num' }, fmtEuro(r.lignes.reduce((t, l) => t + l.prets, 0))),
-      r.fraisDansCout ? null : h('td', { class: 'num' }, r.fraisPrets ? '− ' + fmtEuro(r.fraisPrets) : '—'), h('td', { class: 'num' }, fmtEuro(r.total)), h('td', { class: 'num' }, '100,00 %'));
+    const sApports = r.lignes.reduce((t, l) => t + l.apports, 0);
+    const tot = h('tr', { class: 'strong' }, h('td', null, 'Total'), h('td', { class: 'num' }, fmtEuro(sApports)),
+      r.fraisDansCout ? null : h('td', { class: 'num' }, r.fraisPrets ? '− ' + fmtEuro(r.fraisPrets) : '—'),
+      r.fraisDansCout ? null : h('td', { class: 'num' }, fmtEuro(sApports - r.fraisPrets)),
+      h('td', { class: 'num' }, fmtEuro(r.lignes.reduce((t, l) => t + l.prets, 0))), h('td', { class: 'num' }, fmtEuro(r.total)), h('td', { class: 'num' }, '100,00 %'));
     tableau.querySelector('table').appendChild(h('tfoot', null, tot));
     const barre = h('div', { class: 'qt-barre' }, r.lignes.map((l, i) => h('div', { class: 'qt-morceau', style: { '--c': COULEURS[i % COULEURS.length], flex: Math.max(l.quotite, 0.0001) } }, h('span', null, nom(l, i)), h('strong', null, pct2(l.quotiteArrondie)))));
     const controle = r.equilibre ? ui.badge(true, 'Le financement correspond au coût de l\'acquisition (' + fmtEuro(r.base) + ').')

@@ -1,10 +1,10 @@
 /*
  * Quotités d'acquisition en indivision : part de chaque acquéreur, d'après son financement.
  *
- * Contribution d'un acquéreur = ses apports personnels
- *                             + sa part du capital de chaque prêt
- *                             − sa part des frais de chaque prêt (garantie, dossier, courtage…),
- * les frais de prêt n'entrant pas dans la valeur du bien. Quotité = contribution / total des contributions,
+ * Contribution d'un acquéreur = son apport personnel, net de sa part des frais de prêt
+ *                               (l'apport déclaré comprend ces frais : garantie, dossier, courtage…)
+ *                             + sa part du capital de chaque prêt.
+ * Les frais de prêt n'entrent pas dans la valeur du bien. Quotité = contribution / total des contributions,
  * ce total devant correspondre au coût de l'acquisition (prix et frais d'acquisition).
  * Fonctions pures, testables sous Node.
  */
@@ -83,8 +83,13 @@
     const euros = (x) => Math.round(x).toLocaleString('fr-FR') + '\u00a0€';
     const noms = r.lignes.map((l) => l.nom || 'l\'acquéreur');
     const partsTxt = r.lignes.map((l, i) => noms[i] + ' à concurrence de ' + pct(l.quotiteArrondie)).join(', ');
-    const det = r.lignes.map((l, i) => '- ' + noms[i] + ' : ' + [l.apports ? euros(l.apports) + ' d\'apport personnel' : null, l.prets ? euros(l.prets) + ' au moyen du prêt' : null].filter(Boolean).join(' et ')
-      + (l.fraisPrets && !r.fraisDansCout ? ', déduction faite de sa part des frais de prêt (' + euros(l.fraisPrets) + ')' : '') + ', soit ' + euros(l.contribution) + '.');
+    const net = !r.fraisDansCout;
+    const det = r.lignes.map((l, i) => {
+      const apport = l.apports ? (net && l.fraisPrets
+        ? euros(l.apports - l.fraisPrets) + ' de deniers personnels (apport de ' + euros(l.apports) + ' dont ' + euros(l.fraisPrets) + ' affectés aux frais de prêt)'
+        : euros(l.apports) + ' de deniers personnels') : null;
+      return '- ' + noms[i] + ' : ' + [apport, l.prets ? euros(l.prets) + ' au moyen du prêt' : null].filter(Boolean).join(' et ') + ', soit ' + euros(l.contribution) + '.';
+    });
     return [
       'Les acquéreurs acquièrent le bien en indivision, ' + partsTxt + '.',
       'Ces quotités correspondent au financement de l\'acquisition, dont le coût total s\'élève à ' + euros(r.base) + (o.detailCout ? ' (' + o.detailCout + ')' : '') + ', financé ainsi :',
