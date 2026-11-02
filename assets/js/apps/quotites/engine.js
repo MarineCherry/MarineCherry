@@ -210,10 +210,9 @@
     return { blocs: B, totalCout, fondsPerso, fondsEmpr, equilibre: Math.abs(totalCout - (fondsPerso + fondsEmpr) + (r.fraisDansCout ? 0 : fraisPrets)) < 0.5 };
   }
 
-  // Décompte de chaque acquéreur, à la manière du décompte financier adressé avant la signature.
-  // Total à verser = apport personnel (moins sa part des frais de prêt lorsqu'ils sont réglés directement
-  // à la banque) + sa part du capital des prêts. Sommes à déduire : versements déjà reçus (acompte,
-  // provision sur frais…) et part du prêt à recevoir à la signature. Reste : le virement à faire.
+  // Fonds à verser à l'étude par chaque acquéreur (appel de la somme globale) et reste à verser.
+  // Dû = apport personnel (moins sa part des frais de prêt lorsqu'ils sont réglés directement à la banque)
+  // + sa part du capital des prêts, à débloquer entre les mains de l'étude.
   function versements(d, r) {
     const fraisALaBanque = d.fraisPretsEtude !== true;
     const acq = d.acquereurs || [];
@@ -222,17 +221,14 @@
       const apport = l.apports - (fraisALaBanque ? l.fraisPrets : 0);
       const du = apport + l.prets;
       const verse = somme(liste, (v) => n(v.montant));
-      const pretRecu = somme(liste.filter((v) => v.type === 'pret'), (v) => n(v.montant));
-      const pretARecevoir = Math.max(0, l.prets - pretRecu);
-      const reste = du - verse;
-      return { id: l.id, nom: l.nom, apport, pret: l.prets, du, verse, pretRecu, pretARecevoir, reste, virement: reste - pretARecevoir, versements: liste };
+      return { id: l.id, nom: l.nom, apport, pret: l.prets, du, verse, reste: du - verse, versements: liste };
     });
     const besoin = r.baseEmplois + (fraisALaBanque ? 0 : r.fraisPrets);
-    const tot = (k) => somme(lignes, (l) => l[k]);
-    const du = tot('du');
+    const du = somme(lignes, (l) => l.du);
+    const verse = somme(lignes, (l) => l.verse);
     return {
-      lignes, fraisALaBanque, besoin, du, verse: tot('verse'), reste: tot('reste'), apport: tot('apport'), pret: tot('pret'),
-      pretARecevoir: tot('pretARecevoir'), virement: tot('virement'),
+      lignes, fraisALaBanque, besoin, du, verse, reste: du - verse,
+      apport: somme(lignes, (l) => l.apport), pret: somme(lignes, (l) => l.pret),
       ecart: du - besoin, coherent: Math.abs(du - besoin) < 0.5,
     };
   }
@@ -255,10 +251,7 @@
     prets: [{ id: 'k1', libelle: 'Prêt immobilier', preteur: 'Banque Exemple', capital: 260000, frais: 7000, egal: true, repartition: {} }],
     fraisDansCout: true,
   };
-  EXEMPLE.acquereurs[0].versements = [
-    { id: 'v1', date: '2026-09-15', libelle: 'Acompte', montant: 15000 },
-    { id: 'v2', date: '2026-10-01', libelle: 'Provision sur frais', montant: 500 },
-  ];
+  EXEMPLE.acquereurs[0].versements = [{ id: 'v1', date: '2026-09-15', libelle: 'Dépôt de garantie', montant: 15000 }];
 
   return { calculer, parts, arrondir, clause, clauseActe, clauseTexte, versements, pct, EXEMPLE };
 });
