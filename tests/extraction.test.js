@@ -209,3 +209,15 @@ test('Mail transféré, sans civilité ni libellés (données fictives)', () => 
   assert.ok(d.notes.startsWith('À suivre (mail.msg) :\n- Le rapport de diagnostics,'));
   assert.strictEqual(d.bien.travauxRecents, true);
 });
+
+test('Document Word (.docx) : paragraphes et tableaux « libellé / valeur » (données fictives)', async () => {
+  const Z = require('../assets/js/core/zip.js');
+  const p = (t) => '<w:p><w:r><w:t xml:space="preserve">' + t + '</w:t></w:r></w:p>';
+  const cell = (t) => '<w:tc><w:tcPr/>' + p(t) + '</w:tc>';
+  const xml = '<w:document><w:body>' + p('OFFRE D\'ACHAT') + p('Le bien : 12 rue des Lilas 84000 Avignon')
+    + '<w:tbl><w:tr>' + cell('Acquéreur') + cell('Claire ROUX') + '</w:tr><w:tr>' + cell('Prix') + cell('210 000 €') + '</w:tr></w:tbl>'
+    + p('Fait à Avignon') + '<w:sectPr/></w:body></w:document>';
+  const docx = Z.ecrire({ '[Content_Types].xml': '<Types/>', 'word/document.xml': xml });
+  const t = X.texteDocx(Z.texte((await Z.lire(docx))['word/document.xml']));
+  assert.strictEqual(t, 'OFFRE D\'ACHAT\nLe bien : 12 rue des Lilas 84000 Avignon\nAcquéreur : Claire ROUX\nPrix : 210 000 €\nFait à Avignon');
+});

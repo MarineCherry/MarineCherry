@@ -1,5 +1,5 @@
 /*
- * Import d'un mail (.msg Outlook, .eml), d'une offre ou d'un compromis (PDF, texte) dans le suivi des dossiers.
+ * Import d'un mail (.msg Outlook, .eml), d'une offre ou d'un compromis (PDF, Word .docx, texte) dans le suivi des dossiers.
  * Le fichier est lu sur le poste (msgreader, pdf.js) ; rien n'est envoyé sur internet.
  */
 (function (root) {
@@ -9,7 +9,7 @@
   const ui = A.ui;
   const X = () => A.engines.extraction;
 
-  const FORMATS = '.msg,.eml,.pdf,.txt';
+  const FORMATS = '.msg,.eml,.pdf,.docx,.doc,.txt';
 
   function script(src) {
     return new Promise((ok, ko) => {
@@ -79,8 +79,14 @@
       return Object.assign({ nom }, m);
     }
     if (ext === 'pdf') return { nom, sujet: nom.replace(/\.pdf$/i, ''), expediteur: '', corps: await textePdf(fichier), piecesJointes: [] };
+    if (ext === 'docx') {
+      const fichiers = await A.zip.lire(new Uint8Array(await fichier.arrayBuffer()));
+      if (!fichiers['word/document.xml']) throw new Error('Ce fichier Word n\'a pas pu être lu.');
+      return { nom, sujet: nom.replace(/\.docx$/i, ''), expediteur: '', corps: X().texteDocx(A.zip.texte(fichiers['word/document.xml'])), piecesJointes: [] };
+    }
+    if (ext === 'doc') throw new Error('Ancien format Word (.doc) : ouvrez-le dans Word et enregistrez-le en .docx, puis importez-le.');
     if (ext === 'txt') return { nom, sujet: nom, expediteur: '', corps: await fichier.text(), piecesJointes: [] };
-    throw new Error('Format non pris en charge : utilisez un mail Outlook (.msg), un mail enregistré (.eml), un PDF ou un texte.');
+    throw new Error('Format non pris en charge : utilisez un mail Outlook (.msg), un mail enregistré (.eml), un PDF, un document Word (.docx) ou un texte.');
   }
 
   /* ---------- Fenêtre de vérification ---------- */

@@ -511,5 +511,32 @@
     return d;
   }
 
-  return { lireEml, extraire, fusionner, htmlEnTexte, piecesReconnues, adresse, montant };
+  /*
+   * Texte d'un document Word (.docx) à partir de son word/document.xml : un paragraphe par ligne ;
+   * dans un tableau, les cellules d'une même ligne sont réunies (« Libellé : valeur »).
+   */
+  function texteDocx(xml) {
+    const ent = (t) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+    const para = (p) => {
+      let t = '';
+      p.replace(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>|<w:(?:br|cr)\b[^>]*\/>|<w:tab\b[^>]*\/>/g, (all, x) => { t += x !== undefined ? ent(x) : all.startsWith('<w:tab') ? ' ' : '\n'; return ''; });
+      return t;
+    };
+    const paragraphes = (bloc) => (bloc.match(/<w:p[ >][\s\S]*?<\/w:p>/g) || []).map(para);
+    const corps = (/<w:body>([\s\S]*)<\/w:body>/.exec(xml || '') || [, xml || ''])[1];
+    const lignes = [];
+    // Tableaux et paragraphes, dans l'ordre du document.
+    corps.replace(/<w:tbl>[\s\S]*?<\/w:tbl>|<w:p[ >][\s\S]*?<\/w:p>/g, (bloc) => {
+      if (bloc.startsWith('<w:tbl>')) {
+        (bloc.match(/<w:tr[ >][\s\S]*?<\/w:tr>/g) || []).forEach((tr) => {
+          const cellules = (tr.match(/<w:tc>[\s\S]*?<\/w:tc>/g) || []).map((tc) => paragraphes(tc).join(' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
+          if (cellules.length) lignes.push(cellules.length === 2 && !/:\s*$/.test(cellules[0]) ? cellules[0] + ' : ' + cellules[1] : cellules.join(' '));
+        });
+      } else lignes.push(para(bloc));
+      return '';
+    });
+    return lignes.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  return { lireEml, extraire, fusionner, htmlEnTexte, piecesReconnues, adresse, montant, texteDocx };
 });

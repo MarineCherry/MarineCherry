@@ -336,7 +336,7 @@
     const main = h('div', { class: 'fiche-main' });
     const el = cadre([refEl, sousEl], [
       enregistrement,
-      ui.button('Importer un mail', { icon: 'mail', variant: 'ghost', onClick: () => importer(d, null, () => structure()) }),
+      ui.button('Importer un mail ou un document', { icon: 'mail', variant: 'ghost', onClick: () => importer(d, null, () => structure()) }),
       ui.button('Imprimer', { icon: 'print', variant: 'ghost', onClick: () => imprimer(d) }),
       ui.button('Supprimer', { icon: 'trash', variant: 'ghost', iconOnly: true, onClick: async () => {
         if (!(await ui.confirm('Supprimer ce dossier ?', 'Le dossier « ' + titre(d) + ' » sera supprimé' + (S().etat.mode === 'partage' ? ' pour tous les collègues' : '') + '. Pour le garder sans l\'afficher, choisissez plutôt le statut « Archivé ».', 'Supprimer'))) return;
