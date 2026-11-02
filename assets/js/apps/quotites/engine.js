@@ -221,13 +221,15 @@
       const apport = l.apports - (fraisALaBanque ? l.fraisPrets : 0);
       const du = apport + l.prets;
       const verse = somme(liste, (v) => n(v.montant));
-      return { id: l.id, nom: l.nom, apport, pret: l.prets, du, verse, reste: du - verse, versements: liste };
+      const fraisBanque = fraisALaBanque ? l.fraisPrets : 0;
+      return { id: l.id, nom: l.nom, apportSaisi: l.apports, fraisBanque, apport, pret: l.prets, du, verse, reste: du - verse, versements: liste };
     });
     const besoin = r.baseEmplois + (fraisALaBanque ? 0 : r.fraisPrets);
     const du = somme(lignes, (l) => l.du);
     const verse = somme(lignes, (l) => l.verse);
     return {
       lignes, fraisALaBanque, besoin, du, verse, reste: du - verse,
+      apportSaisi: somme(lignes, (l) => l.apportSaisi), fraisBanque: somme(lignes, (l) => l.fraisBanque),
       apport: somme(lignes, (l) => l.apport), pret: somme(lignes, (l) => l.pret),
       ecart: du - besoin, coherent: Math.abs(du - besoin) < 0.5,
     };

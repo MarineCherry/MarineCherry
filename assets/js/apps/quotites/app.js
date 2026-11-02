@@ -183,14 +183,15 @@
     const resteTxt = (x) => (x < -0.005 ? h('span', { class: 'qt-trop' }, 'Trop-versé ' + fmtEuro(-x)) : h('strong', null, fmtEuro(Math.max(0, x))));
     const tableau = ui.table([
       { label: 'Acquéreur', render: (l) => h('span', { class: 'qt-nom', style: { '--c': COULEURS[v.lignes.indexOf(l) % COULEURS.length] } }, h('span', { class: 'qt-pastille' }), nom(l, v.lignes.indexOf(l))) },
-      { label: 'Apport', num: true, render: (l) => fmtEuro(l.apport) },
+      { label: 'Apport', num: true, render: (l) => fmtEuro(l.apportSaisi) },
+      v.fraisBanque ? { label: 'Frais de prêt (banque)', num: true, render: (l) => (l.fraisBanque ? '− ' + fmtEuro(l.fraisBanque) : '—') } : null,
       { label: 'Prêt', num: true, render: (l) => fmtEuro(l.pret) },
       { label: 'À verser à l\'étude', num: true, render: (l) => h('strong', null, fmtEuro(l.du)) },
       { label: 'Déjà versé', num: true, render: (l) => fmtEuro(l.verse) },
       { label: 'Reste à verser', num: true, render: (l) => resteTxt(l.reste) },
-    ], v.lignes);
+    ].filter(Boolean), v.lignes);
     tableau.querySelector('table').appendChild(h('tfoot', null, h('tr', { class: 'strong' }, h('td', null, 'Total'),
-      h('td', { class: 'num' }, fmtEuro(v.apport)), h('td', { class: 'num' }, fmtEuro(v.pret)), h('td', { class: 'num' }, fmtEuro(v.du)), h('td', { class: 'num' }, fmtEuro(v.verse)), h('td', { class: 'num' }, resteTxt(v.reste)))));
+      h('td', { class: 'num' }, fmtEuro(v.apportSaisi)), v.fraisBanque ? h('td', { class: 'num' }, '− ' + fmtEuro(v.fraisBanque)) : null, h('td', { class: 'num' }, fmtEuro(v.pret)), h('td', { class: 'num' }, fmtEuro(v.du)), h('td', { class: 'num' }, fmtEuro(v.verse)), h('td', { class: 'num' }, resteTxt(v.reste)))));
     return { v, tableau, nom };
   }
   function tabVersements(ctx) {
@@ -210,7 +211,7 @@
     const recap = ctx.live((r) => {
       const { v, tableau, nom } = recapVersements(s, r);
       const copier = async () => {
-        const txt = [s.reference || 'Fonds à verser à l\'étude'].concat(v.lignes.map((l, i) => nom(l, i) + ' : à verser ' + fmtEuro(l.du) + ' (apport ' + fmtEuro(l.apport) + ' + prêt ' + fmtEuro(l.pret) + '), déjà versé ' + fmtEuro(l.verse)
+        const txt = [s.reference || 'Fonds à verser à l\'étude'].concat(v.lignes.map((l, i) => nom(l, i) + ' : à verser ' + fmtEuro(l.du) + ' (apport ' + fmtEuro(l.apportSaisi) + (l.fraisBanque ? ' − frais de prêt réglés à la banque ' + fmtEuro(l.fraisBanque) : '') + ' + prêt ' + fmtEuro(l.pret) + '), déjà versé ' + fmtEuro(l.verse)
           + (l.reste < -0.005 ? ', trop-versé ' + fmtEuro(-l.reste) : ', reste à verser ' + fmtEuro(Math.max(0, l.reste))))).join('\n');
         try { await navigator.clipboard.writeText(txt); ui.toast('Récapitulatif copié.'); } catch (e) { ui.toast('Copie impossible.', 'error'); }
       };
