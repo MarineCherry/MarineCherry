@@ -538,5 +538,74 @@
     return lignes.join('\n').replace(/\n{3,}/g, '\n\n').trim();
   }
 
-  return { lireEml, extraire, fusionner, htmlEnTexte, piecesReconnues, adresse, montant, texteDocx };
+  // Texte d'un document OpenOffice / LibreOffice (.odt) à partir de son content.xml.
+  function texteOdt(xml) {
+    const ent = (t) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+    return (xml || '').replace(/<text:(?:line-break|tab)\s*\/>/g, (x) => (x.includes('tab') ? ' ' : '\n'))
+      .replace(/<\/text:(?:p|h)>/g, '\n').replace(/<table:table-cell[^>]*>/g, ' ').replace(/<[^>]+>/g, '')
+      .split('\n').map((l) => ent(l).replace(/\s+/g, ' ').trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  // Texte d'un document RTF (enregistré depuis Word, WordPad…) : lecture des groupes et mots de contrôle.
+  const RTF_IGNORES = /^(?:fonttbl|colortbl|stylesheet|info|pict|object|themedata|colorschememapping|latentstyles|datastore|xmlnstbl|listtable|listoverridetable|rsidtbl|generator|mmathPr|header|footer|headerl|headerr|headerf|footerl|footerr|footerf|fldinst|filetbl|revtbl|pgdsctbl|panose)$/;
+  const CP1252 = { 0x80: '€', 0x82: '‚', 0x84: '„', 0x85: '…', 0x91: '‘', 0x92: '’', 0x93: '“', 0x94: '”', 0x96: '–', 0x97: '—', 0x8c: 'Œ', 0x9c: 'œ', 0xa0: ' ' };
+  function texteRtf(rtf) {
+    const src = String(rtf || '');
+    let out = '', ignore = false, uc = 1, sauter = 0;
+    const pile = [];
+    const ecrire = (c) => { if (sauter > 0) { sauter--; return; } if (!ignore) out += c; };
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i];
+      if (c === '{') { pile.push({ ignore, uc }); continue; }
+      if (c === '}') { const e = pile.pop(); if (e) { ignore = e.ignore; uc = e.uc; } continue; }
+      if (c === '\r' || c === '\n') continue;
+      if (c !== '\\') { ecrire(c); continue; }
+      const n = src[i + 1];
+      if (n === '\\' || n === '{' || n === '}') { ecrire(n); i++; continue; }
+      if (n === '*') { ignore = true; i++; continue; }
+      if (n === "'") { const code = parseInt(src.substr(i + 2, 2), 16); ecrire(CP1252[code] || String.fromCharCode(code)); i += 3; continue; }
+      if (n === '~') { ecrire(' '); i++; continue; }
+      const m = /^([a-zA-Z]+)(-?\d+)? ?/.exec(src.slice(i + 1, i + 40));
+      if (!m) { i++; continue; }
+      i += m[0].length;
+      const mot = m[1], arg = m[2] !== undefined ? +m[2] : null;
+      sauter = 0;
+      if (RTF_IGNORES.test(mot)) ignore = true;
+      else if (mot === 'uc') uc = arg || 0;
+      else if (mot === 'u') { ecrire(String.fromCharCode((arg + 65536) % 65536)); sauter = uc; }
+      else if (mot === 'par' || mot === 'line' || mot === 'row' || mot === 'sect' || mot === 'page') ecrire('\n');
+      else if (mot === 'tab' || mot === 'cell') ecrire(' ');
+    }
+    return out.split('\n').map((l) => l.replace(/[ \t]+/g, ' ').trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  /*
+   * Ancien format Word (.doc, binaire) : reconstitution approchée du texte, à partir des suites de caractères
+   * lisibles (texte enregistré en Unicode ou en Windows-1252). Suffisant pour repérer les informations.
+   */
+  function texteDocBinaire(octets) {
+    const b = octets instanceof Uint8Array ? octets : new Uint8Array(octets);
+    const lisible = (c) => c === 9 || c === 13 || c === 10 || c === 11 || (c >= 32 && c !== 127);
+    const blocs = [];
+    // Suites UTF-16 (petit-boutiste).
+    let cur = '', debut = 0;
+    for (let i = 0; i + 1 < b.length; i += 2) {
+      const c = b[i] | (b[i + 1] << 8);
+      if (lisible(c) && c < 0x2400) { if (!cur) debut = i; cur += String.fromCharCode(c); }
+      else { if (cur.length >= 20) blocs.push({ debut, t: cur }); cur = ''; }
+    }
+    if (cur.length >= 20) blocs.push({ debut, t: cur });
+    // Suites sur un octet (Windows-1252), si le texte n'est pas en Unicode.
+    const cp = { 0x80: '€', 0x92: '’', 0x93: '“', 0x94: '”', 0x96: '–', 0x97: '—', 0x9c: 'œ', 0xa0: ' ' };
+    cur = '';
+    for (let i = 0; i < b.length; i++) {
+      const c = b[i];
+      if (lisible(c) && (c < 0x80 || c >= 0xa0 || cp[c])) { if (!cur) debut = i; cur += cp[c] || String.fromCharCode(c); }
+      else { if (cur.length >= 30 && /[a-zà-ÿ]{3,} [a-zà-ÿ]{2,}/i.test(cur)) blocs.push({ debut, t: cur }); cur = ''; }
+    }
+    return blocs.sort((x, y) => x.debut - y.debut).map((x) => x.t).join('\n')
+      .replace(/[\r\x0b]/g, '\n').split('\n').map((l) => l.replace(/[\x07\x01-\x08\x0e-\x1f]/g, ' ').replace(/[ \t]+/g, ' ').trim()).filter(Boolean).join('\n');
+  }
+
+  return { lireEml, extraire, fusionner, htmlEnTexte, piecesReconnues, adresse, montant, texteDocx, texteOdt, texteRtf, texteDocBinaire };
 });

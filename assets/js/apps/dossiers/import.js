@@ -9,7 +9,7 @@
   const ui = A.ui;
   const X = () => A.engines.extraction;
 
-  const FORMATS = '.msg,.eml,.pdf,.docx,.doc,.txt';
+  const FORMATS = '.msg,.eml,.pdf,.docx,.docm,.dotx,.doc,.rtf,.odt,.txt,.htm,.html';
 
   function script(src) {
     return new Promise((ok, ko) => {
@@ -59,34 +59,52 @@
   }
 
   // Lecture d'un fichier : { nom, sujet, expediteur, corps, piecesJointes }
+  // Le type du document est reconnu d'après son contenu (signature des premiers octets), puis son extension.
   async function lireFichier(fichier) {
     const nom = fichier.name || 'document';
-    const ext = (nom.split('.').pop() || '').toLowerCase();
-    if (ext === 'msg') {
-      await script('assets/vendor/msgreader/msgreader.min.js');
-      const r = new root.MsgReader(await fichier.arrayBuffer());
-      const i = r.getFileData();
-      if (i.error) throw new Error('Ce fichier Outlook n\'a pas pu être lu.');
-      const exp = [i.senderName, i.senderEmail ? '<' + (i.senderSmtpAddress || i.senderEmail) + '>' : ''].filter(Boolean).join(' ');
-      return {
-        nom, sujet: i.subject || '', expediteur: exp, date: i.messageDeliveryTime || i.clientSubmitTime || '',
-        corps: i.body || (i.bodyHtml ? X().htmlEnTexte(i.bodyHtml) : ''),
-        piecesJointes: (i.attachments || []).filter((a) => !a.attachmentHidden).map((a) => a.fileName || a.name || 'pièce jointe'),
-      };
+    const ext = (nom.includes('.') ? nom.split('.').pop() : '').toLowerCase();
+    const sujet = nom.replace(/\.[^.]+$/, '');
+    const octets = new Uint8Array(await fichier.arrayBuffer());
+    const sig = (...x) => x.every((v, k) => octets[k] === v);
+    const debut = new TextDecoder('latin1').decode(octets.subarray(0, 16));
+    const doc = (corps) => ({ nom, sujet, expediteur: '', corps, piecesJointes: [] });
+
+    if (sig(0x50, 0x4b, 0x03, 0x04)) {
+      // Archive : Word (.docx, .docm, .dotx) ou OpenOffice (.odt).
+      const f = await A.zip.lire(octets);
+      if (f['word/document.xml']) return doc(X().texteDocx(A.zip.texte(f['word/document.xml'])));
+      if (f['content.xml']) return doc(X().texteOdt(A.zip.texte(f['content.xml'])));
+      throw new Error('« ' + nom + ' » est une archive qui ne contient pas de document Word.');
     }
-    if (ext === 'eml') {
-      const m = X().lireEml(await fichier.text());
-      return Object.assign({ nom }, m);
+    if (sig(0x25, 0x50, 0x44, 0x46)) return doc(await textePdf(fichier));
+    if (/^\{\\rtf/.test(debut)) return doc(X().texteRtf(new TextDecoder('latin1').decode(octets)));
+    if (sig(0xd0, 0xcf, 0x11, 0xe0)) {
+      // Format binaire Microsoft : mail Outlook (.msg) ou ancien document Word (.doc).
+      if (ext !== 'doc' && ext !== 'dot') {
+        try {
+          await script('assets/vendor/msgreader/msgreader.min.js');
+          const r = new root.MsgReader(octets.buffer);
+          const i = r.getFileData();
+          if (!i.error && (i.subject || i.body || i.bodyHtml)) {
+            const exp = [i.senderName, i.senderEmail ? '<' + (i.senderSmtpAddress || i.senderEmail) + '>' : ''].filter(Boolean).join(' ');
+            return {
+              nom, sujet: i.subject || '', expediteur: exp, date: i.messageDeliveryTime || i.clientSubmitTime || '',
+              corps: i.body || (i.bodyHtml ? X().htmlEnTexte(i.bodyHtml) : ''),
+              piecesJointes: (i.attachments || []).filter((a) => !a.attachmentHidden).map((a) => a.fileName || a.name || 'pièce jointe'),
+            };
+          }
+        } catch (e) { /* pas un mail : ancien document Word */ }
+      }
+      const t = X().texteDocBinaire(octets);
+      if (t.length < 40) throw new Error('« ' + nom + ' » n\'a pas pu être lu. Ouvrez-le dans Word et enregistrez-le en .docx, puis importez-le.');
+      return doc(t);
     }
-    if (ext === 'pdf') return { nom, sujet: nom.replace(/\.pdf$/i, ''), expediteur: '', corps: await textePdf(fichier), piecesJointes: [] };
-    if (ext === 'docx') {
-      const fichiers = await A.zip.lire(new Uint8Array(await fichier.arrayBuffer()));
-      if (!fichiers['word/document.xml']) throw new Error('Ce fichier Word n\'a pas pu être lu.');
-      return { nom, sujet: nom.replace(/\.docx$/i, ''), expediteur: '', corps: X().texteDocx(A.zip.texte(fichiers['word/document.xml'])), piecesJointes: [] };
-    }
-    if (ext === 'doc') throw new Error('Ancien format Word (.doc) : ouvrez-le dans Word et enregistrez-le en .docx, puis importez-le.');
-    if (ext === 'txt') return { nom, sujet: nom, expediteur: '', corps: await fichier.text(), piecesJointes: [] };
-    throw new Error('Format non pris en charge : utilisez un mail Outlook (.msg), un mail enregistré (.eml), un PDF, un document Word (.docx) ou un texte.');
+    // Fichiers texte : mail enregistré (.eml), page web, texte.
+    const texte = new TextDecoder('utf-8').decode(octets);
+    if (ext === 'eml' || /^(?:Return-Path|Received|From|MIME-Version|Delivered-To|Date|Subject):/im.test(texte.slice(0, 2000))) return Object.assign({ nom }, X().lireEml(texte));
+    if (ext === 'html' || ext === 'htm' || /^\s*<(?:!doctype|html)/i.test(texte)) return doc(X().htmlEnTexte(texte));
+    if (ext === 'txt' || !/[\x00-\x08\x0e-\x1f]/.test(texte.slice(0, 2000))) return doc(texte);
+    throw new Error('Format de « ' + nom + ' » non pris en charge : utilisez un mail Outlook (.msg), un mail enregistré (.eml), un PDF, un document Word (.docx ou .doc), RTF ou OpenOffice (.odt), ou un texte.');
   }
 
   /* ---------- Fenêtre de vérification ---------- */

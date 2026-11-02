@@ -221,3 +221,13 @@ test('Document Word (.docx) : paragraphes et tableaux « libellé / valeur » (d
   const t = X.texteDocx(Z.texte((await Z.lire(docx))['word/document.xml']));
   assert.strictEqual(t, 'OFFRE D\'ACHAT\nLe bien : 12 rue des Lilas 84000 Avignon\nAcquéreur : Claire ROUX\nPrix : 210 000 €\nFait à Avignon');
 });
+
+test('RTF, OpenOffice et ancien Word (.doc) : texte reconstitué', () => {
+  const rtf = '{\\rtf1\\ansi\\uc1{\\fonttbl{\\f0 Times;}}{\\*\\generator Writer;}\\pard Acqu\\u233\\\'e9reur : Claire ROUX\\par Prix : 210\\~000 \\\'80\\par}';
+  assert.strictEqual(X.texteRtf(rtf), 'Acquéreur : Claire ROUX\nPrix : 210 000 €');
+  assert.strictEqual(X.texteOdt('<office:text><text:p>VENDEURS :</text:p><text:p>Monsieur DUPONT Marc</text:p></office:text>'), 'VENDEURS :\nMonsieur DUPONT Marc');
+  // Ancien .doc : texte en Unicode au milieu de données binaires.
+  const t = 'Adresse du bien vendu: 12 rue des Lilas 84000 Avignon\r';
+  const b = Buffer.concat([Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0, 1, 2, 3]), Buffer.from(t, 'utf16le'), Buffer.from([0, 0, 0xff, 0xfe])]);
+  assert.ok(X.texteDocBinaire(new Uint8Array(b)).includes('Adresse du bien vendu: 12 rue des Lilas 84000 Avignon'));
+});
