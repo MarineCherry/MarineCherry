@@ -57,9 +57,11 @@
         l.detailPrets.push({ id: p.id, part: pp[i], capital: n(p.capital) * pp[i], frais: n(p.frais) * pp[i] });
       });
     });
-    // Convention : frais de prêt déduits de la contribution (par défaut), ou comptés dans le coût de l'acquisition.
+    // Apports : sommes affectées à l'acquisition (versées à l'étude). Les frais de prêt sont payés à part par
+    // les emprunteurs, selon leur part du prêt ; avec la méthode de l'étude, ils s'ajoutent au coût de
+    // l'opération et à la contribution de chacun. Sinon, ils sont laissés hors du calcul.
     const fraisDansCout = !!d.fraisDansCout;
-    lignes.forEach((l) => (l.contribution = l.apports + l.prets - (fraisDansCout ? 0 : l.fraisPrets)));
+    lignes.forEach((l) => (l.contribution = l.apports + l.prets + (fraisDansCout ? l.fraisPrets : 0)));
     const total = somme(lignes, (l) => l.contribution);
     const fr = lignes.map((l) => (total > 0 ? Math.max(0, l.contribution) / total : 0));
     const arr = total > 0 ? arrondir(fr) : fr;
@@ -69,7 +71,7 @@
     const base = baseEmplois + (fraisDansCout ? fraisPrets : 0);
     return {
       lignes, base, baseEmplois, total, ressources, fraisPrets, fraisDansCout,
-      // Écart entre le financement (net des frais de prêt) et le coût de l'acquisition.
+      // Écart entre le financement et le coût de l'opération.
       ecart: total - base,
       equilibre: Math.abs(total - base) < 0.5,
       negatif: lignes.some((l) => l.contribution < -0.005),
@@ -83,11 +85,9 @@
     const euros = (x) => Math.round(x).toLocaleString('fr-FR') + '\u00a0€';
     const noms = r.lignes.map((l) => l.nom || 'l\'acquéreur');
     const partsTxt = r.lignes.map((l, i) => noms[i] + ' à concurrence de ' + pct(l.quotiteArrondie)).join(', ');
-    const net = !r.fraisDansCout;
     const det = r.lignes.map((l, i) => {
-      const apport = l.apports ? (net && l.fraisPrets
-        ? euros(l.apports - l.fraisPrets) + ' de deniers personnels (apport de ' + euros(l.apports) + ' dont ' + euros(l.fraisPrets) + ' affectés aux frais de prêt)'
-        : euros(l.apports) + ' de deniers personnels') : null;
+      const perso = l.contribution - l.prets;
+      const apport = perso ? euros(perso) + ' de deniers personnels' : null;
       return '- ' + noms[i] + ' : ' + [apport, l.prets ? euros(l.prets) + ' au moyen du prêt' : null].filter(Boolean).join(' et ') + ', soit ' + euros(l.contribution) + '.';
     });
     return [
@@ -115,7 +115,9 @@
     const parCode = (code) => somme(emplois.filter((x) => x.code === code), (x) => n(x.montant));
     const prets = (d.prets || []).filter((x) => n(x.capital));
     const fraisPrets = somme(d.prets || [], (x) => n(x.frais));
-    const fondsPerso = somme(r.lignes, (l) => l.apports);
+    // Fonds personnels : apport, plus la part des frais de prêt payée par chacun (méthode de l'étude).
+    const persoDe = (l) => l.apports + (r.fraisDansCout ? l.fraisPrets : 0);
+    const fondsPerso = somme(r.lignes, persoDe);
     const fondsEmpr = somme(prets, (x) => n(x.capital));
     const cout = [
       ['Prix', parCode('prix')],
@@ -151,7 +153,7 @@
     st('Prise en charge du financement de l\'opération');
     st('A - Fonds personnels');
     p('Le financement du prix et des frais au moyen de leur apport personnel est réalisé par chacun des ACQUEREURS à concurrence des sommes suivantes :');
-    r.lignes.forEach((l, i) => { if (l.apports) p(nomDe(i) + ' apporte ' + lettres(l.apports) + ' provenant de fonds lui appartenant à titre personnel.'); });
+    r.lignes.forEach((l, i) => { if (persoDe(l)) p(nomDe(i) + ' apporte ' + lettres(persoDe(l)) + ' provenant de fonds lui appartenant à titre personnel.'); });
 
     if (prets.length) {
       st('B - Fonds empruntés');
@@ -175,7 +177,7 @@
     const ligne = (lib, f, tot) => [lib].concat(r.lignes.map(f), [tot]);
     const totalContrib = somme(r.lignes, (l) => l.contribution);
     B.push({ type: 'table', entete, gras: ['Total', 'Soit en proportion du coût de l\'opération'], lignes: [
-      ligne('Apport personnel', (l) => eur(r.fraisDansCout ? l.apports : l.apports - l.fraisPrets), eur(r.fraisDansCout ? fondsPerso : fondsPerso - r.fraisPrets)),
+      ligne('Apport personnel', (l) => eur(persoDe(l)), eur(fondsPerso)),
       prets.length ? ligne('Prêt', (l) => eur(l.prets), eur(fondsEmpr)) : null,
       ligne('Total', (l) => eur(l.contribution), eur(totalContrib)),
       ligne('Soit en proportion du coût de l\'opération', (l) => pct(l.quotiteArrondie), '100 %'),
@@ -207,30 +209,28 @@
     p('Sur la quote-part revenant définitivement à chacune des parties seront retenues les sommes dont elles sont redevables l\'une envers l\'autre.');
     p('Ces conventions sont acceptées par chacun des ACQUEREURS indivisaires.');
     p('ETANT PRECISE que les conventions qui précèdent s\'appliqueront à défaut de dispositions contraires contenues dans le contrat de mariage ou le pacte civil de solidarité pouvant lier les ACQUEREURS.');
-    return { blocs: B, totalCout, fondsPerso, fondsEmpr, equilibre: Math.abs(totalCout - (fondsPerso + fondsEmpr) + (r.fraisDansCout ? 0 : fraisPrets)) < 0.5 };
+    return { blocs: B, totalCout, fondsPerso, fondsEmpr, equilibre: Math.abs(totalCout - (fondsPerso + fondsEmpr)) < 0.5 };
   }
 
   // Fonds à verser à l'étude par chaque acquéreur (appel de la somme globale) et reste à verser.
-  // Dû = apport personnel (moins sa part des frais de prêt lorsqu'ils sont réglés directement à la banque)
-  // + sa part du capital des prêts, à débloquer entre les mains de l'étude.
+  // Dû = apport + part du capital des prêts (débloqué entre les mains de l'étude)
+  // + part des frais de prêt seulement s'ils sont appelés par l'étude (sinon réglés à la banque).
   function versements(d, r) {
     const fraisALaBanque = d.fraisPretsEtude !== true;
     const acq = d.acquereurs || [];
     const lignes = r.lignes.map((l, i) => {
       const liste = ((acq[i] || {}).versements || []).filter((v) => n(v.montant));
-      const apport = l.apports - (fraisALaBanque ? l.fraisPrets : 0);
-      const du = apport + l.prets;
+      const fraisEtude = fraisALaBanque ? 0 : l.fraisPrets;
+      const du = l.apports + l.prets + fraisEtude;
       const verse = somme(liste, (v) => n(v.montant));
-      const fraisBanque = fraisALaBanque ? l.fraisPrets : 0;
-      return { id: l.id, nom: l.nom, apportSaisi: l.apports, fraisBanque, apport, pret: l.prets, du, verse, reste: du - verse, versements: liste };
+      return { id: l.id, nom: l.nom, apport: l.apports, fraisEtude, pret: l.prets, du, verse, reste: du - verse, versements: liste };
     });
     const besoin = r.baseEmplois + (fraisALaBanque ? 0 : r.fraisPrets);
-    const du = somme(lignes, (l) => l.du);
-    const verse = somme(lignes, (l) => l.verse);
+    const tot = (k) => somme(lignes, (l) => l[k]);
+    const du = tot('du');
     return {
-      lignes, fraisALaBanque, besoin, du, verse, reste: du - verse,
-      apportSaisi: somme(lignes, (l) => l.apportSaisi), fraisBanque: somme(lignes, (l) => l.fraisBanque),
-      apport: somme(lignes, (l) => l.apport), pret: somme(lignes, (l) => l.pret),
+      lignes, fraisALaBanque, besoin, du, verse: tot('verse'), reste: tot('reste'),
+      apport: tot('apport'), fraisEtude: tot('fraisEtude'), pret: tot('pret'),
       ecart: du - besoin, coherent: Math.abs(du - besoin) < 0.5,
     };
   }
@@ -243,8 +243,8 @@
   const EXEMPLE = {
     reference: '',
     acquereurs: [
-      { id: 'a1', civilite: 'Mme', nom: 'Julie MARTIN', apports: [{ id: 'p1', libelle: 'Épargne', montant: 50000 }] },
-      { id: 'a2', civilite: 'M', nom: 'Thomas DURAND', apports: [{ id: 'p2', libelle: 'Épargne', montant: 20000 }] },
+      { id: 'a1', civilite: 'Mme', nom: 'Julie MARTIN', apports: [{ id: 'p1', libelle: 'Épargne', montant: 45000 }] },
+      { id: 'a2', civilite: 'M', nom: 'Thomas DURAND', apports: [{ id: 'p2', libelle: 'Épargne', montant: 18000 }] },
     ],
     emplois: [
       { id: 'e1', code: 'prix', libelle: 'Prix', montant: 300000 },
