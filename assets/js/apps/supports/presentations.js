@@ -360,7 +360,7 @@
         rendu: () => tableau3([
           ['Comment se séparer', 'divorce (avocats, juge ou notaire)', 'simple déclaration', 'aucune formalité'],
           ['Compensation possible', OUI('prestation compensatoire'), NON(), NON()],
-          ['Partage des biens', 'liquidation du régime', 'partage de l\'indivision', 'partage de l\'indivision'],
+          ['Partage des biens', 'liquidation du régime matrimonial', 'chacun reprend ses biens ; partage de ce qui est en indivision', 'chacun reprend ses biens ; partage de ce qui a été acheté ensemble'],
         ]),
       },
       {
