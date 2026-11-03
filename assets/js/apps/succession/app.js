@@ -207,6 +207,24 @@
     });
   }
 
+  // « Donation de tout » : une ligne par bien saisi (totalité, à tous les enfants), sauf les biens déjà donnés.
+  function donnerTout(ctx) {
+    const s = ctx.state;
+    const deja = new Set(s.donations.map((d) => d.bienId).filter(Boolean));
+    const ajouts = s.biens.filter((b) => isNum(b.valeur) && b.valeur > 0 && !deja.has(b.id)).map((b) => {
+      const pr = s.nbParents === 1 ? 'P1' : b.proprietaire || 'commun';
+      return Object.assign(newDonation(pr === 'commun' ? 'deux' : pr), { bienId: b.id });
+    });
+    if (!ajouts.length) {
+      ui.toast(s.biens.some((b) => isNum(b.valeur) && b.valeur > 0) ? 'Tous les biens sont déjà dans les donations.' : 'Aucun bien saisi dans l\'onglet « Patrimoine ».');
+      return;
+    }
+    // Les lignes vides (sans bien choisi) sont remplacées.
+    s.donations = s.donations.filter((d) => d.bienId).concat(ajouts);
+    ctx.render(); ctx.changed();
+    ui.toast(ajouts.length + (ajouts.length > 1 ? ' biens ajoutés' : ' bien ajouté') + ' : totalité, à tous les enfants. Ajustez ligne par ligne si besoin.');
+  }
+
   function tabDonations(ctx) {
     const s = ctx.state;
     const deux = s.nbParents === 2;
@@ -237,7 +255,9 @@
       h('div', { class: 'table-wrap' }, h('table', { class: 'table table-input' },
         h('thead', null, h('tr', null, ['Qui donne ?', 'Quel bien ?', 'Montant (pleine propriété)', 'À qui ?', 'Donné (PP / NP)', ''].map((x) => h('th', null, x)))),
         h('tbody', null, rows.length ? rows : h('tr', null, h('td', { colspan: 6, class: 'empty' }, 'Aucune donation envisagée.'))))),
-      ui.button('Ajouter une donation', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.donations.push(newDonation(deux ? 'deux' : 'P1')); ctx.render(); } }),
+      h('div', { class: 'chips' },
+        ui.button('Ajouter une donation', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.donations.push(newDonation(deux ? 'deux' : 'P1')); ctx.render(); } }),
+        ui.button('Donation de tout', { icon: 'plus', variant: 'soft', small: true, onClick: () => donnerTout(ctx) })),
       ctx.live((r) => h('div', { class: 'checks' },
         r.parents.filter((x) => x.actif).map((x) => {
           const pat = r.patrimoine[x.code];
