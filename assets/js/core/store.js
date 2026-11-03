@@ -60,6 +60,28 @@
   }
 
   const saveDraft = (appId, data) => write(KEY_DRAFT + appId, data);
+
+  /*
+   * Dossiers récents (à la manière d'un historique de discussions) : chaque dossier travaillé est gardé
+   * sur ce poste, avec son titre et sa date de modification. Au plus HIST_MAX dossiers par outil ;
+   * les plus anciens sont retirés si la place manque.
+   */
+  const KEY_HIST = 'atelier.historique.';
+  const HIST_MAX = 80;
+  const listeHistorique = (appId) => (read(KEY_HIST + appId) || []).slice().sort((a, b) => (a.modifie < b.modifie ? 1 : -1));
+  function enregistrerHistorique(appId, entree) {
+    let liste = listeHistorique(appId).filter((x) => x.id !== entree.id);
+    liste.unshift(Object.assign({}, entree, { modifie: new Date().toISOString() }));
+    liste = liste.slice(0, HIST_MAX);
+    while (liste.length && !write(KEY_HIST + appId, liste)) {
+      if (liste.length === 1) return false;
+      liste.pop();
+    }
+    return true;
+  }
+  function supprimerHistorique(appId, id) {
+    write(KEY_HIST + appId, listeHistorique(appId).filter((x) => x.id !== id));
+  }
   const loadDraft = (appId) => read(KEY_DRAFT + appId);
 
   // Téléchargement d'un fichier JSON sur le poste.
@@ -107,5 +129,5 @@
     return file.dossier;
   }
 
-  A.store = { getParams, setParams, resetParams, isCustomized, onParamsChange, engineParams, saveDraft, loadDraft, downloadJSON, openJSON, wrapFile, unwrapFile };
+  A.store = { getParams, setParams, resetParams, isCustomized, onParamsChange, engineParams, saveDraft, loadDraft, listeHistorique, enregistrerHistorique, supprimerHistorique, downloadJSON, openJSON, wrapFile, unwrapFile };
 })(typeof self !== 'undefined' ? self : this);

@@ -19,7 +19,21 @@
 (function (root) {
   'use strict';
   const A = root.Atelier;
-  const { h, debounce, clone, slug, todayISO } = A.util;
+  const { h, debounce, clone, slug, todayISO, uid } = A.util;
+
+  // Date de modification lisible : « à l'instant », « il y a 5 min », « hier à 14 h 05 », « 12/10/2026 ».
+  function quand(iso) {
+    const d = new Date(iso), maintenant = new Date();
+    const min = Math.round((maintenant - d) / 60000);
+    const heure = d.getHours() + ' h ' + String(d.getMinutes()).padStart(2, '0');
+    if (min < 1) return 'à l\'instant';
+    if (min < 60) return 'il y a ' + min + ' min';
+    const jour = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const ecart = Math.round((jour(maintenant) - jour(d)) / 86400000);
+    if (ecart === 0) return 'aujourd\'hui à ' + heure;
+    if (ecart === 1) return 'hier à ' + heure;
+    return d.toLocaleDateString('fr-FR');
+  }
   const ui = A.ui;
 
   A.simulator = function (cfg) {
@@ -27,6 +41,8 @@
       const saved = A.store.loadDraft(cfg.app.id);
       let state = saved && saved.state ? normalize(saved.state) : cfg.empty();
       let tab = saved && cfg.tabs.some((t) => t.id === saved.tab) ? saved.tab : cfg.tabs[0].id;
+      // Identifiant du dossier en cours dans les « dossiers récents ».
+      let dossierId = (saved && saved.id) || uid('dos');
       let result = null;
       let live = [];
 
@@ -42,7 +58,64 @@
           result = null;
         }
       }
-      const persist = debounce(() => A.store.saveDraft(cfg.app.id, { state, tab }), 300);
+      function persistNow() {
+        A.store.saveDraft(cfg.app.id, { state, tab, id: dossierId });
+        if (!cfg.isEmpty(state)) {
+          A.store.enregistrerHistorique(cfg.app.id, { id: dossierId, titre: cfg.reference(state) || 'Dossier sans nom', state: clone(state), tab });
+        }
+      }
+      const persist = debounce(persistNow, 400);
+      // Ouvre un dossier (récent ou fichier) en gardant le dossier en cours dans les récents.
+      function charger(nouvelEtat, id, onglet) {
+        persistNow();
+        state = nouvelEtat;
+        dossierId = id || uid('dos');
+        tab = onglet && cfg.tabs.some((t) => t.id === onglet) ? onglet : cfg.tabs[0].id;
+        render();
+        persistNow();
+      }
+
+      // Panneau « Dossiers récents » : recherche, ouverture, suppression.
+      function panneauRecents() {
+        persistNow();
+        let filtre = '';
+        const liste = h('div', { class: 'recents-liste' });
+        const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+        const onKey = (e) => { if (e.key === 'Escape') close(); };
+        function remplir() {
+          const f = filtre.trim().toLowerCase();
+          const items = A.store.listeHistorique(cfg.app.id).filter((x) => !f || (x.titre || '').toLowerCase().includes(f));
+          liste.replaceChildren(...(items.length ? items.map((x) => h('div', { class: 'recent' + (x.id === dossierId ? ' recent-actif' : '') },
+            h('button', { type: 'button', class: 'recent-ouvrir', onclick: () => {
+              close();
+              if (x.id === dossierId) return;
+              charger(normalize(clone(x.state)), x.id, x.tab);
+              ui.toast('Dossier « ' + x.titre + ' » ouvert.');
+            } },
+              h('span', { class: 'recent-titre' }, x.titre || 'Dossier sans nom'),
+              h('span', { class: 'recent-date' }, x.id === dossierId ? 'Dossier en cours · ' + quand(x.modifie) : quand(x.modifie))),
+            h('button', { type: 'button', class: 'btn btn-ghost btn-icon btn-sm', title: 'Retirer de la liste', 'aria-label': 'Retirer ' + x.titre, onclick: async () => {
+              const ok = await ui.confirm('Retirer ce dossier ?', '« ' + x.titre + ' » sera retiré des dossiers récents de ce poste.', 'Retirer');
+              if (!ok) return;
+              A.store.supprimerHistorique(cfg.app.id, x.id);
+              remplir();
+            } }, ui.icon('trash', 16))))
+            : [h('p', { class: 'muted recents-vide' }, f ? 'Aucun dossier ne correspond.' : 'Aucun dossier pour l\'instant : les dossiers travaillés s\'ajoutent ici automatiquement.')]));
+        }
+        const recherche = h('input', { class: 'input', type: 'search', placeholder: 'Rechercher un dossier…', 'aria-label': 'Rechercher un dossier', oninput: (e) => { filtre = e.target.value; remplir(); } });
+        const overlay = h('div', { class: 'overlay', onclick: (e) => { if (e.target === overlay) close(); } },
+          h('div', { class: 'dialog dialog-recents', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Dossiers récents' },
+            h('h3', { class: 'dialog-title' }, 'Dossiers récents'),
+            h('p', { class: 'small muted' }, 'Gardés automatiquement sur ce poste (dans ce navigateur), du plus récent au plus ancien.'),
+            recherche, liste,
+            h('div', { class: 'dialog-actions' },
+              ui.button('Nouveau dossier', { icon: 'plus', variant: 'soft', onClick: () => { close(); actions.nouveau(); } }),
+              ui.button('Fermer', { variant: 'ghost', onClick: close }))));
+        remplir();
+        document.body.appendChild(overlay);
+        document.addEventListener('keydown', onKey);
+        recherche.focus();
+      }
 
       const ctx = {
         get state() { return state; },
@@ -118,23 +191,16 @@
       };
 
       const actions = {
-        async nouveau() {
-          if (!cfg.isEmpty(state)) {
-            const ok = await ui.confirm('Nouveau dossier', "Le dossier en cours sera effacé de l'écran. Pensez à l'enregistrer si vous souhaitez le conserver.", 'Commencer un nouveau dossier');
-            if (!ok) return;
-          }
-          state = cfg.empty();
-          tab = cfg.tabs[0].id;
-          render();
-          persist();
-          ui.toast('Nouveau dossier prêt.');
+        nouveau() {
+          const avait = !cfg.isEmpty(state);
+          charger(cfg.empty(), null, null);
+          ui.toast(avait ? 'Nouveau dossier prêt. Le précédent est dans « Récents ».' : 'Nouveau dossier prêt.');
         },
+        recents() { panneauRecents(); },
         async ouvrir() {
           try {
             const file = await A.store.openJSON();
-            state = normalize(A.store.unwrapFile(cfg.app.id, file));
-            render();
-            persist();
+            charger(normalize(A.store.unwrapFile(cfg.app.id, file)), null, null);
             ui.toast('Dossier ouvert.');
           } catch (e) {
             ui.toast(e.message, 'error');

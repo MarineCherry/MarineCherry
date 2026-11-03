@@ -20,6 +20,7 @@ Les calculs reprennent à l'identique les formules des classeurs Excel d'origine
 
 Aucune installation : ouvrir **`index.html`** dans Chrome, Edge ou Firefox (double-clic).
 
+- **Récents** : chaque dossier travaillé est gardé automatiquement sur le poste (dans le navigateur), comme un historique de discussions : recherche, réouverture d'un clic, retrait de la liste. **Nouveau** démarre un dossier vierge sans perdre le précédent.
 - **Enregistrer** : télécharge le dossier dans un fichier `.json` sur le poste. **Ouvrir** permet de le reprendre plus tard.
 - **Imprimer / PDF** : ouvre la fenêtre d'impression ; choisir « Enregistrer au format PDF » pour obtenir un PDF. La synthèse succession s'enregistre aussi directement en PDF (html2canvas et jsPDF, `assets/vendor/pdf`, licence MIT).
 - Le dossier en cours est aussi conservé automatiquement dans le navigateur : on le retrouve en revenant dans l'outil.
