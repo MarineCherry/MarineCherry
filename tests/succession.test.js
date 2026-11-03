@@ -119,3 +119,47 @@ test('Hypothèse D désactivée : seules A, B et C sont comparées', () => {
   assert.ok(!r.controles.some((x) => /Petits-enfants/.test(x.libelle)));
   assert.deepStrictEqual(S.calculer(dossier(), P).comparatif.map((x) => x.code), ['A', 'B', 'C', 'D']);
 });
+
+// Famille recomposée : Alice enfant commun, Bruno enfant de Jean seul, Clara enfant de Marie seule.
+function recomposee(o) {
+  return dossier(Object.assign({
+    enfantsNonCommuns: true,
+    enfants: [
+      { id: 'a', nom: 'Alice', majeur: true, part: null, de: 'deux' },
+      { id: 'b', nom: 'Bruno', majeur: true, part: null, de: 'P1' },
+      { id: 'c', nom: 'Clara', majeur: true, part: null, de: 'P2' },
+    ],
+    petitsEnfants: [],
+  }, o || {}));
+}
+
+test('Enfants non communs : chaque parent transmet à ses seuls enfants', () => {
+  const r = S.calculer(recomposee(), P);
+  assert.deepStrictEqual(r.enfants.map((k) => [k.parts.P1, k.parts.P2]), [[0.5, 0.5], [0.5, 0], [0, 0.5]]);
+  // Sans donation : Jean (900 000) à Alice et Bruno, Marie (700 000) à Alice et Clara.
+  const A = r.hypotheses.A;
+  near(A.parents[0].enfants[1].succession.transmis, 450000, 'Bruno hérite de Jean');
+  near(A.parents[1].enfants[1].succession.transmis, 0, 'Bruno n\'hérite pas de Marie');
+  near(A.parents[1].enfants[2].succession.transmis, 350000, 'Clara hérite de Marie');
+  // Donation de la maison commune à tous : chaque moitié va aux enfants de chaque parent.
+  const B = r.hypotheses.B;
+  near(B.parents[0].enfants[1].donation.transmis, 300000, 'Bruno reçoit de Jean');
+  near(B.parents[1].enfants[2].donation.transmis, 300000, 'Clara reçoit de Marie');
+  near(B.cumul.enfants[0].donation.transmis, 600000, 'Alice reçoit des deux');
+  assert.ok(r.controles.every((c) => c.ok), JSON.stringify(r.controles.filter((c) => !c.ok)));
+});
+
+test('Enfant non commun : bien commun attribué en entier (art. 1076-1), donateur étranger refusé', () => {
+  const r = S.calculer(recomposee({ donations: [
+    { id: 'd1', donateur: 'deux', bienId: 'm', montant: null, beneficiaire: 'b' },
+    { id: 'd2', donateur: 'P2', bienId: 'l', montant: 50000, beneficiaire: 'b' },
+  ] }), P);
+  // Jean seul donateur de toute la maison commune à Bruno.
+  near(r.lignes[0].parDonateur.P1, 1200000, 'donné par Jean');
+  near(r.lignes[0].parDonateur.P2, 0, 'Marie non codonatrice');
+  near(r.hypotheses.B.parents[0].enfants[1].donation.droits, droits(1100000), 'droits de Bruno');
+  near(r.patrimoine.P2.resteBrut, 100000, 'il ne reste à Marie que son livret');
+  // Marie ne peut pas donner à Bruno.
+  near(r.lignes[1].total, 0, 'donation ignorée');
+  assert.ok(r.alertes.some((x) => /n'est pas l'enfant de Marie/.test(x)));
+});

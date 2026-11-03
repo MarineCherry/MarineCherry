@@ -1254,3 +1254,6 @@ body.avec-fiches .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .qt-trop { color: var(--warn, #b25e09); font-weight: 600; }
 @media (max-width: 640px) { .qt-vers { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px; } .qt-vers > .field:nth-child(2) { grid-column: 1 / -1; grid-row: 1; } }
 @media (max-width: 640px) { .segmented .segment { white-space: normal; height: auto; min-height: 30px; padding-top: 5px; padding-bottom: 5px; line-height: 1.2; } }
+.row-personne-nc { grid-template-columns: 26px minmax(150px, 1.4fr) minmax(130px, 1fr) auto minmax(100px, 0.7fr) minmax(110px, 0.8fr) 32px; }
+.readonly-multi { display: flex; flex-direction: column; justify-content: center; line-height: 1.25; font-size: 13px; }
+@media (max-width: 640px) { .row-personne-nc { grid-template-columns: 26px 1fr 1fr; } .row-personne-nc > .row-index { grid-row: span 4; } .row-personne-nc > .field:nth-child(3) { grid-column: 2 / -1; } }

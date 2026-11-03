@@ -22,7 +22,7 @@
   const COLORS = { donation: '#b08a4f', succession: '#2c4f86', residuelle: '#2f8f83' };
   const NATURE_COLORS = ['#2c4f86', '#b08a4f', '#5d8a75', '#8c3b4a', '#8a93a6', '#6b5b95'];
 
-  const newEnfant = () => ({ id: uid('e'), nom: '', majeur: true, part: null });
+  const newEnfant = () => ({ id: uid('e'), nom: '', majeur: true, part: null, de: 'deux' });
   const newPetitEnfant = (parent) => ({ id: uid('pe'), nom: '', majeur: true, parent: parent || '' });
   const newBien = (proprietaire) => ({ id: uid('b'), designation: '', nature: 'Immobilier', valeur: null, proprietaire: proprietaire || 'commun', regime: 'Aucun' });
   const newDonation = (donateur) => ({ id: uid('d'), donateur: donateur || 'deux', bienId: '', montant: null, beneficiaire: 'tous' });
@@ -31,7 +31,7 @@
     return {
       nomDossier: '', dateSimulation: todayISO(), nbParents: 2,
       parents: [{ nom: '', age: null }, { nom: '', age: null }],
-      enfants: [newEnfant()], petitsEnfants: [], hypotheseD: false,
+      enfants: [newEnfant()], enfantsNonCommuns: false, petitsEnfants: [], hypotheseD: false,
       donFamilial: false, deces15ans: false,
       biens: [], donations: [], anterieures: [],
     };
@@ -44,28 +44,42 @@
   const parentNom = (s, i) => (s.parents[i] && s.parents[i].nom) || 'Parent ' + (i + 1);
   const nomDonateur = (s, g) => (g === 'deux' ? 'Les deux parents' : parentNom(s, g === 'P2' ? 1 : 0));
   const pctCell = (x) => fmtPct(x, 1);
+  // Enfants non communs (famille recomposée) : l'enfant n'est celui que d'un des deux parents.
+  const nonCommuns = (s) => s.nbParents === 2 && !!s.enfantsNonCommuns;
+  const filiation = (s, e) => (nonCommuns(s) && (e.de === 'P1' || e.de === 'P2') ? 'enfant de ' + parentNom(s, e.de === 'P2' ? 1 : 0) : null);
+  const nomEnfant = (s, e) => e.nom + (filiation(s, e) ? ' (' + filiation(s, e) + ')' : '');
 
   /* ---------- Onglet « Famille » ---------- */
   function listeEnfants(ctx) {
     const s = ctx.state;
     const { field } = ui;
-    const rows = s.enfants.map((x, i) => h('div', { class: 'row-line row-personne' },
+    const nc = nonCommuns(s);
+    const origines = [{ value: 'deux', label: 'Des deux' }, { value: 'P1', label: parentNom(s, 0) + ' seul(e)' }, { value: 'P2', label: parentNom(s, 1) + ' seul(e)' }];
+    const rows = s.enfants.map((x, i) => h('div', { class: 'row-line row-personne' + (nc ? ' row-personne-nc' : '') },
       h('span', { class: 'row-index' }, String(i + 1)),
       field('Nom / prénom', ctx.text(x, 'nom', { structural: true })),
+      nc ? field('Enfant de', ctx.select(x, 'de', origines, { structural: true })) : null,
       field('Majeur ?', ctx.yesNo(x, 'majeur', { small: true })),
       field('Part souhaitée', ctx.pct(x, 'part', { placeholder: 'égale' })),
       field('Part retenue', ctx.live((r) => {
         const found = r.enfants.find((e) => e.id === x.id);
-        return h('div', { class: 'readonly' }, found ? fmtPct(found.part) : '—');
+        if (!found) return h('div', { class: 'readonly' }, '—');
+        if (!r.nonCommuns) return h('div', { class: 'readonly' }, fmtPct(found.part));
+        return h('div', { class: 'readonly readonly-multi' }, [0, 1].filter((j) => found.de[j ? 'P2' : 'P1']).map((j) =>
+          h('span', null, (found.commun ? parentNom(s, j) + ' : ' : '') + fmtPct(found.parts[j ? 'P2' : 'P1']))));
       })),
       ui.button('Retirer', {
         icon: 'trash', iconOnly: true, variant: 'ghost', small: true,
         onClick: () => { s.enfants.splice(i, 1); ctx.render(); ctx.changed(); },
       })));
     return ui.card('Les enfants', h('div', { class: 'stack-sm' },
+      s.nbParents === 2 ? field('Enfants non communs (famille recomposée)', ctx.yesNo(s, 'enfantsNonCommuns', { small: true, structural: true }),
+        { help: 'Oui : pour chaque enfant, indiquez s\'il est l\'enfant des deux parents ou d\'un seul.' }) : null,
       rows.length ? h('div', { class: 'rows' }, rows) : h('p', { class: 'muted' }, 'Aucun pour l\'instant.'),
       ui.button('Ajouter un enfant', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.enfants.push(newEnfant()); ctx.render(); } })),
-    { subtitle: 'Part souhaitée vide = parts égales. Sinon, le total doit faire 100 %.' });
+    { subtitle: nc
+      ? 'Un enfant non commun ne reçoit que de son parent (biens propres et moitié des biens communs) et n\'hérite que de lui. Part souhaitée vide = parts égales entre les enfants de chaque parent.'
+      : 'Part souhaitée vide = parts égales. Sinon, le total doit faire 100 %.' });
   }
 
   function listePetitsEnfants(ctx) {
@@ -197,7 +211,8 @@
     const s = ctx.state;
     const deux = s.nbParents === 2;
     const donateurs = [{ value: 'P1', label: parentNom(s, 0) }].concat(deux ? [{ value: 'P2', label: parentNom(s, 1) }, { value: 'deux', label: 'Les deux parents (bien commun)' }] : []);
-    const beneficiaires = [{ value: 'tous', label: 'Tous les enfants (selon leurs parts)' }].concat(s.enfants.filter((e) => e.nom).map((e) => ({ value: e.id, label: e.nom })));
+    const beneficiaires = [{ value: 'tous', label: nonCommuns(s) ? 'Tous les enfants (chaque parent aux siens)' : 'Tous les enfants (selon leurs parts)' }]
+      .concat(s.enfants.filter((e) => e.nom).map((e) => ({ value: e.id, label: nomEnfant(s, e) })));
 
     const rows = s.donations.map((d, i) => {
       if (!deux) d.donateur = 'P1';
@@ -253,7 +268,7 @@
     return r.parents.filter((x) => x.actif).map((x) => {
       const mt = r.montage[x.code];
       if (!mt) return null;
-      const lignes = mt.branches.map((b) => {
+      const lignes = mt.branches.filter((b) => !b.horsBranche).map((b) => {
         const k = r.enfants.find((e) => e.id === b.enfant);
         return {
           nom: 'Branche de ' + k.nom, prevu: b.prevuPP, donne: b.donnePP, np: b.donneNP, part: b.prevuPP ? b.part : null,
@@ -336,7 +351,7 @@
     const colonnes = cols.filter(Boolean);
     const nDon = colsDon.length;
     const nSucc = colsSucc.length;
-    const rows = v.enfants.slice();
+    const rows = v.enfants.filter((x) => !x.horsBranche);
     v.petitsEnfants.filter((x) => x.transmis > 0).forEach((x) => rows.push({ nom: h('span', null, x.nom, h('span', { class: 'muted' }, ' · petit-enfant')), donation: x, succession: null, totalDroits: x.droits, __class: 'row-pe' }));
     return ui.table(colonnes, rows, {
       compact: true,
@@ -387,6 +402,8 @@
       'Droits en ligne directe (barème de l\'art. 777 CGI) ; abattement de ' + fmtEuro(p.abattEnfant) + ' par parent et par enfant, renouvelé tous les ' + p.delaiRappel + ' ans.',
       "Usufruit viager valorisé selon le barème fiscal de l'article 669 du CGI, à l'âge de chaque parent ; il s'éteint au décès sans droits supplémentaires.",
       'Chaque parent transmet ses biens propres et la moitié des biens communs ; les droits du conjoint survivant ne sont pas modélisés.',
+      nonCommuns(s) && s.enfants.some((e) => e.nom && (e.de === 'P1' || e.de === 'P2'))
+        ? 'Enfants non communs : chacun ne reçoit que de son parent et n\'hérite que de lui. Un bien commun attribué en entier à l\'enfant d\'un seul des époux est donné par ce seul parent, son conjoint n\'étant pas codonateur (art. 1076-1 C. civ.) ; la récompense éventuellement due à la communauté n\'est pas calculée.' : null,
       s.hypotheseD === false ? null : 'Hypothèse D : montage optimisé en nue-propriété. Pour chaque branche, part des biens désignés donnée à l\'enfant, don aux petits-enfants (même montant par branche, partagé entre eux) et part gardée pour la succession, choisis pour que le total des droits soit le plus faible ; abattement de ' + fmtEuro(p.abattPetitEnfant) + ' par grand-parent et par petit-enfant.',
       s.deces15ans
         ? 'Décès supposé dans les ' + p.delaiRappel + ' ans suivant la donation : la donation est rappelée fiscalement et consomme l\'abattement.'
@@ -581,6 +598,8 @@
     s.petitsEnfants = (s.petitsEnfants || []).map((x) => Object.assign({ parent: '' }, x));
     // Anciens dossiers : hypothèse D étudiée s'il y a des petits-enfants.
     if (typeof s.hypotheseD !== 'boolean') s.hypotheseD = s.petitsEnfants.some((x) => x.nom);
+    s.enfantsNonCommuns = !!s.enfantsNonCommuns;
+    s.enfants = (s.enfants || []).map((x) => Object.assign({ de: 'deux' }, x));
     migrer(s);
     return s;
   }

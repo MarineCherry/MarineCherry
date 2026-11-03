@@ -10,6 +10,10 @@
  *   D : montage optimisé en nue-propriété : pour chaque branche, part des biens désignés donnée à
  *       l'enfant, don aux petits-enfants (même montant par branche, partagé entre eux) et part
  *       conservée pour la succession, choisis pour que le total des droits soit minimal.
+ * Enfants non communs (option) : chaque enfant peut n'être l'enfant que d'un des deux parents. Il ne reçoit
+ * alors que de son parent (biens propres de celui-ci et sa moitié des biens communs, ou un bien commun en
+ * entier qui lui est attribué : art. 1076-1 C. civ., le conjoint n'est pas codonateur) et n'hérite que de lui ;
+ * les parts sont réparties, pour chaque parent, entre ses seuls enfants.
  * La liquidation (abattement, rappel fiscal, barème progressif) reprend celle du classeur Excel d'origine.
  * Fonctions pures : aucune dépendance au navigateur, testables sous Node.
  */
@@ -118,11 +122,27 @@
     const presents = (l) => (l || []).filter((x) => x.nom && x.nom.trim());
     const enf = presents(d.enfants);
     const avecPart = enf.some((x) => isNum(x.part));
-    const enfants = enf.map((x) => ({
-      id: x.id, nom: x.nom, majeur: !!x.majeur,
-      part: avecPart ? n(x.part) : 1 / enf.length,
-      rappel: { P1: rappelDe(x.id, 'P1'), P2: rappelDe(x.id, 'P2') },
-    }));
+    // Filiation : enfant des deux parents, ou d'un seul (option « enfants non communs »).
+    const nonCommuns = !!d.enfantsNonCommuns && nbParents === 2;
+    const enfants = enf.map((x) => {
+      const de = !nonCommuns || !x.de || x.de === 'deux' ? { P1: true, P2: nbParents === 2 } : { P1: x.de === 'P1', P2: x.de === 'P2' };
+      return {
+        id: x.id, nom: x.nom, majeur: !!x.majeur, de, commun: de.P1 && de.P2,
+        poids: avecPart ? n(x.part) : 1,
+        rappel: { P1: rappelDe(x.id, 'P1'), P2: rappelDe(x.id, 'P2') },
+      };
+    });
+    // Part de chaque enfant dans la transmission de chaque parent, entre les seuls enfants de ce parent.
+    PARENTS.forEach((g) => {
+      const total = sum(enfants.filter((k) => k.de[g]), (k) => k.poids);
+      enfants.forEach((k) => {
+        k.parts = k.parts || {};
+        k.parts[g] = k.de[g] && total > 0 ? k.poids / total : 0;
+      });
+    });
+    enfants.forEach((k) => (k.part = nonCommuns ? (k.de.P1 ? k.parts.P1 : k.parts.P2) : (avecPart ? k.poids : 1 / enfants.length)));
+    const enfantParId = {};
+    enfants.forEach((k) => (enfantParId[k.id] = k));
     const petitsEnfants = presents(d.petitsEnfants).map((x) => ({
       id: x.id, nom: x.nom, majeur: !!x.majeur, branche: enfants.some((e) => e.id === x.parent) ? x.parent : null,
       rappel: { P1: rappelDe(x.id, 'P1'), P2: rappelDe(x.id, 'P2') },
@@ -154,11 +174,42 @@
       const b = bienParId[l.bienId];
       const res = { source: l, index: i, parDonateur: { P1: 0, P2: 0 }, total: 0, bien: b || null };
       if (!b) return res;
-      const donateurs = l.donateur === 'deux' && nbParents === 2 ? ['P1', 'P2'] : [l.donateur === 'P2' && nbParents === 2 ? 'P2' : 'P1'];
+      const nomG = (g) => P[g].nom || (g === 'P1' ? 'Parent 1' : 'Parent 2');
+      const benef = enfantParId[l.beneficiaire];
+      let donateurs = l.donateur === 'deux' && nbParents === 2 ? ['P1', 'P2'] : [l.donateur === 'P2' && nbParents === 2 ? 'P2' : 'P1'];
+      // Enfant non commun : seul son parent peut lui donner.
+      if (benef && !benef.commun) {
+        const auteur = benef.de.P1 ? 'P1' : 'P2';
+        if (l.donateur === 'deux' && b.parts.P1 && b.parts.P2) {
+          // Bien commun attribué en entier à l'enfant d'un seul des époux : son parent en est le seul donateur
+          // (art. 1076-1 C. civ.) ; la donation porte sur les deux moitiés du bien.
+          let m = isNum(l.montant) ? l.montant : b.disponible.P1 + b.disponible.P2;
+          const dispo = b.disponible.P1 + b.disponible.P2;
+          if (m > dispo + 0.005) {
+            alertes.push('Donation n° ' + (i + 1) + ' : il ne reste que ' + Math.round(dispo).toLocaleString('fr-FR') + ' € disponibles sur « ' + (b.source.designation || 'ce bien') + ' ».');
+            m = dispo;
+          }
+          m = Math.max(0, m);
+          const f = dispo > 0 ? m / dispo : 0;
+          PARENTS.forEach((g) => { const x = b.disponible[g] * f; b.disponible[g] -= x; b.donne[g] += x; });
+          res.parDonateur[auteur] = m;
+          res.total = m;
+          res.seulDonateur = auteur;
+          if (m > 0) dons.push({ g: auteur, bien: b, montant: m, beneficiaire: benef.id });
+          return res;
+        }
+        if (donateurs.includes(auteur)) donateurs = [auteur];
+        else {
+          alertes.push('Donation n° ' + (i + 1) + ' : ' + benef.nom + ' n\'est pas l\'enfant de ' + nomG(donateurs[0]) + ' ; la donation est ignorée (seul son parent peut lui donner).');
+          return res;
+        }
+      }
       donateurs.forEach((g) => {
+        // Donation à tous les enfants : chaque parent donne à ses seuls enfants.
+        if (!benef && !enfants.some((k) => k.de[g])) return;
         let m = isNum(l.montant) ? l.montant / donateurs.length : b.disponible[g];
         if (m > b.disponible[g] + 0.005) {
-          alertes.push('Donation n° ' + (i + 1) + ' : ' + (P[g].nom || (g === 'P1' ? 'Parent 1' : 'Parent 2')) + ' ne détient que '
+          alertes.push('Donation n° ' + (i + 1) + ' : ' + nomG(g) + ' ne détient que '
             + Math.round(b.disponible[g]).toLocaleString('fr-FR') + ' € disponibles sur « ' + (b.source.designation || 'ce bien') + ' ».');
           m = b.disponible[g];
         }
@@ -176,7 +227,7 @@
     function masses(g, k, nue) {
       const out = { transmis: 0, exo: 0, liquidites: 0, pp: 0, ppNL: 0, exoSucc: 0 };
       dons.filter((x) => x.g === g).forEach((x) => {
-        const part = x.beneficiaire === 'tous' ? k.part : x.beneficiaire === k.id ? 1 : 0;
+        const part = x.beneficiaire === 'tous' ? k.parts[g] : x.beneficiaire === k.id ? 1 : 0;
         if (!part) return;
         const facteur = nue && !x.bien.liquide ? P[g].nuePropriete : 1;
         const v = x.montant * part * facteur;
@@ -223,17 +274,17 @@
      *     conserve pour cette branche (biens non liquides) et réduit d'autant la succession de l'enfant.
      * On retient les valeurs de t et y qui rendent le total des droits (donations + successions) minimal.
      */
-    const branchesPE = enfants.filter((k) => peDeBranche(k.id).length);
+    const branchesPE = (g) => enfants.filter((k) => k.de[g] && peDeBranche(k.id).length);
     const deces = d.deces15ans ? 1 : 0;
     function brancheD(g, k, m, t, y) {
       const pat = patrimoine[g];
       const np = P[g].nuePropriete;
-      const pe = peDeBranche(k.id);
+      const pe = k.de[g] ? peDeBranche(k.id) : [];
       const yPP = pe.length && np > 0 ? y / np : 0;
       const donEnf = liquider(bareme, p.abattEnfant, t * m.transmis, t * m.exo, donFamilial(g, k, t * m.liquidites), k.rappel[g]);
       const donPE = pe.map((x) => liquider(bareme, p.abattPetitEnfant, pe.length ? y / pe.length : 0, (pe.length ? y / pe.length : 0) * pat.tauxExoDonNL, 0, x.rappel[g]));
-      const brut = Math.max(0, k.part * pat.resteBrut + (1 - t) * m.pp - yPP);
-      const exo = Math.max(0, Math.min(brut, k.part * pat.resteExo + (1 - t) * m.exoSucc - yPP * pat.tauxExoSuccNL));
+      const brut = Math.max(0, k.parts[g] * pat.resteBrut + (1 - t) * m.pp - yPP);
+      const exo = Math.max(0, Math.min(brut, k.parts[g] * pat.resteExo + (1 - t) * m.exoSucc - yPP * pat.tauxExoSuccNL));
       const succ = liquider(bareme, p.abattEnfant, brut, exo, 0, deces * (k.rappel[g] + donEnf.net));
       const droits = donEnf.droits + sum(donPE, (x) => x.droits) + succ.droits;
       return { donEnf, donPE, succ, droits, yPP };
@@ -241,8 +292,8 @@
     // Plus grande part donnée à l'enfant compatible avec le don y aux petits-enfants.
     function tMax(g, k, m, y) {
       const np = P[g].nuePropriete;
-      if (!peDeBranche(k.id).length || !(y > 0)) return 1;
-      const manque = y / np - k.part * patrimoine[g].resteNL;
+      if (!k.de[g] || !peDeBranche(k.id).length || !(y > 0)) return 1;
+      const manque = y / np - k.parts[g] * patrimoine[g].resteNL;
       if (manque <= 0) return 1;
       return m.ppNL > 0 ? Math.max(0, 1 - manque / m.ppNL) : 0;
     }
@@ -281,8 +332,9 @@
         return { t, v: brancheD(g, k, mC[i], t, y).droits };
       });
       const total = (y) => optT(y).reduce((a, x) => a + x.v, 0);
-      const yMax = branchesPE.length && np > 0
-        ? Math.min(...branchesPE.map((k) => (k.part * patrimoine[g].resteNL + mC[enfants.indexOf(k)].ppNL) * np)) : 0;
+      const bPE = branchesPE(g);
+      const yMax = bPE.length && np > 0
+        ? Math.min(...bPE.map((k) => (k.parts[g] * patrimoine[g].resteNL + mC[enfants.indexOf(k)].ppNL) * np)) : 0;
       let y = 0;
       if (yMax > 0) {
         y = Math.min(yMax, Math.round(minimiser(total, 0, yMax, 24).x / 100) * 100);
@@ -295,8 +347,8 @@
         branches: enfants.map((k, i) => {
           const r = brancheD(g, k, mC[i], ts[i].t, y);
           return {
-            enfant: k.id, part: ts[i].t, prevuPP: mC[i].pp, donnePP: ts[i].t * mC[i].pp, donneNP: r.donEnf.transmis,
-            petitsEnfants: peDeBranche(k.id).length, pePP: r.yPP, peNP: peDeBranche(k.id).length ? y : 0, successionPP: r.succ.transmis,
+            enfant: k.id, horsBranche: !k.de[g], part: ts[i].t, prevuPP: mC[i].pp, donnePP: ts[i].t * mC[i].pp, donneNP: r.donEnf.transmis,
+            petitsEnfants: k.de[g] ? peDeBranche(k.id).length : 0, pePP: r.yPP, peNP: k.de[g] && peDeBranche(k.id).length ? y : 0, successionPP: r.succ.transmis,
           };
         }),
       };
@@ -318,7 +370,7 @@
               const r = brancheD(g, k, masses(g, k, true), mt.branches[i].part, mt.y);
               donEnf[i] = r.donEnf;
               succ[i] = r.succ;
-              const pe = peDeBranche(k.id);
+              const pe = k.de[g] ? peDeBranche(k.id) : [];
               pe.forEach((x, j) => (donPE[petitsEnfants.indexOf(x)] = r.donPE[j]));
               if (pe.length) repartitionPE.push({ enfant: k.id, nombre: pe.length, montant: mt.y, parPetitEnfant: mt.y / pe.length });
             });
@@ -333,7 +385,7 @@
               const brut = code === 'A' ? pat.brut : pat.resteBrut;
               const exo = code === 'A' ? pat.exo : pat.resteExo;
               const rappel = code === 'A' ? k.rappel[g] : deces * (k.rappel[g] + donEnf[i].net);
-              succ[i] = liquider(bareme, p.abattEnfant, k.part * brut, k.part * exo, 0, rappel);
+              succ[i] = liquider(bareme, p.abattEnfant, k.parts[g] * brut, k.parts[g] * exo, 0, rappel);
             });
           }
         }
@@ -366,7 +418,9 @@
           const succession = addRows(gs.map((g) => par[g].succ[i]));
           const totalDroits = donation.droits + succession.droits;
           const droitsA = sum(gs, (g) => ref[g].succ[i].droits);
-          return { id: k.id, nom: k.nom, donation, succession, totalDroits, economie: droitsA - totalDroits, net: donation.transmis + succession.transmis - totalDroits };
+          // Enfant non commun : hors de la branche du parent dont il n'est pas l'enfant.
+          const horsBranche = !gs.some((g) => k.de[g]);
+          return { id: k.id, nom: k.nom, horsBranche, donation, succession, totalDroits, economie: droitsA - totalDroits, net: donation.transmis + succession.transmis - totalDroits };
         });
         const lignesPE = petitsEnfants.map((x, j) => Object.assign({ id: x.id, nom: x.nom, branche: x.branche }, addRows(gs.map((g) => par[g].donPE[j]))));
         const donation = addRows(lignesEnf.map((l) => l.donation).concat(lignesPE));
@@ -411,10 +465,11 @@
     });
 
     // Contrôles de saisie.
-    const sommeParts = sum(enfants, (x) => x.part);
+    const sommeParts = sum(enfants, (x) => x.poids);
     const controles = [
       { libelle: 'Au moins un enfant', ok: enfants.length > 0, message: 'aucun enfant saisi' },
-      { libelle: 'Parts des enfants = 100 %', ok: enfants.length > 0 && Math.abs(sommeParts - 1) < 0.0001, message: 'le total des parts est différent de 100 %' },
+      nonCommuns ? { libelle: 'Chaque parent a au moins un enfant', ok: actifs.every((g) => enfants.some((k) => k.de[g])), message: 'un parent n\'a aucun enfant : ses biens ne sont transmis à personne dans la simulation' }
+        : { libelle: 'Parts des enfants = 100 %', ok: enfants.length > 0 && (!avecPart || Math.abs(sommeParts - 1) < 0.0001), message: 'le total des parts est différent de 100 %' },
       { libelle: 'Âges des parents renseignés', ok: actifs.every((g, i) => isNum(((d.parents || [])[i] || {}).age)), message: 'âge manquant' },
       { libelle: 'Patrimoine saisi', ok: total > 0, message: 'aucun bien saisi' },
       { libelle: 'Donations envisagées', ok: dons.length > 0, message: 'aucune donation saisie : les hypothèses ' + actives.slice(1).map((h) => h.code).join(', ').replace(/, (\w)$/, ' et $1') + ' sont identiques à A' },
@@ -423,7 +478,7 @@
     ];
 
     return {
-      parents, enfants, petitsEnfants, biens, lignes, patrimoine, total, montage, limiteRappel: limiteRappel ? new Date(toTime(limiteRappel)).toISOString().slice(0, 10) : null,
+      parents, enfants, nonCommuns, petitsEnfants, biens, lignes, patrimoine, total, montage, limiteRappel: limiteRappel ? new Date(toTime(limiteRappel)).toISOString().slice(0, 10) : null,
       hypotheses, actives, comparatif, meilleure, parNature, controles: controles.filter(Boolean), alertes,
       patrimoineTotal: total,
     };
