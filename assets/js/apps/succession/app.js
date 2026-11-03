@@ -537,7 +537,9 @@
 
   async function telechargerPdf(ctx, complet) {
     const s = ctx.state;
-    const nom = 'synthese-' + (A.util.slug(s.nomDossier) || 'transmission') + '-' + todayISO() + '.pdf';
+    const nom = complet
+      ? ('Dossier complet ' + ((s.nomDossier || '').trim() || 'transmission')).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() + '.pdf'
+      : 'synthese-' + (A.util.slug(s.nomDossier) || 'transmission') + '-' + todayISO() + '.pdf';
     try {
       ui.toast('Préparation du PDF…');
       await A.pdf.telecharger(documentSynthese(s, ctx.result, ctx.params(), complet), nom);
@@ -584,7 +586,8 @@
     if (!choix) return;
     if (choix === 'pdf') return telechargerPdf(ctx, false);
     const s = ctx.state;
-    ui.print(documentSynthese(s, ctx.result, ctx.params(), choix === 'imprimer-complet'), 'Transmission ' + (s.nomDossier || ''));
+    const complet = choix === 'imprimer-complet';
+    ui.print(documentSynthese(s, ctx.result, ctx.params(), complet), (complet ? 'Dossier complet ' : 'Transmission ') + (s.nomDossier || ''));
   }
 
   /*
