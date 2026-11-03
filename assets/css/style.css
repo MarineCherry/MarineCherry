@@ -1268,3 +1268,4 @@ body.avec-fiches .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .recent-date { font-size: 12.5px; color: var(--ink-3, #7a8195); }
 .recent-actif .recent-titre::before { content: '● '; color: var(--accent); }
 .recents-vide { padding: 18px 10px; }
+.taxe-texte { white-space: pre-wrap; font-family: inherit; font-size: 13px; line-height: 1.5; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 0; color: var(--ink-2); max-height: 420px; overflow: auto; }

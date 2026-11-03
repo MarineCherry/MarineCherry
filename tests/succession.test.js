@@ -163,3 +163,25 @@ test('Enfant non commun : bien commun attribué en entier (art. 1076-1), donateu
   near(r.lignes[1].total, 0, 'donation ignorée');
   assert.ok(r.alertes.some((x) => /n'est pas l'enfant de Marie/.test(x)));
 });
+
+test('Taxe : montants donnés en pleine propriété et en nue-propriété, par catégorie de bien', () => {
+  const d = dossier({ donations: [
+    { id: 'd1', donateur: 'deux', bienId: 'm', montant: null, beneficiaire: 'tous' },
+    { id: 'd2', donateur: 'P2', bienId: 'l', montant: 40000, beneficiaire: 'tous' },
+  ] });
+  const r = S.calculer(d, P);
+  const C = S.taxe(r, 'C');
+  // Maison 1 200 000 en nue-propriété à 60 % ; livret donné en pleine propriété.
+  near(C.totalPP, 1240000, 'pleine propriété');
+  near(C.totalNP, 720000 + 40000, 'valeur transmise');
+  assert.deepStrictEqual(C.parNature.map((x) => [x.nature, Math.round(x.pp), Math.round(x.np)]), [['Immobilier', 1200000, 720000], ['Liquidités', 40000, 40000]]);
+  assert.strictEqual(C.donateurs.length, 2);
+  assert.strictEqual(C.nbEnfants, 2);
+  near(C.droits, r.hypotheses.C.cumul.total.donation.droits, 'droits');
+  const B = S.taxe(r, 'B');
+  near(B.totalNP, 1240000, 'pleine propriété : rien de démembré');
+  // Montage D : jamais plus que les biens désignés, plus le don aux petits-enfants.
+  const D = S.taxe(S.calculer(Object.assign(d, { hypotheseD: true }), P), 'D');
+  assert.strictEqual(D.code, 'D');
+  assert.ok(D.lignes.every((x) => x.pp <= 1200000 + 0.01));
+});

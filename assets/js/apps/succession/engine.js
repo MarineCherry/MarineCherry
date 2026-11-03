@@ -484,5 +484,68 @@
     };
   }
 
-  return { calculer, liquider, droitsBareme, usufruitParAge, partsBien, NATURE_LIQUIDITES, HYPOTHESES, PARENTS };
+  /*
+   * Éléments pour la taxe de l'acte de donation, selon la forme retenue :
+   * B (pleine propriété), C (nue-propriété, usufruit réservé) ou D (montage avec les petits-enfants).
+   * Pour chaque bien donné : valeur en pleine propriété et valeur transmise (nue-propriété selon l'âge
+   * du donateur, art. 669 CGI ; les liquidités sont données en pleine propriété). Totaux par catégorie.
+   */
+  function taxe(r, forme) {
+    const code = forme === 'B' || (forme === 'D' && r.hypotheses.D) ? forme : 'C';
+    const P = { P1: r.parents[0], P2: r.parents[1] };
+    const npDe = (g, b) => (code === 'B' || b.liquide ? 1 : P[g].nuePropriete);
+    const enfants = r.enfants;
+    const lignes = [];
+    r.lignes.forEach((l) => {
+      if (!l.bien || !(l.total > 0)) return;
+      const benef = l.source.beneficiaire || 'tous';
+      const ligne = { designation: l.bien.source.designation || 'Bien sans désignation', nature: l.bien.source.nature || 'Autre', liquide: l.bien.liquide,
+        donateurs: PARENTS.filter((g) => l.parDonateur[g] > 0), beneficiaire: benef, pp: 0, np: 0 };
+      PARENTS.forEach((g) => {
+        const m = l.parDonateur[g];
+        if (!(m > 0)) return;
+        // Hypothèse D : seule la part retenue par le montage est donnée à chaque enfant.
+        let donne = m;
+        if (code === 'D' && r.montage[g]) {
+          donne = enfants.reduce((t, k, i) => {
+            const part = benef === 'tous' ? k.parts[g] : benef === k.id ? 1 : 0;
+            return t + m * part * r.montage[g].branches[i].part;
+          }, 0);
+        }
+        ligne.pp += donne;
+        ligne.np += donne * npDe(g, l.bien);
+      });
+      if (ligne.pp > 0.005) lignes.push(ligne);
+    });
+    // Hypothèse D : don aux petits-enfants (nue-propriété de biens non liquides conservés).
+    let petitsEnfants = null;
+    if (code === 'D') {
+      const pe = { pp: 0, np: 0, nombre: r.petitsEnfants.filter((x) => x.branche).length };
+      PARENTS.forEach((g) => {
+        const mt = r.montage[g];
+        if (!mt || !(mt.y > 0)) return;
+        mt.branches.forEach((b) => { if (b.peNP > 0) { pe.np += b.peNP; pe.pp += b.pePP; } });
+      });
+      if (pe.np > 0.005) petitsEnfants = pe;
+    }
+    const parNature = [];
+    lignes.forEach((x) => {
+      let c = parNature.find((y) => y.nature === x.nature);
+      if (!c) parNature.push((c = { nature: x.nature, pp: 0, np: 0 }));
+      c.pp += x.pp;
+      c.np += x.np;
+    });
+    const H = r.hypotheses[code].cumul;
+    return {
+      code,
+      donateurs: r.parents.filter((x) => x.actif && lignes.some((l) => l.donateurs.includes(x.code))),
+      nbEnfants: enfants.filter((k) => lignes.some((l) => l.beneficiaire === 'tous' ? true : l.beneficiaire === k.id)).length,
+      lignes, parNature, petitsEnfants,
+      totalPP: sum(lignes, (x) => x.pp) + (petitsEnfants ? petitsEnfants.pp : 0),
+      totalNP: sum(lignes, (x) => x.np) + (petitsEnfants ? petitsEnfants.np : 0),
+      droits: H.total.donation.droits,
+    };
+  }
+
+  return { calculer, taxe, liquider, droitsBareme, usufruitParAge, partsBien, NATURE_LIQUIDITES, HYPOTHESES, PARENTS };
 });

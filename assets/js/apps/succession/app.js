@@ -558,6 +558,113 @@
       ui.card(null, ctx.live((r) => vueSynthese(ctx.state, r, ctx.params())), { className: 'card-doc' }));
   }
 
+  /* ---------- Onglet « Taxe » (éléments pour la comptable) ---------- */
+  const FORMES = { B: 'donation en pleine propriété', C: 'donation en nue-propriété avec réserve d\'usufruit', D: 'donation en nue-propriété aux enfants et aux petits-enfants avec réserve d\'usufruit' };
+  const ACTES = ['Donation-partage', 'Donation simple'];
+  function taxeDe(s, r) {
+    const t = s.taxe || {};
+    const forme = t.forme || (r.meilleure && r.meilleure.code !== 'A' ? r.meilleure.code : 'C');
+    return engine.taxe(r, forme);
+  }
+  const donateursTxt = (s, l) => (l.donateurs.length === 2 ? 'les deux parents' : parentNom(s, l.donateurs[0] === 'P2' ? 1 : 0));
+  const beneficiaireTxt = (s, r, l) => (l.beneficiaire === 'tous' ? 'tous les enfants' : (r.enfants.find((e) => e.id === l.beneficiaire) || {}).nom || '—');
+  // Nue-propriété proprement dite et biens donnés en pleine propriété (liquidités) dans la forme démembrée.
+  function ventilation(tx) {
+    const dem = tx.lignes.filter((l) => l.np < l.pp - 0.5);
+    const pe = tx.petitsEnfants || { pp: 0, np: 0 };
+    return {
+      np: dem.reduce((t, l) => t + l.np, 0) + pe.np,
+      npPP: dem.reduce((t, l) => t + l.pp, 0) + pe.pp,
+      enPP: tx.lignes.filter((l) => l.np >= l.pp - 0.5).reduce((t, l) => t + l.pp, 0),
+    };
+  }
+  function texteTaxe(s, r, tx) {
+    const t = s.taxe || {};
+    const e = (x) => fmtEuro(x);
+    const lignes = [
+      'Bonjour,', '',
+      'Voici les éléments pour la taxe du dossier ' + (s.nomDossier || '') + '.', '',
+      'Acte : ' + (t.typeActe || ACTES[0]) + ' — ' + FORMES[tx.code],
+      'Nombre de donateurs : ' + tx.donateurs.length + ' (' + tx.donateurs.map((x) => parentNom(s, x.index) + ', ' + x.age + ' ans'
+        + (tx.code === 'B' ? '' : ', usufruit ' + fmtPct(x.usufruit, 0) + ' / nue-propriété ' + fmtPct(x.nuePropriete, 0))).join(' ; ') + ')',
+      'Donataires : ' + tx.nbEnfants + ' enfant' + (tx.nbEnfants > 1 ? 's' : '') + (tx.petitsEnfants ? ' et ' + tx.petitsEnfants.nombre + ' petit' + (tx.petitsEnfants.nombre > 1 ? 's' : '') + '-enfant' + (tx.petitsEnfants.nombre > 1 ? 's' : '') : ''),
+      '',
+      'Montant donné en pleine propriété : ' + e(tx.totalPP),
+      ...(tx.code === 'B' ? [] : (() => {
+        const v = ventilation(tx);
+        return ['Montant donné en nue-propriété (valeur fiscale) : ' + e(v.np) + ' (biens d\'une valeur de ' + e(v.npPP) + ' en pleine propriété)',
+          v.enPP ? 'Biens donnés en pleine propriété (non démembrés) : ' + e(v.enPP) : null,
+          'Valeur totale transmise : ' + e(tx.totalNP)];
+      })()),
+      '',
+      'Par catégorie de biens :',
+      ...tx.parNature.map((x) => '- ' + x.nature + ' : ' + e(x.pp) + ' en pleine propriété' + (tx.code === 'B' ? '' : Math.abs(x.np - x.pp) < 0.5 ? ' (non démembré)' : ' ; ' + e(x.np) + ' en nue-propriété')),
+      tx.petitsEnfants ? '- Aux petits-enfants : ' + e(tx.petitsEnfants.pp) + ' en pleine propriété ; ' + e(tx.petitsEnfants.np) + ' en nue-propriété' : null,
+      '',
+      'Détail des biens donnés :',
+      ...tx.lignes.map((l) => '- ' + l.designation + ' (' + l.nature + '), donné par ' + donateursTxt(s, l) + ' à ' + beneficiaireTxt(s, r, l) + ' : '
+        + e(l.pp) + (tx.code === 'B' ? '' : Math.abs(l.np - l.pp) < 0.5 ? ' (pleine propriété)' : ' ; nue-propriété ' + e(l.np))),
+      '',
+      'Droits de donation estimés : ' + e(tx.droits),
+      (t.observations || '').trim() ? '\nObservations : ' + t.observations.trim() : null,
+      '', 'Merci,',
+    ];
+    return lignes.filter((x) => x !== null).join('\n');
+  }
+  function tabTaxe(ctx) {
+    const s = ctx.state;
+    s.taxe = s.taxe || { forme: null, typeActe: ACTES[0], observations: '' };
+    const formes = [{ value: 'B', label: 'Pleine propriété' }, { value: 'C', label: 'Nue-propriété' }].concat(ctx.result && ctx.result.hypotheses.D ? [{ value: 'D', label: 'Montage D (petits-enfants)' }] : []);
+    if (!s.taxe.forme && ctx.result) s.taxe.forme = taxeDe(s, ctx.result).code;
+    let email = A.store.getPref('emailComptable') || '';
+    const champEmail = ui.textInput({ value: email, type: 'email', placeholder: 'adresse@notaires.fr', ariaLabel: 'Adresse de la comptable',
+      onChange: (v) => { email = (v || '').trim(); A.store.setPref('emailComptable', email); } });
+
+    const reglages = ui.card('L\'acte', h('div', { class: 'grid-2' },
+      ui.field('Type d\'acte', ctx.select(s.taxe, 'typeActe', ACTES)),
+      ui.field('Forme retenue', ctx.segmented(s.taxe, 'forme', formes, { small: true, structural: true }), { help: 'Reprise des donations envisagées selon cette hypothèse.' }),
+      ui.field('Observations pour la comptable', ctx.text(s.taxe, 'observations', { placeholder: 'ex. bien situé à…, rapport d\'une donation antérieure…' }), { wide: true })));
+
+    const recap = ctx.live((r) => {
+      const tx = taxeDe(s, r);
+      if (!tx.lignes.length) return ui.card('Éléments pour la taxe', ui.note('Aucune donation envisagée : complétez l\'onglet « Donations envisagées ».', 'warn'));
+      const np = tx.code !== 'B';
+      const stats = h('div', { class: 'bilan' },
+        ui.stat('Donateurs', String(tx.donateurs.length), tx.donateurs.map((x) => parentNom(s, x.index) + (np ? ' (NP ' + fmtPct(x.nuePropriete, 0) + ')' : '')).join(' · ')),
+        ui.stat('Donné en pleine propriété', fmtEuro(tx.totalPP)),
+        np ? (() => { const v = ventilation(tx); return ui.stat('Donné en nue-propriété', fmtEuro(v.np), 'valeur fiscale (art. 669 CGI)' + (v.enPP ? ' ; + ' + fmtEuro(v.enPP) + ' en pleine propriété (non démembré)' : '')); })() : null,
+        ui.stat('Droits estimés', fmtEuro(tx.droits), null, 'strong'));
+      const cats = ui.table([{ label: 'Catégorie de biens', key: 'nature' }, { label: 'Pleine propriété', num: true, render: (x) => fmtEuro(x.pp) }]
+        .concat(np ? [{ label: 'Nue-propriété', num: true, render: (x) => (Math.abs(x.np - x.pp) < 0.5 ? 'en PP' : fmtEuro(x.np)) }] : []),
+      tx.parNature.concat(tx.petitsEnfants ? [{ nature: 'Petits-enfants (montage D)', pp: tx.petitsEnfants.pp, np: tx.petitsEnfants.np }] : []), { compact: true });
+      const detail = ui.table([
+        { label: 'Bien', render: (l) => l.designation }, { label: 'Catégorie', key: 'nature' },
+        { label: 'Donné par', render: (l) => donateursTxt(s, l) }, { label: 'À', render: (l) => beneficiaireTxt(s, r, l) },
+        { label: 'Pleine propriété', num: true, render: (l) => fmtEuro(l.pp) },
+      ].concat(np ? [{ label: 'Nue-propriété', num: true, render: (l) => (Math.abs(l.np - l.pp) < 0.5 ? 'en PP' : fmtEuro(l.np)) }] : []), tx.lignes, { compact: true });
+      const envoyer = () => {
+        if (!email) { ui.toast('Indiquez d\'abord l\'adresse de la comptable.', 'error'); return; }
+        const sujet = 'Taxe – ' + (s.nomDossier || 'dossier') + ' – ' + (s.taxe.typeActe || ACTES[0]);
+        location.href = 'mailto:' + encodeURIComponent(email) + '?subject=' + encodeURIComponent(sujet) + '&body=' + encodeURIComponent(texteTaxe(s, r, tx));
+      };
+      const copier = async () => {
+        try { await navigator.clipboard.writeText(texteTaxe(s, r, tx)); ui.toast('Éléments copiés : collez-les dans un mail.'); } catch (e) { ui.toast('Copie impossible.', 'error'); }
+      };
+      return h('div', { class: 'stack' },
+        ui.card('Éléments pour la taxe', h('div', { class: 'stack-sm' }, stats,
+          h('h3', { class: 'section-title' }, 'Par catégorie de biens'), cats,
+          h('h3', { class: 'section-title' }, 'Détail des biens donnés'), detail),
+        { subtitle: 'Acte : ' + (s.taxe.typeActe || ACTES[0]) + ' — ' + FORMES[tx.code] + '.' }),
+        ui.card('Envoyer à la comptable', h('div', { class: 'stack-sm' },
+          ui.field('Adresse de la comptable', champEmail, { help: 'Gardée sur ce poste uniquement.' }),
+          h('div', { class: 'chips' },
+            ui.button('Envoyer par mail', { icon: 'mail', variant: 'primary', onClick: envoyer }),
+            ui.button('Copier le texte', { icon: 'copy', variant: 'soft', onClick: copier })),
+          h('pre', { class: 'taxe-texte' }, texteTaxe(s, r, tx)))));
+    });
+    return h('div', { class: 'stack' }, reglages, recap);
+  }
+
   /* ---------- Panneau de synthèse ---------- */
   function aside(ctx) {
     return ui.card('En un coup d\'œil', ctx.live((r) => {
@@ -622,6 +729,7 @@
     // Anciens dossiers : hypothèse D étudiée s'il y a des petits-enfants.
     if (typeof s.hypotheseD !== 'boolean') s.hypotheseD = s.petitsEnfants.some((x) => x.nom);
     s.enfantsNonCommuns = !!s.enfantsNonCommuns;
+    s.taxe = Object.assign({ forme: null, typeActe: 'Donation-partage', observations: '' }, s.taxe || {});
     s.enfants = (s.enfants || []).map((x) => Object.assign({ de: 'deux' }, x));
     migrer(s);
     return s;
@@ -637,6 +745,7 @@
       { id: 'anterieures', label: 'Donations antérieures', render: tabAnterieures },
       { id: 'resultats', label: 'Résultats', render: tabResultats },
       { id: 'synthese', label: 'Synthèse client', render: tabSynthese },
+      { id: 'taxe', label: 'Taxe', render: tabTaxe },
     ],
   });
 

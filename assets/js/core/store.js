@@ -59,6 +59,10 @@
     return Object.assign({}, p[section], { bareme669: p.commun.bareme669 });
   }
 
+  // Préférences de ce poste (ex. adresse de la comptable) : jamais dans le code du site.
+  const getPref = (key) => read('atelier.pref.' + key);
+  const setPref = (key, value) => write('atelier.pref.' + key, value);
+
   const saveDraft = (appId, data) => write(KEY_DRAFT + appId, data);
 
   /*
@@ -129,5 +133,5 @@
     return file.dossier;
   }
 
-  A.store = { getParams, setParams, resetParams, isCustomized, onParamsChange, engineParams, saveDraft, loadDraft, listeHistorique, enregistrerHistorique, supprimerHistorique, downloadJSON, openJSON, wrapFile, unwrapFile };
+  A.store = { getParams, setParams, resetParams, isCustomized, onParamsChange, engineParams, getPref, setPref, saveDraft, loadDraft, listeHistorique, enregistrerHistorique, supprimerHistorique, downloadJSON, openJSON, wrapFile, unwrapFile };
 })(typeof self !== 'undefined' ? self : this);
