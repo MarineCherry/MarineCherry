@@ -34,7 +34,7 @@
   const isEmpty = (s) => !s.reference && !s.operations.length && !s.base.some((x) => x.montant) && !s.actif.some((x) => x.montant) && !s.usufruitier.nom;
 
   /* ---------- Actif successoral ---------- */
-  const NATURES = [{ value: 'liquidites', label: 'Liquidités (comptes, livrets)' }, { value: 'titres', label: 'Valeurs mobilières' }, { value: 'immobilier', label: 'Immobilier' }, { value: 'autre', label: 'Autre' }];
+  const NATURES = [{ value: 'liquidites', label: 'Liquidités (comptes, livrets)' }, { value: 'titres', label: 'Valeurs mobilières' }, { value: 'autre', label: 'Autre' }];
   const REGIMES = [{ value: 'communaute', label: 'Communauté' }, { value: 'separation', label: 'Séparation de biens' }, { value: 'aucun', label: 'Non marié / veuf' }];
   const PROPRIETES = [{ value: 'commun', label: 'Bien commun (½ à la succession)' }, { value: 'propre', label: 'Bien propre du défunt (100 %)' }, { value: 'indivis', label: 'Indivis (quote-part)' }];
   const proprieteDefaut = (s) => (s.regime === 'communaute' ? 'commun' : 'propre');
@@ -264,7 +264,7 @@
         ui.button('Ajouter un bien', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.actif.push(nouvelActif(s)); ctx.render(); } }),
         ui.button('Tout l\'actif versé (relevé)', { icon: 'check', variant: 'soft', small: true, onClick: reprendre })),
       ctx.live((r) => h('p', { class: 'small' }, 'Soumis au quasi-usufruit, revenant à la succession : ', h('strong', null, fmtEuro(r.brut))))),
-    { subtitle: 'Indiquez les montants au décès (bordereau de situation), même s\'ils diffèrent des sommes reçues. Seules les lignes marquées « Quasi-usufruit » entrent dans l\'assiette : par défaut les liquidités ; l\'immobilier reste en usufruit ordinaire.' });
+    { subtitle: 'Indiquez les montants au décès (bordereau de situation), même s\'ils diffèrent des sommes reçues. Seules les sommes d\'argent entrent dans l\'assiette (art. 587 C. civ.) : l\'immobilier, qui reste en usufruit ordinaire, n\'a pas à figurer ici.' });
   }
 
   function tableOperations(ctx) {
@@ -403,7 +403,7 @@
         s.base = [];
       }
     }
-    s.actif = s.actif.map((x) => Object.assign(nouvelActif(s), x));
+    s.actif = s.actif.map((x) => Object.assign(nouvelActif(s), x, x.nature === 'immobilier' ? { nature: 'autre', soumis: false } : {}));
     return s;
   }
 
