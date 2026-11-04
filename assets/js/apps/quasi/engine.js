@@ -207,7 +207,7 @@
     const lignesBase = base.map((x) => {
       const f = fraction(x.part);
       const part = f === null ? 1 : f;
-      return { id: x.id, libelle: x.libelle || '', montant: n(x.montant), partTexte: String(x.part || '').trim(), part, demembre: n(x.montant) * part };
+      return { id: x.id, libelle: x.libelle || '', montant: n(x.montant), partTexte: String(x.part || '').trim(), part, demembre: n(x.montant) * part, groupe: x.groupe || '' };
     });
     const brutTotal = sum(lignesBase, (x) => x.montant);
     const brut = sum(lignesBase, (x) => x.demembre);
@@ -277,9 +277,31 @@
     const succession = d.cas !== 'vente';
     const B = [];
     const lignes = [];
-    r.lignesBase.forEach((x) => lignes.push([x.libelle || (succession ? 'Liquidités' : 'Prix de vente'), euros(x.montant)]));
-    if (r.lignesBase.length > 1) lignes.push(['Total', euros(r.brutTotal)]);
-    if (Math.abs(r.brut - r.brutTotal) > 0.005) {
+    const gras = ['Total', 'Total frais :', 'Solde :', 'Assiette du quasi-usufruit :', 'Déduction faite des frais :'];
+    const parGroupe = succession && r.lignesBase.some((x) => x.groupe);
+    if (parGroupe) {
+      // Actif successoral par origine : communauté (moitié), biens propres, biens indivis (quote-part).
+      const titres = { commun: 'ACTIF DE COMMUNAUTE', propre: 'BIENS PROPRES DU DEFUNT', indivis: 'BIENS INDIVIS' };
+      ['commun', 'propre', 'indivis'].forEach((g) => {
+        const ls = r.lignesBase.filter((x) => (x.groupe || 'propre') === g);
+        if (!ls.length) return;
+        lignes.push([titres[g], '']);
+        gras.push(titres[g]);
+        ls.forEach((x) => lignes.push([x.libelle || 'Liquidités', euros(x.montant)]));
+        const total = sum(ls, (x) => x.montant), dem = sum(ls, (x) => x.demembre);
+        if (g === 'commun') {
+          if (ls.length > 1) lignes.push(['Total', euros(total)]);
+          lignes.push(['1/2 revenant à la succession :', euros(dem)]);
+        } else if (g === 'indivis') {
+          lignes.push(['Quote-part revenant à la succession :', euros(dem)]);
+        } else if (ls.length > 1) lignes.push(['Total', euros(total)]);
+      });
+      if (new Set(r.lignesBase.map((x) => x.groupe || 'propre')).size > 1) { lignes.push(['Total revenant à la succession :', euros(r.brut)]); gras.push('Total revenant à la succession :'); }
+    } else {
+      r.lignesBase.forEach((x) => lignes.push([x.libelle || (succession ? 'Liquidités' : 'Prix de vente'), euros(x.montant)]));
+      if (r.lignesBase.length > 1) lignes.push(['Total', euros(r.brutTotal)]);
+    }
+    if (!parGroupe && Math.abs(r.brut - r.brutTotal) > 0.005) {
       const parts = [...new Set(r.lignesBase.map((x) => x.partTexte).filter(Boolean))];
       const libPart = succession
         ? (parts.length === 1 ? parts[0] + ' revenant à la succession' : 'Part revenant à la succession')
@@ -304,7 +326,7 @@
       lignes.push(['Assiette du quasi-usufruit :', euros(r.nus[0].assiette)]);
     }
     B.push({ type: 'sous-titre', texte: succession ? 'Calcul des droits sur lesquels s\'exerce le quasi-usufruit' : 'Détermination des sommes objets du quasi-usufruit' });
-    B.push({ type: 'table', lignes, gras: ['Total', 'Total frais :', 'Solde :', 'Assiette du quasi-usufruit :', 'Déduction faite des frais :'] });
+    B.push({ type: 'table', lignes, gras });
     if (!plusieurs && !(r.nus.length === 1 && r.nus[0].propres.length)) B.push({ type: 'p', texte: 'sur lequel s\'exerce les droits en usufruit du conjoint.' });
 
     const qu = r.nus.filter((x) => x.mode === 'qu');

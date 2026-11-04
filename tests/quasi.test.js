@@ -163,3 +163,24 @@ test('Arrondi : les créances de restitution font exactement le solde', () => {
   near(r.nus.reduce((t, x) => t + x.creance, 0), 100000.01, 'total des créances');
   near(r.assietteQU, 100000.01, 'assiette');
 });
+
+test('Succession : actif par origine (communauté, propre, indivis) dans le tableau de l\'acte', () => {
+  const d = {
+    cas: 'succession', nus: [{ id: 'a', nom: 'Madame Claire DURAND' }],
+    base: [
+      { libelle: 'BANQUE EXEMPLE : comptes et livrets', montant: 100000, part: '1/2', groupe: 'commun' },
+      { libelle: 'Livret A au nom du défunt (bien propre)', montant: 20000, part: '', groupe: 'propre' },
+      { libelle: 'Compte joint avec un tiers', montant: 9000, part: '1/3', groupe: 'indivis' },
+    ],
+    operations: [{ action: 'retranche', libelle: 'frais de notoriété', montant: 500 }],
+  };
+  const r = Q.calculer(d, P);
+  near(r.brut, 50000 + 20000 + 3000, 'revenant à la succession');
+  near(r.assietteQU, 72500, 'assiette');
+  const t = Q.texte(Q.blocs(d, r));
+  assert.ok(t.includes('ACTIF DE COMMUNAUTE\t\nBANQUE EXEMPLE : comptes et livrets\t100 000,00 €\n1/2 revenant à la succession :\t50 000,00 €'));
+  assert.ok(t.includes('BIENS PROPRES DU DEFUNT\t\nLivret A au nom du défunt (bien propre)\t20 000,00 €'));
+  assert.ok(t.includes('Quote-part revenant à la succession :\t3 000,00 €'));
+  assert.ok(t.includes('Total revenant à la succession :\t73 000,00 €'));
+  assert.ok(t.includes('Solde :\t72 500,00 €'));
+});

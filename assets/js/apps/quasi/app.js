@@ -26,17 +26,37 @@
       reference: '', cas: 'succession', dateActe: todayISO(),
       usufruitier: { nom: '', naissance: '', age: null },
       nus: [nouveauNu(), nouveauNu()],
+      regime: 'communaute', actif: [],
       base: [], operations: [],
       releve: null,
     };
   }
-  const isEmpty = (s) => !s.reference && !s.operations.length && !s.base.some((x) => x.montant) && !s.usufruitier.nom;
+  const isEmpty = (s) => !s.reference && !s.operations.length && !s.base.some((x) => x.montant) && !s.actif.some((x) => x.montant) && !s.usufruitier.nom;
+
+  /* ---------- Actif successoral ---------- */
+  const NATURES = [{ value: 'liquidites', label: 'Liquidités (comptes, livrets)' }, { value: 'titres', label: 'Valeurs mobilières' }, { value: 'immobilier', label: 'Immobilier' }, { value: 'autre', label: 'Autre' }];
+  const REGIMES = [{ value: 'communaute', label: 'Communauté' }, { value: 'separation', label: 'Séparation de biens' }, { value: 'aucun', label: 'Non marié / veuf' }];
+  const PROPRIETES = [{ value: 'commun', label: 'Bien commun (½ à la succession)' }, { value: 'propre', label: 'Bien propre du défunt (100 %)' }, { value: 'indivis', label: 'Indivis (quote-part)' }];
+  const proprieteDefaut = (s) => (s.regime === 'communaute' ? 'commun' : 'propre');
+  // Seules les sommes d'argent (biens consomptibles) sont en principe soumises au quasi-usufruit (art. 587 C. civ.).
+  const soumisDefaut = (nature) => nature === 'liquidites';
+  const nouvelActif = (s, o) => Object.assign({ id: uid('a'), libelle: '', nature: 'liquidites', montant: null, propriete: proprieteDefaut(s), part: '', soumis: true, opId: '' }, o || {});
+  const partActif = (x) => (x.propriete === 'commun' ? '1/2' : x.propriete === 'indivis' ? x.part : '');
+  const montantBase = (o) => (typeof o.montantBase === 'number' ? o.montantBase : o.montant);
+  // Libellé d'une ligne d'actif reprise du relevé : « reçu de BNP POUR COMPTE SSION » → « BNP PARIBAS (fonds versés) ».
+  function actifDepuisOperation(s, o) {
+    const tiers = (/^re[çc]u de (.+?) pour compte/i.exec(o.libelleReleve) || [])[1];
+    return nouvelActif(s, { libelle: (tiers ? tiers.toUpperCase() : 'Fonds') + ' (fonds versés au dossier)', montant: o.montant, opId: o.id });
+  }
   const SENS = (o) => (o.credit ? 'credit' : 'debit');
 
   // Données du calcul : lignes de base (relevé + saisies) et éléments retranchés.
   function donnees(s) {
-    const base = s.operations.filter((o) => o.action === 'base').map((o) => ({ id: o.id, libelle: o.libelle || o.libelleReleve, montant: o.montant, part: o.part }))
-      .concat(s.base.map((x) => ({ id: x.id, libelle: x.libelle, montant: x.montant, part: x.part })));
+    // Succession : base = actif successoral soumis au quasi-usufruit, selon son origine (communauté, propre, indivis).
+    const base = s.cas !== 'vente'
+      ? s.actif.filter((x) => x.soumis).map((x) => ({ id: x.id, libelle: x.libelle, montant: x.montant, part: partActif(x), groupe: x.propriete }))
+      : s.operations.filter((o) => o.action === 'base').map((o) => ({ id: o.id, libelle: o.libelle || o.libelleReleve, montant: montantBase(o), part: o.part }))
+        .concat(s.base.map((x) => ({ id: x.id, libelle: x.libelle, montant: x.montant, part: x.part })));
     return Object.assign({}, s, { base, operations: s.operations.filter((o) => o.action === 'retranche') });
   }
   const compute = (s, p) => E.calculer(donnees(s), p);
@@ -119,6 +139,11 @@
         action: c.action, libelle: c.libelle, repartition: c.repartition, nature: c.nature, verifier: c.verifier, personneTexte: c.personneTexte || '', personne: '', part: '',
       };
     }).concat(manuelles);
+    // Succession : les fonds versés au dossier alimentent l'actif successoral (montants modifiables).
+    if (s.cas !== 'vente') {
+      s.actif = s.actif.filter((x) => !x.opId);
+      s.operations.filter((o) => o.action === 'base' && o.sens === 'credit').forEach((o) => s.actif.push(actifDepuisOperation(s, o)));
+    }
     // Plus-values : rattachées au nu-propriétaire cité, sinon sans effet (part en pleine propriété de l'usufruitier).
     const cites = [...new Set(s.operations.filter((o) => o.personneTexte).map((o) => o.personneTexte))];
     cites.forEach((t) => {
@@ -185,7 +210,7 @@
       h('div', { class: 'rows' },
         lignesReleve.map((o) => h('div', { class: 'row-line qu-base' },
           f('Ligne du relevé', ctx.text(o, 'libelle', { placeholder: o.libelleReleve })),
-          f('Montant', h('div', { class: 'readonly' }, fmtEuro(o.montant))),
+          f('Montant', ctx.num(o, 'montantBase', { suffix: '€', placeholder: A.util.fmtNum(o.montant, 2) }), { help: o.montantBase !== undefined && o.montantBase !== null && o.montantBase !== o.montant ? 'Relevé : ' + fmtEuro(o.montant) : 'Lu sur le relevé, modifiable' }),
           f(vente ? 'Quote-part démembrée' : 'Part de la succession', ctx.text(o, 'part', { placeholder: '100 %' }), { help: vente ? 'ex. 95/100, 3/8' : 'ex. 1/2 (communauté)' }),
           ui.button('Retirer de la base', { icon: 'trash', iconOnly: true, variant: 'ghost', small: true, onClick: () => { o.action = 'ignore'; ctx.render(); ctx.changed(); } }))),
         s.base.map((x) => h('div', { class: 'row-line qu-base' },
@@ -197,7 +222,49 @@
       ctx.live((r) => h('p', { class: 'small' }, 'Base démembrée : ', h('strong', null, fmtEuro(r.brut)), r.brutTotal !== r.brut ? ' (sur ' + fmtEuro(r.brutTotal) + ')' : ''))),
     { subtitle: vente ? 'Prix de vente encaissé, avec la quote-part sur laquelle porte le démembrement.' : 'Liquidités versées sur le compte du dossier. Ajoutez ce qui n\'apparaît pas (comptes au décès, actif non encore versé).' });
 
-    return h('div', { class: 'stack' }, dossier, parties, base, tableOperations(ctx), resultat(ctx));
+    return h('div', { class: 'stack' }, dossier, parties, vente ? base : carteActif(ctx), tableOperations(ctx), resultat(ctx));
+  }
+
+  function carteActif(ctx) {
+    const s = ctx.state;
+    const regime = f('Régime matrimonial du défunt', ui.segmented({ value: s.regime, options: REGIMES, small: true, onChange: async (v) => {
+      s.regime = v;
+      if (s.actif.length && await ui.confirm('Appliquer le régime ?', 'Rattacher toutes les lignes de l\'actif ' + (v === 'communaute' ? 'à la communauté (½ à la succession)' : 'aux biens propres du défunt (100 %)') + ' ? Vous pourrez ensuite modifier ligne par ligne.', 'Appliquer')) {
+        s.actif.forEach((x) => { if (x.propriete !== 'indivis') x.propriete = proprieteDefaut(s); });
+      }
+      ctx.render(); ctx.changed();
+    } }));
+    const lignes = s.actif.map((x) => h('div', { class: ['row-line', 'qu-actif', x.soumis ? '' : 'qu-actif-hors'] },
+      f('Bien', ctx.text(x, 'libelle', { placeholder: 'ex. BNP PARIBAS : comptes et livrets' }), { help: x.opId ? 'Repris du relevé : montant modifiable' : null }),
+      f('Nature', ui.selectInput({ value: x.nature, options: NATURES, ariaLabel: 'Nature', onChange: (v) => { x.nature = v; x.soumis = soumisDefaut(v); ctx.render(); ctx.changed(); } })),
+      f('Montant au décès', ctx.num(x, 'montant', { suffix: '€' })),
+      ui.button('Retirer', { icon: 'trash', iconOnly: true, variant: 'ghost', small: true, onClick: () => {
+        s.actif.splice(s.actif.indexOf(x), 1);
+        const op = x.opId && s.operations.find((o) => o.id === x.opId);
+        if (op) op.action = 'ignore';
+        ctx.render(); ctx.changed();
+      } }),
+      f('Origine', ctx.select(x, 'propriete', PROPRIETES, { structural: true })),
+      x.propriete === 'indivis' ? f('Quote-part du défunt', ctx.text(x, 'part', { placeholder: 'ex. 1/2' })) : f('À la succession', ctx.live(() => {
+        const fr = E.fraction(partActif(x));
+        return h('div', { class: 'readonly' }, fmtEuro((fr === null ? 1 : fr) * (x.montant || 0)));
+      })),
+      f('Soumis au quasi-usufruit', ui.yesNo(x.soumis, (v) => { x.soumis = v; ctx.render(); ctx.changed(); }, true))));
+    const versees = s.operations.filter((o) => o.sens === 'credit' && o.nature === 'liquidites');
+    const reprendre = () => {
+      let n = 0;
+      versees.forEach((o) => { if (!s.actif.some((x) => x.opId === o.id)) { o.action = 'base'; s.actif.push(actifDepuisOperation(s, o)); n++; } });
+      ctx.render(); ctx.changed();
+      ui.toast(n ? n + ' ligne' + (n > 1 ? 's' : '') + ' reprise' + (n > 1 ? 's' : '') + ' du relevé.' : versees.length ? 'Les fonds versés sont déjà dans l\'actif.' : 'Aucun versement de fonds trouvé dans le relevé.');
+    };
+    return ui.card('Actif successoral', h('div', { class: 'stack-sm' },
+      regime,
+      h('div', { class: 'rows' }, lignes.length ? lignes : h('p', { class: 'small muted' }, 'Aucune ligne : reprenez les fonds versés au dossier ou saisissez l\'actif (bordereau de situation au décès, immobilier…).')),
+      h('div', { class: 'chips' },
+        ui.button('Ajouter un bien', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.actif.push(nouvelActif(s)); ctx.render(); } }),
+        ui.button('Tout l\'actif versé (relevé)', { icon: 'check', variant: 'soft', small: true, onClick: reprendre })),
+      ctx.live((r) => h('p', { class: 'small' }, 'Soumis au quasi-usufruit, revenant à la succession : ', h('strong', null, fmtEuro(r.brut))))),
+    { subtitle: 'Indiquez les montants au décès (bordereau de situation), même s\'ils diffèrent des sommes reçues. Seules les lignes marquées « Quasi-usufruit » entrent dans l\'assiette : par défaut les liquidités ; l\'immobilier reste en usufruit ordinaire.' });
   }
 
   function tableOperations(ctx) {
@@ -205,7 +272,7 @@
     const vente = s.cas === 'vente';
     const personnes = [{ value: '', label: 'Tous' }].concat(s.nus.map((x, i) => ({ value: x.id, label: x.nom || 'Nu-propriétaire ' + (i + 1) })));
     const effets = (o) => (o.sens === 'credit'
-      ? [{ value: 'base', label: 'Base de départ' }, { value: 'ignore', label: 'Sans effet' }]
+      ? [{ value: 'base', label: vente ? 'Base de départ' : 'Repris dans l\'actif' }, { value: 'ignore', label: 'Sans effet' }]
       : [{ value: 'retranche', label: 'Retranché' }, { value: 'ignore', label: 'Sans effet' }]);
     const ligne = (o) => {
       const ret = o.action === 'retranche';
@@ -216,7 +283,15 @@
             o.details && o.details.length ? h('span', { class: 'small muted' }, o.details.map((d) => d.libelle + ' ' + fmtEuro(d.montant)).join(' · ')) : null)),
         h('td', { class: 'num nowrap' }, o.manuel ? ctx.num(o, 'montant', { suffix: '€' }) : h('span', { class: o.sens === 'credit' ? 'pos' : '' }, (o.sens === 'credit' ? '+ ' : '') + fmtEuro(o.montant))),
         h('td', null, h('div', { class: 'qu-cell' },
-          ui.selectInput({ value: o.action, options: effets(o), ariaLabel: 'Effet', onChange: (v) => { o.action = v; o.verifier = false; ctx.render(); ctx.changed(); } }),
+          ui.selectInput({ value: o.action, options: effets(o), ariaLabel: 'Effet', onChange: (v) => {
+            o.action = v; o.verifier = false;
+            // Succession : un versement repris (ou retiré) alimente (ou quitte) l'actif successoral.
+            if (!vente && o.sens === 'credit') {
+              if (v === 'base' && !s.actif.some((x) => x.opId === o.id)) s.actif.push(actifDepuisOperation(s, o));
+              if (v !== 'base') s.actif = s.actif.filter((x) => x.opId !== o.id);
+            }
+            ctx.render(); ctx.changed();
+          } }),
           ret && vente && !o.personne ? ctx.segmented(o, 'repartition', [{ value: 'totalite', label: 'Totalité' }, { value: 'prorata', label: 'Prorata' }], { small: true }) : null)),
         h('td', null, ret ? h('div', { class: 'qu-cell' },
           ctx.text(o, 'libelle', { placeholder: 'libellé dans l\'acte' }),
@@ -225,7 +300,7 @@
           : o.manuel ? ui.button('Retirer', { icon: 'trash', iconOnly: true, variant: 'ghost', small: true, onClick: () => { s.operations.splice(s.operations.indexOf(o), 1); ctx.render(); ctx.changed(); } }) : null));
     };
     const tete = ['Date', 'Opération du relevé', 'Montant', vente ? 'Effet · répartition' : 'Effet', 'Libellé dans l\'acte', ''];
-    const ops = s.operations.filter((o) => o.action !== 'base');
+    const ops = s.operations.filter((o) => o.action !== 'base' || !vente);
     const aVerifier = ops.filter((o) => o.verifier).length;
     const ajouter = () => {
       s.operations.push({ id: uid('o'), manuel: true, date: '', libelleReleve: '', montant: null, sens: 'debit', details: [], action: 'retranche', libelle: '', repartition: 'totalite', nature: 'manuel', verifier: false, personne: '', part: '' });
@@ -317,6 +392,18 @@
     s.nus = (s.nus && s.nus.length ? s.nus : [nouveauNu()]).map((x) => Object.assign(nouveauNu(), x));
     s.base = s.base || [];
     s.operations = s.operations || [];
+    s.regime = s.regime || 'communaute';
+    // Anciens dossiers de succession : la base de départ devient l'actif successoral.
+    if (!Array.isArray(s.actif)) {
+      s.actif = [];
+      if (s.cas !== 'vente') {
+        const prop = (part) => (/^1\s*\/\s*2$/.test(String(part || '').trim()) ? { propriete: 'commun' } : String(part || '').trim() ? { propriete: 'indivis', part } : { propriete: 'propre' });
+        s.operations.filter((o) => o.action === 'base').forEach((o) => s.actif.push(Object.assign(nouvelActif(s, { libelle: o.libelle || o.libelleReleve, montant: montantBase(o), opId: o.id }), prop(o.part))));
+        s.base.forEach((x) => s.actif.push(Object.assign(nouvelActif(s, { libelle: x.libelle, montant: x.montant }), prop(x.part))));
+        s.base = [];
+      }
+    }
+    s.actif = s.actif.map((x) => Object.assign(nouvelActif(s), x));
     return s;
   }
 

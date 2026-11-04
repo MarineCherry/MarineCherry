@@ -1288,3 +1288,7 @@ body.avec-fiches .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 td.nowrap, .nowrap { white-space: nowrap; }
 td .pos { color: #2f7d5b; }
 @media (max-width: 640px) { .qu-usu, .qu-base { grid-template-columns: 1fr 1fr; } .qu-nu { grid-template-columns: 1fr 1fr 32px; } .qu-nu > .field:nth-child(3) { grid-column: 1 / -1; grid-row: 2; } }
+.qu-actif { grid-template-columns: minmax(0, 1.8fr) minmax(0, 1.2fr) minmax(0, 1fr) 32px; }
+.qu-actif > .btn-icon { grid-column: 4; grid-row: 1; }
+.qu-actif-hors { opacity: .7; }
+@media (max-width: 640px) { .qu-actif { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .qu-actif > .field:first-child { grid-column: 1 / -1; } .qu-actif > .btn-icon { grid-column: 1 / -1; grid-row: auto; order: 9; justify-self: end; } }
