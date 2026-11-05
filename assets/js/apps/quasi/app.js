@@ -169,6 +169,42 @@
     ui.toast(nb + ' opérations lues. Vérifiez les lignes signalées en orange.');
   }
 
+  /* ---------- Lecture de la déclaration de succession (PDF) ---------- */
+  async function importerDDS(ctx) {
+    const fichier = await choisirFichier();
+    if (!fichier) return;
+    ui.toast('Lecture de la déclaration de succession…');
+    let lu;
+    try {
+      lu = E.lireDDS(await pagesDuPdf(fichier));
+    } catch (e) {
+      console.error(e);
+      return ui.toast('Lecture du PDF impossible : ' + e.message, 'error');
+    }
+    const s = ctx.state;
+    if (!lu.comptes.length && !lu.regime && !lu.conjoint) return ui.toast('Ce PDF ne ressemble pas à une déclaration de succession (2705-SD).', 'error');
+    if (s.actif.some((x) => x.montant !== null && x.montant !== undefined) && !(await ui.confirm('Remplacer les comptes ?', 'Les comptes déjà saisis seront remplacés par ceux de la déclaration.', 'Remplacer'))) return;
+    s.cas = 'succession';
+    if (lu.regime) s.regime = lu.regime;
+    if (lu.option === 'usufruit' || lu.option === 'quart') s.option = lu.option;
+    if (!s.reference && lu.defunt) s.reference = 'Succession ' + lu.defunt;
+    if (lu.conjoint) {
+      if (!s.usufruitier.nom) s.usufruitier.nom = lu.conjoint.nom;
+      if (lu.conjoint.naissance) s.usufruitier.naissance = lu.conjoint.naissance;
+    }
+    if (lu.heritiers.length && s.nus.every((x) => !x.nom)) s.nus = lu.heritiers.map((x) => Object.assign(nouveauNu(), { nom: x.nom, part: x.part }));
+    // Comptes : origine d'après la section de la déclaration (actif de communauté ou biens propres).
+    s.actif = lu.comptes.map((c) => nouvelActif(s, {
+      etablissement: c.etablissement, agence: c.agence, titulaire: c.titulaire, type: c.type, numero: c.numero, montant: c.montant,
+      propriete: c.section === 'communaute' ? 'commun' : c.titulaire === 'joint' ? 'indivis' : c.titulaire === 'conjoint' ? 'conjoint' : 'propre',
+      part: c.section !== 'communaute' && c.titulaire === 'joint' ? '1/2' : '',
+    }));
+    s.dds = { fichier: fichier.name, avertissements: lu.avertissements };
+    ctx.render();
+    ctx.changed();
+    ui.toast(lu.comptes.length + ' compte' + (lu.comptes.length > 1 ? 's' : '') + ' repris de la déclaration. Vérifiez le régime, l\'option et les origines.');
+  }
+
   /* ---------- Onglet « Calcul » ---------- */
   const f = (label, control, opts) => ui.field(label, control, opts);
   const retirer = (ctx, liste, x) => ui.button('Retirer', { icon: 'trash', iconOnly: true, variant: 'ghost', small: true, onClick: () => { liste.splice(liste.indexOf(x), 1); ctx.render(); ctx.changed(); } });
@@ -198,7 +234,7 @@
         f('Sur sa part', ctx.segmented(x, 'mode', [{ value: 'qu', label: 'Quasi-usufruit' }, { value: 'bareme', label: 'Répartition (barème)' }], { small: true })),
         s.nus.length > 1 ? retirer(ctx, s.nus, x) : h('span')))),
       ui.button('Ajouter un nu-propriétaire', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.nus.push(nouveauNu()); ctx.render(); } })),
-    { subtitle: 'Noms repris du relevé quand il les cite : à compléter. « Répartition (barème) » : la part est partagée entre usufruitier et nu-propriétaire selon l\'âge, au lieu d\'un quasi-usufruit.' });
+    { subtitle: 'Noms repris de la déclaration de succession ou du relevé : à vérifier. « Répartition (barème) » : la part est partagée entre usufruitier et nu-propriétaire selon l\'âge, au lieu d\'un quasi-usufruit.' });
 
     // Base de départ : opérations du relevé retenues et saisies manuelles.
     const credits = s.operations.filter((o) => o.sens === 'credit' && (o.nature === (vente ? 'prix' : 'liquidites')));
@@ -257,6 +293,10 @@
       })),
       f('Retenu', ui.yesNo(x.soumis, (v) => { x.soumis = v; ctx.render(); ctx.changed(); }, true))));
     return ui.card('Comptes bancaires au décès', h('div', { class: 'stack-sm' },
+      h('div', { class: 'qu-import' },
+        ui.button(s.dds ? 'Lire une autre déclaration' : 'Lire la déclaration de succession (PDF)', { icon: 'upload', variant: s.dds ? 'soft' : 'primary', onClick: () => importerDDS(ctx) }),
+        h('span', { class: 'small muted' }, s.dds ? s.dds.fichier + ' · ' + s.actif.length + ' compte' + (s.actif.length > 1 ? 's' : '') : 'Comptes, régime matrimonial, option du conjoint et héritiers repris de la 2705-SD.')),
+      ...(s.dds ? s.dds.avertissements.map((a) => ui.note(a, 'warn')) : []),
       h('div', { class: 'grid-2' }, regime, option),
       h('div', { class: 'rows' }, lignes.length ? lignes : h('p', { class: 'small muted' }, 'Saisissez les comptes de la déclaration de succession (banque, compte, numéro, solde au décès).')),
       h('div', { class: 'chips' }, ui.button('Ajouter un compte', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.actif.push(nouvelActif(s, s.actif.length ? { etablissement: s.actif[s.actif.length - 1].etablissement, agence: s.actif[s.actif.length - 1].agence } : {})); ctx.render(); } })),

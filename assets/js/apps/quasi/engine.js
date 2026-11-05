@@ -133,6 +133,110 @@
     return res;
   }
 
+  /* ---------- 1 bis. Lecture de la déclaration de succession (2705-SD) ---------- */
+  // Texte d'un PDF : lignes reconstituées (éléments de même hauteur), pages mises bout à bout.
+  function texteDesPages(pages) {
+    const lignes = [];
+    (pages || []).forEach((page) => {
+      const rangs = [];
+      (page.items || []).filter((i) => String(i.str || '').trim()).slice().sort((a, b) => b.y - a.y || a.x - b.x).forEach((i) => {
+        const r = rangs.find((x) => Math.abs(x.y - i.y) <= 2);
+        if (r) r.items.push(i); else rangs.push({ y: i.y, items: [i] });
+      });
+      rangs.forEach((r) => lignes.push(r.items.sort((a, b) => a.x - b.x).map((i) => i.str.trim()).join(' ')));
+    });
+    return lignes;
+  }
+  // Mentions répétées sur chaque page du formulaire (en-têtes, affirmation de sincérité, signatures).
+  const RE_FORMULAIRE = [/AFFIRMATION DE SINC/i, /A ne signer qu/i, /l[ée]gataires, leurs tuteurs/i, /J'affirme/i, /peines [ée]dict[ée]es/i, /comptant, les cr[ée]ances/i,
+    /appartenaient au d[ée]funt/i, /^A\s+\S.*,\s*le\s*…/i, /Signature\(s\)/i, /^Page\s+\d+\s*\/\s*\d+/i, /N°\s*2705/i, /^\(\s*\d{2}\s*-\s*\d{4}\s*\)$/, /^A\s+remplir/i, /R[ée]serv[ée] [àa]/i,
+    /^ACTIF ET PASSIF DE LA SUCCESSION/i, /par le d[ée]clarant/i, /l.administration$/i, /^en euros$/i, /DIRECTION GENERALE DES FINANCES/i, /D[ÉE]CLARATION DE SUCCESSION$/i, /feuille de suite/i,
+    /@internet/i, /^\d{5}\s*\*\s*\d{2}$/, /^\(1\)\s*[ÉE]noncez/i, /avec le d[ée]funt, leurs date/i];
+  const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  function dateEnLettres(t) {
+    const m = /(\d{1,2})(?:er)?\s+([a-zéû]+)\s+(\d{4})/i.exec(t || '');
+    if (!m) return '';
+    const k = MOIS.indexOf(m[2].toLowerCase());
+    return k < 0 ? '' : m[3] + '-' + String(k + 1).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0');
+  }
+  const civiliteNom = (civ, nom) => (/^Mada/i.test(civ) ? 'Madame ' : 'Monsieur ') + nom.replace(/\s+/g, ' ').trim();
+
+  function lireDDS(source) {
+    const lignes = typeof source === 'string' ? source.split('\n') : Array.isArray(source) && typeof source[0] === 'string' ? source : texteDesPages(source);
+    const utiles = lignes.map((l) => l.replace(/\s+/g, ' ').trim()).filter((l) => l && !RE_FORMULAIRE.some((re) => re.test(l)));
+    const T = utiles.join(' ').replace(/\s+/g, ' ').replace(/\s*-\s*joint/gi, '-joint').replace(/\s+,/g, ',').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')');
+    const res = { defunt: '', regime: null, option: null, conjoint: null, heritiers: [], comptes: [], avertissements: [] };
+
+    // Défunt.
+    const nomDef = /Nom de naissance du d[ée]funt\s*:\s*(.+?)\s+Pr[ée]nom\(s\)\s*:\s*(.+?)\s+Date de naissance/i.exec(T);
+    if (nomDef) res.defunt = (/Succession de\s*:.*?☒\s*Mme/i.test(T) ? 'Mme ' : 'M. ') + nomDef[2].trim().split(' ')[0] + ' ' + nomDef[1].trim().toUpperCase();
+    // Régime matrimonial.
+    const reg = /R[ée]gime matrimonial adopt[ée] par les [ée]poux\s*:\s*(.*?)\s+En cas d/i.exec(T);
+    if (reg && /communaut/i.test(reg[1])) res.regime = 'communaute';
+    else if ((reg && /s[ée]paration/i.test(reg[1])) || /s[ée]par[ée]\(e\) de biens\s*☒/i.test(T)) res.regime = 'separation';
+    else if (/Veuf\(ve\) de\s*:\s*\p{Lu}/u.test(T) || /Divorc[ée]\(e\) de\s*:\s*\p{Lu}/u.test(T) || /☒\s*C[ée]libataire/i.test(T)) res.regime = 'aucun';
+    else if (/r[ée]gime de la communaut[ée]/i.test(T)) res.regime = 'communaute';
+    else if (/r[ée]gime de la s[ée]paration de biens/i.test(T)) res.regime = 'separation';
+    // Option du conjoint survivant.
+    const opt = /option du conjoint survivant(.{0,700}?)(?:Absence de partage|ABSENCE|Attestation|Notori[ée]t[ée]|$)/i.exec(T);
+    const texteOption = opt ? opt[1] : ((/Quotit[ée] \(part disponible\) choisie\s*:\s*(.*?)\s+Dispositions testamentaires/i.exec(T) || [])[1] || '');
+    if (/trois quarts en usufruit|3\s*\/\s*4 en usufruit/i.test(texteOption)) res.option = 'quart';
+    else if (/usufruit/i.test(texteOption)) res.option = 'usufruit';
+    else if (/quart en (pleine )?propri/i.test(texteOption)) { res.option = 'propriete'; res.avertissements.push('Le conjoint a opté pour une part en pleine propriété : pas d\'usufruit, à vérifier.'); }
+    // Conjoint survivant (quasi-usufruitier).
+    const cj = /Son conjoint survivant\s+(Madame|Monsieur)\s+([^,]+?),(.{0,400}?)N[ée]e? [àa]\s.{0,80}?,\s*le\s+(\d{1,2}(?:er)?\s+[a-zéû]+\s+\d{4})/i.exec(T);
+    if (cj) res.conjoint = { nom: civiliteNom(cj[1], cj[2]), naissance: dateEnLettres(cj[4]) };
+    // Héritiers et proportions.
+    const her = /Ses h[ée]ritiers(.*?)(?:Qualit[ée]s h[ée]r[ée]ditaires|QUALITES HEREDITAIRES)/i.exec(T);
+    if (her) {
+      const re = /\d+\)\s*(Madame|Monsieur)\s+([^,]+?)\s*,/g;
+      let m;
+      while ((m = re.exec(her[1]))) res.heritiers.push({ nom: civiliteNom(m[1], m[2]), part: '' });
+    }
+    const prop = /Proportions h[ée]r[ée]ditaires(.*?)(?:EXPOSE|RAPPEL DES ACTES|$)/i.exec(T);
+    if (prop) {
+      const re = /-\s*(Madame|Monsieur)\s+([^,]+?)\s*,\s*pour\s+[^(]*\((\d+\s*\/\s*\d+)\)/g;
+      let m;
+      while ((m = re.exec(prop[1]))) {
+        const mots = m[2].toUpperCase().split(/\s+/);
+        const h = res.heritiers.find((x) => mots.every((w) => x.nom.toUpperCase().includes(w)));
+        if (h) h.part = m[3].replace(/\s/g, '');
+      }
+    }
+    // Comptes bancaires : actif de communauté, puis actif de succession (biens propres).
+    const sections = [
+      { code: 'communaute', re: /ACTIF DE COMMUNAUTE(.*?)(?:PASSIF DE COMMUNAUTE|Soit un actif brut de communaut)/i },
+      { code: 'succession', re: /ACTIF DE SUCCESSION(.*?)(?:PASSIF DE SUCCESSION|Soit un actif brut de succession)/i },
+    ];
+    sections.forEach((sec) => {
+      const m = sec.re.exec(T);
+      if (!m) return;
+      const zone = m[1];
+      const tetes = [];
+      const reTete = /(\d+)\)\s*(?:A|Au|Aux|À|Auprès de)\s+(?:la\s+|le\s+|l')?(.+?),\s*agence\s+(?:de\s+|d')?(.+?),\s*(?:\((\d{5})\),?)?/g;
+      let t;
+      while ((t = reTete.exec(zone))) tetes.push({ index: t.index, fin: reTete.lastIndex, etab: t[2].trim(), agence: t[3].trim() + (t[4] ? ' (' + t[4] + ')' : '') });
+      tetes.forEach((tt, k) => {
+        let bloc = zone.slice(tt.fin, k + 1 < tetes.length ? tetes[k + 1].index : zone.length);
+        const coupe = /\s\d+\)\s*(?:La|Le|Les|L')\s/.exec(bloc);
+        if (coupe) bloc = bloc.slice(0, coupe.index);
+        const reCompte = /-\s*(Au nom du (D[ÉE]FUNT|CONJOINT)|Au nom de\s+[^,]+|En compte-joint|Au nom des deux [ée]poux)\s*,\s*(?:le|la|l')\s*(.+?)\s+num[ée]ro\s+([^,]+?)\s*,(.*?)\(([\d\s.]+,\d{2})\s*€\)/gi;
+        let c;
+        while ((c = reCompte.exec(bloc))) {
+          const tit = /CONJOINT/i.test(c[1]) ? 'conjoint' : /joint|deux/i.test(c[1]) ? 'joint' : 'defunt';
+          res.comptes.push({
+            etablissement: tt.etab, agence: tt.agence, titulaire: tit, type: c[3].replace(/\s+/g, ' ').trim(), numero: c[4].replace(/\s+/g, ''),
+            montant: montant(c[6]), section: sec.code,
+          });
+        }
+      });
+    });
+    if (!res.comptes.length) res.avertissements.push('Aucun compte bancaire trouvé dans la déclaration : saisissez-les à la main.');
+    if (!res.regime) res.avertissements.push('Régime matrimonial non trouvé : à indiquer.');
+    if (!res.option) res.avertissements.push('Option du conjoint non trouvée : à indiquer.');
+    return res;
+  }
+
   /* ---------- 2. Classement des opérations ---------- */
   // Nom de la personne citée après « PVI … : » (déclaration de plus-value) : « M LECOUSTEY Sylvain Robert Maurice ».
   function personneCitee(libelle) {
@@ -398,5 +502,5 @@
   }
   const texte = (B) => B.map((b) => (b.type === 'table' ? b.lignes.map((l) => l.join('\t')).join('\n') : b.texte)).join('\n\n');
 
-  return { lireReleve, classer, personneCitee, calculer, blocs, texte, fraction, montant, ageAu, usufruitParAge, euros, fmtFraction };
+  return { lireReleve, lireDDS, texteDesPages, classer, personneCitee, calculer, blocs, texte, fraction, montant, ageAu, usufruitParAge, euros, fmtFraction };
 });

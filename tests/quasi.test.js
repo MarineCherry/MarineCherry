@@ -213,3 +213,53 @@ test('Succession : comptes de la déclaration regroupés par banque, option 1/4 
   assert.ok(t.includes('Les nus-propriétaires déclarent renoncer'));
   assert.ok(t.includes('soit la somme globale de L(13 000,00 €).'));
 });
+
+test('Déclaration de succession (2705-SD) : régime, option, conjoint, héritiers, comptes de l\'actif de communauté', () => {
+  const lignes = [
+    'Succession de : ☐ Mme ☒ M.',
+    'Nom de naissance du défunt : DURAND Prénom(s) : Paul Henri',
+    'Date de naissance : 1 janvier 1940 Commune de naissance : AVIGNON',
+    'Régime matrimonial adopté par les époux : la communauté légale meubles et acquêts',
+    'En cas d\'absence de contrat de mariage, cochez la case ☒',
+    'Son conjoint survivant',
+    'Madame Anne Marie MARTIN, retraitée, demeurant à ORANGE (84100), 1, rue des Lilas,',
+    'Née à AVIGNON (84000), le 2 mars 1942.',
+    'Ses héritiers',
+    '1) Madame Claire DURAND, retraitée, demeurant à LYON (69000),',
+    '2) Monsieur Marc Louis DURAND, demeurant à PARIS (75000),',
+    'Qualités héréditaires',
+    'Proportions héréditaires',
+    '- Madame Claire DURAND, pour LA MOITIÉ (1/2).',
+    '- Monsieur Marc DURAND, pour LA MOITIÉ (1/2).',
+    'EXPOSE',
+    'Déclaration d\'option du conjoint survivant',
+    'Madame Anne MARTIN a déclaré opter pour le quart en pleine propriété et les trois quarts en usufruit.',
+    'Absence de partage préalable',
+    'ACTIF DE COMMUNAUTE',
+    '1) A BANQUE EXEMPLE, agence de ORANGE,',
+    '(84100),',
+    '- Au nom du DEFUNT, le compte numéro',
+    '0001, d\'un solde créditeur , au jour du décès, de MILLE EUROS (1 000,00 €),',
+    'Ci, ...................... 1 000,00 €',
+    'AFFIRMATION DE SINCÉRITÉ (article 802 du Code général des impôts).',
+    '« J\'affirme sincère et véritable la présente déclaration contenue en 9 pages.',
+    'Page 7/9',
+    '- En compte - joint, le Livret A numéro 0002, d\'un montant en',
+    'capital et intérêts, au jour du décès, de DEUX MILLE EUROS (2 000,00 €),',
+    'Ci, ...................... 2 000,00 €',
+    'Soit un montant total auprès de BANQUE EXEMPLE, de TROIS MILLE EUROS (3 000,00 €).',
+    '2) La TOUTE PROPRIETE du bien ci-après désigné : une maison, estimée (200 000,00 €).',
+    'PASSIF DE COMMUNAUTE',
+  ];
+  const r = Q.lireDDS(lignes);
+  assert.strictEqual(r.defunt, 'M. Paul DURAND');
+  assert.strictEqual(r.regime, 'communaute');
+  assert.strictEqual(r.option, 'quart');
+  assert.deepStrictEqual(r.conjoint, { nom: 'Madame Anne Marie MARTIN', naissance: '1942-03-02' });
+  assert.deepStrictEqual(r.heritiers, [{ nom: 'Madame Claire DURAND', part: '1/2' }, { nom: 'Monsieur Marc Louis DURAND', part: '1/2' }]);
+  assert.deepStrictEqual(r.comptes.map((c) => [c.etablissement, c.agence, c.titulaire, c.type, c.numero, c.montant, c.section]), [
+    ['BANQUE EXEMPLE', 'ORANGE (84100)', 'defunt', 'compte', '0001', 1000, 'communaute'],
+    ['BANQUE EXEMPLE', 'ORANGE (84100)', 'joint', 'Livret A', '0002', 2000, 'communaute'],
+  ]);
+  assert.deepStrictEqual(r.avertissements, []);
+});
