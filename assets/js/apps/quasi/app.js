@@ -35,7 +35,7 @@
 
   /* ---------- Comptes bancaires au décès (succession) ---------- */
   const REGIMES = [{ value: 'communaute', label: 'Communauté' }, { value: 'separation', label: 'Séparation de biens' }, { value: 'aucun', label: 'Non marié / veuf' }];
-  const OPTIONS = [{ value: 'usufruit', label: 'Usufruit de la totalité' }, { value: 'quart', label: '1/4 en PP et 3/4 en usufruit' }, { value: 'complement', label: 'Usufruit + complément (758-6)' }, { value: 'autre', label: 'Autre' }];
+  const OPTIONS = [{ value: 'usufruit', label: 'Usufruit de la totalité' }, { value: 'quart', label: '1/4 PP et 3/4 US' }, { value: 'complement', label: 'US + complément (758-6)' }, { value: 'autre', label: 'Autre' }];
   const TITULAIRES = [{ value: 'defunt', label: 'Défunt' }, { value: 'conjoint', label: 'Conjoint' }, { value: 'joint', label: 'Compte-joint' }, { value: 'indivision', label: 'En indivision' }];
   const PROPRIETES = [{ value: 'commun', label: 'Commun (½ à la succession)' }, { value: 'propre', label: 'Propre du défunt (100 %)' }, { value: 'indivis', label: 'Indivis (quote-part)' }, { value: 'conjoint', label: 'Propre du conjoint (exclu)' }];
   const TYPES = ['compte', 'compte courant', 'Livret A', 'Livret Développement Durable', 'Livret d\'Epargne Populaire', 'compte sur livret', 'Plan d\'Epargne Logement', 'Compte Epargne Logement', 'compte titres'];
@@ -298,7 +298,7 @@
       f('Option du conjoint', ctx.segmented(s, 'option', OPTIONS, { small: true, structural: true })),
       s.option === 'autre' ? f('Part de la succession en usufruit', ctx.text(s, 'partUsufruit', { placeholder: 'ex. 3/4' })) : null,
       s.option === 'complement' ? h('div', { class: 'stack-sm' },
-        f('Date du décès', ctx.date(s, 'dateDeces'), { help: 'Âge de l\'usufruitier au décès, pour évaluer l\'usufruit.' }),
+        h('div', { class: 'grid-2' }, f('Date du décès', ctx.date(s, 'dateDeces'), { help: 'Âge de l\'usufruitier au décès, pour évaluer l\'usufruit.' })),
         ctx.live(() => {
           const im = imputation(s);
           if (!im) return ui.note('Indiquez la date de naissance du conjoint (Les parties) et la date du décès.', 'warn');
@@ -325,7 +325,7 @@
         ui.button(s.dds ? 'Lire une autre déclaration' : 'Lire la déclaration de succession (PDF)', { icon: 'upload', variant: s.dds ? 'soft' : 'primary', onClick: () => importerDDS(ctx) }),
         h('span', { class: 'small muted' }, s.dds ? s.dds.fichier + ' · ' + s.actif.length + ' compte' + (s.actif.length > 1 ? 's' : '') : 'Comptes, régime matrimonial, option du conjoint et héritiers repris de la 2705-SD.')),
       ...(s.dds ? s.dds.avertissements.map((a) => ui.note(a, 'warn')) : []),
-      h('div', { class: 'grid-2' }, regime, option),
+      h('div', { class: 'stack-sm' }, regime, option),
       h('div', { class: 'rows' }, lignes.length ? lignes : h('p', { class: 'small muted' }, 'Saisissez les comptes de la déclaration de succession (banque, compte, numéro, solde au décès).')),
       h('div', { class: 'chips' }, ui.button('Ajouter un compte', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.actif.push(nouvelActif(s, s.actif.length ? { etablissement: s.actif[s.actif.length - 1].etablissement, agence: s.actif[s.actif.length - 1].agence } : {})); ctx.render(); } })),
       ctx.live((r) => h('p', { class: 'small' }, 'Revenant à la succession : ', h('strong', null, fmtEuro(r.brutSuccession)),
