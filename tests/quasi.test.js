@@ -332,3 +332,21 @@ test('Imputation (art. 758-6) : complément en pleine propriété quand l\'usufr
   const c = Q.calculer({ cas: 'succession', partUsufruit: '93,75 %', nus: [{ id: 'a' }], base: [{ montant: 100000, part: '' }], operations: [] }, P);
   near(c.brut, 93750, 'quasi-usufruit sur 93,75 %');
 });
+
+test('Succession : autre actif (parts de SCPI) avec les comptes, droits de succession retranchés', () => {
+  const d = {
+    cas: 'succession', nus: [{ id: 'a' }],
+    base: [
+      { montant: 10000, part: '', groupe: 'propre', compte: { etablissement: 'BANQUE EXEMPLE', titulaire: 'defunt', type: 'compte', numero: '1' } },
+      { libelle: '100 parts de la SCPI EXEMPLE', montant: 8000, part: '', groupe: 'propre', actif: true },
+    ],
+    operations: [{ action: 'retranche', libelle: 'droits de succession', montant: 1500 }],
+  };
+  const r = Q.calculer(d, P);
+  near(r.net, 16500, 'solde');
+  const t = Q.texte(Q.blocs(d, r, (x) => 'L(' + Q.euros(x) + ')'));
+  assert.ok(t.includes('100 parts de la SCPI EXEMPLE\t8 000,00 €'));
+  assert.ok(t.includes('droits de succession\t1 500,00 €'));
+  assert.ok(t.includes('Et que les autres actifs financiers se composaient au décès des éléments suivants :\n\n- 100 parts de la SCPI EXEMPLE, d\'une valeur au jour du décès de L(8 000,00 €),\n\nCi, 8 000,00 €'));
+  assert.strictEqual(Q.classer({ libelle: 'A SIE AVIGNON DROITS SSION M. DURAND', debit: 1500 }, 'succession').nature, 'droits');
+});

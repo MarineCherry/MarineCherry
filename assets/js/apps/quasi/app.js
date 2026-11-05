@@ -26,7 +26,7 @@
       reference: '', cas: 'succession', dateActe: todayISO(),
       usufruitier: { nom: '', naissance: '', age: null },
       nus: [nouveauNu(), nouveauNu()],
-      regime: 'communaute', option: 'usufruit', partUsufruit: '', actif: [], fraisQU: null,
+      regime: 'communaute', option: 'usufruit', partUsufruit: '', actif: [], fraisQU: null, droitsSuccession: null,
       base: [], operations: [],
       releve: null,
     };
@@ -67,18 +67,22 @@
   const montantBase = (o) => (typeof o.montantBase === 'number' ? o.montantBase : o.montant);
   const SENS = (o) => (o.credit ? 'credit' : 'debit');
   const LIB_FRAIS_QU = 'frais de convention de quasi-usufruit';
+  const LIB_DROITS = 'droits de succession';
+  // Droits de succession payés par le compte du dossier (relevé) : ils priment sur la case à remplir.
+  const droitsDuReleve = (s) => s.operations.filter((o) => o.action === 'retranche' && !o.manuel && o.nature === 'droits').reduce((t, o) => t + (o.montant || 0), 0);
 
   // Données du calcul : base (comptes au décès ou prix de vente) et éléments retranchés.
   function donnees(s) {
     const base = s.cas !== 'vente'
-      ? s.actif.filter((x) => x.soumis && x.propriete !== 'conjoint').map((x) => ({
+      ? s.actif.filter((x) => x.soumis && x.propriete !== 'conjoint').map((x) => (x.genre === 'actif' ? { id: x.id, libelle: x.designation, montant: x.montant, part: partActif(x), groupe: x.propriete, actif: true } : {
         id: x.id, libelle: x.etablissement, montant: x.montant, part: partActif(x), groupe: x.propriete,
         compte: { etablissement: (x.etablissement || '').trim(), agence: (x.agence || '').trim(), titulaire: x.titulaire, type: x.type, numero: (x.numero || '').trim(), formule: x.formule || '' },
       }))
       : s.operations.filter((o) => o.action === 'base').map((o) => ({ id: o.id, libelle: o.libelle || o.libelleReleve, montant: montantBase(o), part: o.part }))
         .concat(s.base.map((x) => ({ id: x.id, libelle: x.libelle, montant: x.montant, part: x.part })));
     const operations = s.operations.filter((o) => o.action === 'retranche')
-      .concat(s.fraisQU ? [{ id: 'frais-qu', action: 'retranche', libelle: LIB_FRAIS_QU, montant: s.fraisQU, repartition: 'totalite' }] : []);
+      .concat(s.fraisQU ? [{ id: 'frais-qu', action: 'retranche', libelle: LIB_FRAIS_QU, montant: s.fraisQU, repartition: 'totalite' }] : [])
+      .concat(s.cas !== 'vente' && s.droitsSuccession && !droitsDuReleve(s) ? [{ id: 'droits', action: 'retranche', libelle: LIB_DROITS, montant: s.droitsSuccession, repartition: 'totalite' }] : []);
     const im = s.cas !== 'vente' && s.option === 'complement' ? imputation(s) : null;
     const precisionUsufruit = im && im.x > 0
       ? 'Précision étant faite que la valeur de l\'usufruit du conjoint survivant, évaluée à ' + pctTexte(im.u) + ' eu égard à son âge, étant inférieure au quart en pleine propriété de ses droits légaux, la libéralité s\'impute sur ces droits et il lui est assuré un complément de ' + pctTexte(im.x) + ' en pleine propriété (article 758-6 du Code civil) ; ses droits en usufruit portent ainsi sur ' + pctTexte(1 - im.x) + ' des biens de la succession.'
@@ -306,7 +310,17 @@
             ? ui.note('Usufruit évalué à ' + pctTexte(im.u) + ' (' + im.age + ' ans), moins que le quart légal en pleine propriété (25 %) : complément de ' + pctTexte(im.x) + ' en pleine propriété (art. 758-6 C. civ.). Le quasi-usufruit porte sur ' + pctTexte(1 - im.x) + ' de la part de la succession.', 'info')
             : ui.note('Usufruit évalué à ' + pctTexte(im.u) + ' (' + im.age + ' ans) : il couvre le quart légal, pas de complément. Le quasi-usufruit porte sur la totalité.', 'info');
         })) : null);
-    const lignes = s.actif.map((x) => h('div', { class: ['row-line', 'qu-compte', x.soumis && x.propriete !== 'conjoint' ? '' : 'qu-actif-hors'] },
+    const ligneActif = (x) => h('div', { class: ['row-line', 'qu-autre', x.soumis && x.propriete !== 'conjoint' ? '' : 'qu-actif-hors'] },
+      f('Actif', ctx.text(x, 'designation', { placeholder: 'ex. 120 parts de la SCPI Epargne Pierre' })),
+      f('Valeur au décès', ctx.num(x, 'montant', { suffix: '€' })),
+      ui.button('Retirer', { icon: 'trash', iconOnly: true, variant: 'ghost', small: true, onClick: () => { s.actif.splice(s.actif.indexOf(x), 1); ctx.render(); ctx.changed(); } }),
+      f('Origine', ctx.select(x, 'propriete', PROPRIETES, { structural: true })),
+      x.propriete === 'indivis' ? f('Quote-part du défunt', ctx.text(x, 'part', { placeholder: '1/2' })) : f('À la succession', ctx.live(() => {
+        const fr = E.fraction(partActif(x));
+        return h('div', { class: 'readonly' }, fmtEuro((fr === null ? 1 : fr) * (x.montant || 0)));
+      })),
+      f('Retenu', ui.yesNo(x.soumis, (v) => { x.soumis = v; ctx.render(); ctx.changed(); }, true)));
+    const lignes = s.actif.map((x) => (x.genre === 'actif' ? ligneActif(x) : h('div', { class: ['row-line', 'qu-compte', x.soumis && x.propriete !== 'conjoint' ? '' : 'qu-actif-hors'] },
       f('Banque', ctx.text(x, 'etablissement', { placeholder: 'ex. BNP PARIBAS' })),
       f('Agence', ctx.text(x, 'agence', { placeholder: 'ex. ORANGE (84100)' })),
       f('Titulaire', ui.selectInput({ value: x.titulaire, options: TITULAIRES, ariaLabel: 'Titulaire', onChange: (v) => { x.titulaire = v; x.propriete = proprieteDefaut(s, v); ctx.render(); ctx.changed(); } })),
@@ -319,7 +333,7 @@
         const fr = E.fraction(partActif(x));
         return h('div', { class: 'readonly' }, fmtEuro((fr === null ? 1 : fr) * (x.montant || 0)));
       })),
-      f('Retenu', ui.yesNo(x.soumis, (v) => { x.soumis = v; ctx.render(); ctx.changed(); }, true))));
+      f('Retenu', ui.yesNo(x.soumis, (v) => { x.soumis = v; ctx.render(); ctx.changed(); }, true)))));
     return ui.card('Comptes bancaires au décès', h('div', { class: 'stack-sm' },
       h('div', { class: 'qu-import' },
         ui.button(s.dds ? 'Lire une autre déclaration' : 'Lire la déclaration de succession (PDF)', { icon: 'upload', variant: s.dds ? 'soft' : 'primary', onClick: () => importerDDS(ctx) }),
@@ -327,7 +341,7 @@
       ...(s.dds ? s.dds.avertissements.map((a) => ui.note(a, 'warn')) : []),
       h('div', { class: 'stack-sm' }, regime, option),
       h('div', { class: 'rows' }, lignes.length ? lignes : h('p', { class: 'small muted' }, 'Saisissez les comptes de la déclaration de succession (banque, compte, numéro, solde au décès).')),
-      h('div', { class: 'chips' }, ui.button('Ajouter un compte', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.actif.push(nouvelActif(s, s.actif.length ? { etablissement: s.actif[s.actif.length - 1].etablissement, agence: s.actif[s.actif.length - 1].agence } : {})); ctx.render(); } })),
+      h('div', { class: 'chips' }, ui.button('Ajouter un actif', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.actif.push(nouvelActif(s, { genre: 'actif', designation: '' })); ctx.render(); } }), ui.button('Ajouter un compte', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.actif.push(nouvelActif(s, s.actif.length ? { etablissement: s.actif[s.actif.length - 1].etablissement, agence: s.actif[s.actif.length - 1].agence } : {})); ctx.render(); } })),
       ctx.live((r) => h('p', { class: 'small' }, 'Revenant à la succession : ', h('strong', null, fmtEuro(r.brutSuccession)),
         r.partUsufruit < 1 ? h('span', null, ' ; en usufruit du conjoint (' + (partUsufruit(s) || '') + ') : ', h('strong', null, fmtEuro(r.brut))) : null))),
     { subtitle: 'Base du quasi-usufruit : les comptes bancaires, avec leur solde au décès (déclaration de succession). Un compte commun revient pour moitié à la succession ; un compte propre du conjoint en est exclu. Les comptes d\'une même banque sont regroupés dans l\'acte.' });
@@ -380,6 +394,10 @@
       h('div', { class: 'table-wrap' }, h('table', { class: 'table table-input qu-ops' },
         h('thead', null, h('tr', null, tete.map((t) => h('th', null, t)))),
         h('tbody', null, ops.length ? ops.map(ligne) : h('tr', null, h('td', { colspan: tete.length, class: 'empty' }, 'Lisez le relevé de compte, ou ajoutez les éléments à la main.'))))),
+      s.cas !== 'vente' ? h('div', { class: 'row-line qu-frais-qu' },
+        droitsDuReleve(s) ? f('Droits de succession', h('div', { class: 'readonly' }, fmtEuro(droitsDuReleve(s))), { help: 'Repris du relevé (lignes ci-dessus).' })
+          : f('Droits de succession', ctx.num(s, 'droitsSuccession', { suffix: '€' }), { help: 'Absents du relevé : à indiquer s\'ils sont payés sur les liquidités. Retranchés en totalité.' }),
+        h('span')) : null,
       h('div', { class: 'row-line qu-frais-qu' },
         f('Frais du quasi-usufruit', ctx.num(s, 'fraisQU', { suffix: '€' }), { help: 'Frais de la convention, à prévoir : retranchés en totalité.' }),
         dejaConvention ? ui.note('Le relevé contient déjà des frais de convention de quasi-usufruit (retranchés) : ne les comptez pas deux fois.', 'warn') : h('span')),

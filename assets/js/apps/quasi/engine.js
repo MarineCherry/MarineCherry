@@ -296,7 +296,7 @@
     if (/OPTION DU CONJOINT|\bOPTION\b/.test(L)) return r('retranche', 'frais d\'option du conjoint', { nature: 'acte' });
     if (/ATTESTATION (DE PROPRIETE|IMMOBILIERE)/.test(L)) return r('retranche', 'frais d\'attestation immobilière', { nature: 'acte' });
     if (/DECLARATION DE SUCCESSION/.test(L)) return r('retranche', 'frais de déclaration de succession', { nature: 'acte' });
-    if (/DROITS DE SUCCESSION|\bSIE\b|DGFIP|TRESOR PUBLIC|RECETTE DES (IMPOTS|FINANCES)|SERVICE DES IMPOTS/.test(L)) return r('retranche', 'droits de succession', { nature: 'droits' });
+    if (/DROITS DE SUCCESSION|DROITS SS?ION|PAIEMENT DES DROITS|DROITS DE MUTATION|\bDMTG\b|\bSIE\b|\bSPFE\b|\bSDE\b|DGFIP|TRESOR PUBLIC|RECETTE DES (IMPOTS|FINANCES)|SERVICE DES IMPOTS|IMPOTS? .*SUCCESSION/.test(L)) return r('retranche', 'droits de succession', { nature: 'droits' });
     if (/PROCURATION/.test(L)) return r('retranche', 'honoraires procuration', { nature: 'procuration' });
     if (/MAINLEVEE/.test(L)) return r('retranche', /^DEPOT/.test(L) ? 'dépôt mainlevée' : 'frais mainlevée', { nature: 'mainlevee' });
     if (/^PVI\b|PLUS.?VALUE/.test(L)) return r('retranche', 'plus-value', { nature: 'plus-value', personneTexte: personneCitee(op.libelle), verifier: true });
@@ -347,7 +347,7 @@
       return {
         id: x.id, libelle: x.libelle || '', montant: n(x.montant), partTexte: String(x.part || '').trim(), part, demembre: arrondi(n(x.montant) * part),
         groupe: x.groupe || (Math.abs(part - 0.5) < 1e-9 ? 'commun' : part < 1 ? 'indivis' : 'propre'),
-        compte: x.compte || null,
+        compte: x.compte || null, actif: !!x.actif,
       };
     });
     const brutTotal = sum(lignesBase, (x) => x.montant);
@@ -497,10 +497,11 @@
     if (!detailNus && !(r.nus.length === 1 && r.nus[0].propres.length)) B.push({ type: 'p', texte: 'sur lequel s\'exerce les droits en usufruit du conjoint.' });
     if (succession && d.precisionUsufruit) B.push({ type: 'p', texte: d.precisionUsufruit });
 
-    // Détail des comptes au décès (déclaration de succession).
+    // Détail des comptes au décès (déclaration de succession) et des autres actifs (parts de SCPI…).
     const comptes = r.lignesBase.filter((x) => x.compte);
-    if (succession && comptes.length) {
-      B.push({ type: 'p', texte: 'Précision étant ici faite que les comptes bancaires se composaient au décès des comptes suivants :' });
+    const autres = succession ? r.lignesBase.filter((x) => !x.compte && x.actif) : [];
+    if (succession && (comptes.length || autres.length)) {
+      if (comptes.length) B.push({ type: 'p', texte: 'Précision étant ici faite que les comptes bancaires se composaient au décès des comptes suivants :' });
       parEtablissement(comptes).forEach((e) => {
         const c0 = e.lignes[0].compte;
         B.push({ type: 'p', texte: 'Auprès de ' + e.nom + (c0.agence ? ', agence de ' + c0.agence : '') + ',' });
@@ -517,6 +518,15 @@
         const totalEtab = sansCommunaute ? sum(e.lignes, (x) => x.demembre) : e.montant;
         if (e.nb > 1) B.push({ type: 'p', texte: 'Soit un montant total auprès de ' + e.nom + ', de ' + lettres(totalEtab) + '.' });
       });
+      if (autres.length) {
+        B.push({ type: 'p', texte: comptes.length ? 'Et que les autres actifs financiers se composaient au décès des éléments suivants :' : 'Précision étant ici faite que les actifs financiers se composaient au décès des éléments suivants :' });
+        autres.forEach((x) => {
+          const qp = x.part < 1 ? (x.partTexte || fmtFraction(x.part)) : '';
+          B.push({ type: 'p', texte: '- ' + (x.libelle || 'Actif') + ', d\'une valeur au jour du décès de ' + lettres(x.montant)
+            + (qp ? ', dont ' + (FRACTIONS_LETTRES[qp] || qp) + ' (' + qp + ') revenant à la succession, soit la somme de ' + lettres(x.demembre) : '') + ',' });
+          B.push({ type: 'p', texte: 'Ci, ' + euros(qp ? x.demembre : x.montant), droite: true });
+        });
+      }
       const plusieurs = r.nus.length > 1;
       B.push({ type: 'p', texte: plusieurs ? 'Les nus-propriétaires déclarent renoncer à demander qu\'il soit fait plus ample inventaire, l\'état de l\'actif net ainsi déclaré leur étant suffisant.'
         : 'Le nu-propriétaire déclare renoncer à demander qu\'il soit fait plus ample inventaire, l\'état de l\'actif net ainsi déclaré lui étant suffisant.' });
