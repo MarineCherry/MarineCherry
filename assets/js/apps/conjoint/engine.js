@@ -180,6 +180,7 @@
     'ddv-qd': { libelle: 'Quotité disponible ordinaire en pleine propriété', court: 'QD en PP' },
     'ddv-mixte': { libelle: '¼ en pleine propriété et ¾ en usufruit', court: '¼ PP + ¾ US' },
     'ddv-us': { libelle: 'Totalité en usufruit', court: 'Totalité US' },
+    'ddv-us-complement': { libelle: 'Usufruit de la totalité, complété jusqu\'au quart légal (art. 758-6)', court: 'US + complément' },
     'ddv-total': { libelle: 'Totalité en pleine propriété (libéralité)', court: 'Totalité PP' },
     'legs-partenaire': { libelle: 'Legs au partenaire', court: 'Legs' },
     sans: { libelle: 'Dévolution légale', court: 'Dévolution' },
@@ -193,6 +194,9 @@
         const out = ['legal-pp'];
         if (h.tousCommuns) out.push('legal-us');
         if (lib) out.push('ddv-qd', 'ddv-mixte', 'ddv-us');
+        // Enfant non commun : droits légaux limités au quart en pleine propriété ; si la libéralité en usufruit
+        // vaut moins, le conjoint peut en réclamer le complément (art. 758-6 C. civ.).
+        if (lib && !h.tousCommuns) out.push('ddv-us-complement');
         return out;
       }
       return lib ? ['legal', 'ddv-total'] : ['legal'];
@@ -376,6 +380,27 @@
           }
           calc.reduitA = disponibleConjoint;
           alertes.push('¼ en pleine propriété et ¾ en usufruit (' + euros(v) + ') limité à ' + euros(disponibleConjoint) + ', reste de la quotité disponible après les libéralités déjà imputées : pleine propriété ramenée à ' + euros(conj.pp) + ' (art. 1094-1 C. civ.).');
+        }
+      }
+      if (code === 'ddv-us-complement') {
+        /*
+         * Imputation (art. 758-6) : la libéralité (usufruit de la totalité, converti en capital) s'impute sur les
+         * droits légaux (quart en pleine propriété, art. 757, sur la masse de l'art. 758-5, limité à la masse
+         * d'exercice). Si elle vaut moins, le conjoint reçoit un complément en pleine propriété P tel que
+         * P + usufruit × (biens − P) = valeur des droits légaux : P = (droits légaux − usufruit × biens) / (1 − usufruit).
+         */
+        const legaux = Math.min(clamp0(0.25 * (A + Dr) - Dc), masseExercice);
+        const liberalite = us * dispo;
+        calc.imputation = { legaux, liberalite, complement: 0 };
+        if (liberalite >= legaux - 0.5 || us >= 1) {
+          conj.usBase = dispo;
+          alertes.push('Imputation (art. 758-6) : l\'usufruit de la totalité (' + euros(liberalite) + ') couvre les droits légaux du conjoint (quart en pleine propriété : ' + euros(legaux) + ') : pas de complément.');
+        } else {
+          conj.pp = clamp0((legaux - liberalite) / (1 - us));
+          conj.usBase = clamp0(dispo - conj.pp);
+          calc.imputation.complement = conj.pp;
+          alertes.push('Imputation (art. 758-6) : l\'usufruit de la totalité vaut ' + euros(liberalite) + ', moins que les droits légaux (quart en pleine propriété : ' + euros(legaux) + '). '
+            + 'Le conjoint reçoit en complément ' + euros(conj.pp) + ' en pleine propriété et l\'usufruit du surplus (' + euros(conj.usBase) + '), soit au total la valeur de ses droits légaux.');
         }
       }
       if (code === 'ddv-us' && us * dispo > disponibleConjoint + 0.5) {

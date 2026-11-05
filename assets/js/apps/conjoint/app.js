@@ -386,6 +386,13 @@
       if (c.reduitA) lignes.push({ l: 'Libéralité réduite à ce montant', v: c.reduitA, indent: true, note: sc.code === 'ddv-mixte' ? 'la pleine propriété d\'abord' : '' });
       if (sc.code === 'ddv-mixte') lignes.push({ l: 'Pleine propriété du conjoint', v: conj.pp + (conj.viager || 0) });
     }
+    if (c.imputation) {
+      // Imputation de la libéralité sur les droits légaux (art. 758-6) et complément.
+      lignes.push(
+        { l: 'Droits légaux : quart en pleine propriété', v: c.imputation.legaux, note: '¼ × masse de l\'art. 758-5, dans la masse d\'exercice' },
+        { l: 'Libéralité : usufruit de la totalité, en capital', v: c.imputation.liberalite, note: fmtPct(us, 0) + ' × ' + fmtEuro(c.dispo) + ' de biens' },
+        { l: 'Complément en pleine propriété (art. 758-6)', v: c.imputation.complement, note: c.imputation.complement ? '(droits légaux − usufruit) ÷ (1 − ' + fmtPct(us, 0) + ')' : 'l\'usufruit couvre les droits légaux' });
+    }
     if (conj.usBase) lignes.push({ l: 'Usufruit du conjoint', v: conj.usValeur, note: fmtPct(us, 0) + ' × ' + fmtEuro(conj.usBase) + ' de biens' });
     if (conj.viager) {
       lignes.push(

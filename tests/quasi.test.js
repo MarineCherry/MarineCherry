@@ -317,3 +317,18 @@ test('Déclaration sans communauté : comptes en indivision (quote-part), cumul 
   assert.ok(t.includes('- En indivision, le compte numéro 0001, d\'un solde créditeur, au jour du décès, de L(1 000,00 €), dont la moitié (1/2) appartenant à la succession, soit la somme de L(500,00 €),\n\nCi, 500,00 €'));
   assert.ok(t.includes('Soit un montant total auprès de BANQUE EXEMPLE, de L(2 500,00 €).'));
 });
+
+test('Imputation (art. 758-6) : complément en pleine propriété quand l\'usufruit vaut moins que le quart légal', () => {
+  near(Q.complementConjoint(0.2), 0.0625, 'usufruit 20 % : complément 6,25 %');
+  near(Q.complementConjoint(0.1), 1 / 6, 'usufruit 10 % : complément 1/6');
+  near(Q.complementConjoint(0.3), 0, 'usufruit 30 % : pas de complément');
+  const r = Q.lireDDS([
+    'Décédé(e) à : AVIGNON Code postal : 84000', 'Le : 16 décembre 2021',
+    'Par suite, la valeur de l\'usufruit étant inférieure au quart légal du conjoint survivant, la libéralité s\'impute sur les',
+    'droits légaux du conjoint et il lui sera assuré un complément à hauteur de ses droits légaux.',
+  ]);
+  assert.strictEqual(r.option, 'complement');
+  assert.strictEqual(r.deces, '2021-12-16');
+  const c = Q.calculer({ cas: 'succession', partUsufruit: '93,75 %', nus: [{ id: 'a' }], base: [{ montant: 100000, part: '' }], operations: [] }, P);
+  near(c.brut, 93750, 'quasi-usufruit sur 93,75 %');
+});

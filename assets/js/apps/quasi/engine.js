@@ -177,6 +177,8 @@
     // Défunt.
     const nomDef = /Nom de naissance du d[ée]funt\s*:\s*(.+?)\s+Pr[ée]nom\(s\)\s*:\s*(.+?)\s+Date de naissance/i.exec(T);
     if (nomDef) res.defunt = (/Succession de\s*:.*?☒\s*Mme/i.test(T) ? 'Mme ' : 'M. ') + nomDef[2].trim().split(' ')[0] + ' ' + nomDef[1].trim().toUpperCase();
+    const dec = /D[ée]c[ée]d[ée]\(e\)\s*[àa]\s*.{0,400}?\bLe\s*:\s*(\d{1,2}(?:er)?\s+[a-zéû]+\s+\d{4})/i.exec(T);
+    if (dec) res.deces = dateEnLettres(dec[1]);
     // Régime matrimonial.
     const reg = /R[ée]gime matrimonial adopt[ée] par les [ée]poux\s*:\s*(.*?)\s+En cas d/i.exec(T);
     if (reg && /communaut/i.test(reg[1])) res.regime = 'communaute';
@@ -190,8 +192,13 @@
     // Cumul des droits légaux (1/4 en propriété) et de la donation entre époux (usufruit du surplus) :
     // les enfants reçoivent leur part « des TROIS QUARTS des biens de succession ».
     const cumul = /des TROIS QUARTS\s*\(3\/4\)\s*des biens de succession/i.test(T);
-    if (/trois quarts en usufruit|3\s*\/\s*4 en usufruit/i.test(texteOption)) res.option = 'quart';
-    else if (cumul) {
+    // Imputation (art. 758-6) : usufruit d'une valeur inférieure au quart légal, complété.
+    const complement = /compl[ée]ment [àa] hauteur de ses droits l[ée]gaux|valeur de l.usufruit [ée]tant inf[ée]rieure au quart/i.test(T);
+    if (complement) {
+      res.option = 'complement';
+      res.avertissements.push('Droits du conjoint : usufruit de la donation entre époux, inférieur au quart légal, complété en pleine propriété (art. 758-6 C. civ.), d\'après la liquidation de la déclaration. À vérifier.');
+    } else if (/trois quarts en usufruit|3\s*\/\s*4 en usufruit/i.test(texteOption)) res.option = 'quart';
+    else if (cumul && !complement) {
       res.option = 'quart';
       res.avertissements.push('Droits du conjoint : 1/4 en pleine propriété (droits légaux) et usufruit des 3/4 (donation entre époux), d\'après la liquidation de la déclaration. À vérifier.');
     }
@@ -311,6 +318,13 @@
     (bareme || []).forEach((row) => { if (age >= row.age) v = row.usufruit; });
     return v;
   }
+  /*
+   * Imputation de l'article 758-6 C. civ. : la libéralité en usufruit de la totalité (valeur u, barème de
+   * l'art. 669) s'impute sur les droits légaux (quart en pleine propriété). Si u < 1/4, le conjoint reçoit un
+   * complément en pleine propriété x tel que x + u (1 − x) = 1/4, soit x = (1/4 − u) / (1 − u) ;
+   * son usufruit porte sur le surplus (1 − x).
+   */
+  const complementConjoint = (u) => (isNum(u) && u < 0.25 && u < 1 ? (0.25 - u) / (1 - u) : 0);
   function ageAu(naissance, date) {
     const a = /^(\d{4})-(\d{2})-(\d{2})$/.exec(naissance || ''), b = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || '');
     if (!a || !b) return null;
@@ -481,6 +495,7 @@
     B.push({ type: 'sous-titre', texte: succession ? 'II - CALCUL DES DROITS SUR LESQUELS S\'EXERCE LE QUASI-USUFRUIT' : 'DETERMINATION DES SOMMES OBJETS DU QUASI-USUFRUIT' });
     B.push({ type: 'table', lignes, gras, sansBordure: true });
     if (!detailNus && !(r.nus.length === 1 && r.nus[0].propres.length)) B.push({ type: 'p', texte: 'sur lequel s\'exerce les droits en usufruit du conjoint.' });
+    if (succession && d.precisionUsufruit) B.push({ type: 'p', texte: d.precisionUsufruit });
 
     // Détail des comptes au décès (déclaration de succession).
     const comptes = r.lignesBase.filter((x) => x.compte);
@@ -532,5 +547,5 @@
   }
   const texte = (B) => B.map((b) => (b.type === 'table' ? b.lignes.map((l) => l.join('\t')).join('\n') : b.texte)).join('\n\n');
 
-  return { lireReleve, lireDDS, texteDesPages, classer, personneCitee, calculer, blocs, texte, fraction, montant, ageAu, usufruitParAge, euros, fmtFraction };
+  return { complementConjoint, lireReleve, lireDDS, texteDesPages, classer, personneCitee, calculer, blocs, texte, fraction, montant, ageAu, usufruitParAge, euros, fmtFraction };
 });

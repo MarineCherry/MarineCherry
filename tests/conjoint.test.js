@@ -250,3 +250,19 @@ test('Anciens dossiers : l\'indicateur « horsPart » vaut nature hors part', ()
   assert.strictEqual(C.nature({}), 'avancement');
   assert.strictEqual(C.nature({ nature: 'partage', horsPart: true }), 'partage');
 });
+
+test('Enfant non commun : usufruit de la donation entre époux complété jusqu\'au quart légal (art. 758-6)', () => {
+  // Conjoint de 85 ans (usufruit 20 %) ; actif net 300 000 ; un enfant d'une autre union.
+  const r = C.calculer(dossier({ conjoint: { nom: 'Claire', age: 85 }, enfants: [{ id: 'e1', nom: 'Alice', commun: true }, { id: 'e2', nom: 'Bruno', commun: false }] }), P);
+  assert.deepStrictEqual(r.scenarios.map((s) => s.code), ['legal-pp', 'ddv-qd', 'ddv-mixte', 'ddv-us', 'ddv-us-complement']);
+  const c = scen(r, 'ddv-us-complement');
+  // Droits légaux : 75 000 ; usufruit : 20 % × 300 000 = 60 000 ; complément P = 15 000 / 0,8 = 18 750.
+  near(c.conjoint.pp, 18750, 'complément en pleine propriété');
+  near(c.conjoint.usBase, 281250, 'usufruit du surplus');
+  near(c.conjoint.pp + 0.2 * c.conjoint.usBase, 75000, 'valeur totale = droits légaux');
+  // Conjoint de 72 ans (usufruit 30 %) : l'usufruit couvre les droits légaux, pas de complément.
+  const r2 = C.calculer(dossier({ enfants: [{ id: 'e1', nom: 'Alice', commun: true }, { id: 'e2', nom: 'Bruno', commun: false }] }), P);
+  const c2 = scen(r2, 'ddv-us-complement');
+  near(c2.conjoint.pp, 0, 'pas de complément');
+  near(c2.conjoint.usBase, 300000, 'usufruit de la totalité');
+});

@@ -35,7 +35,7 @@
 
   /* ---------- Comptes bancaires au décès (succession) ---------- */
   const REGIMES = [{ value: 'communaute', label: 'Communauté' }, { value: 'separation', label: 'Séparation de biens' }, { value: 'aucun', label: 'Non marié / veuf' }];
-  const OPTIONS = [{ value: 'usufruit', label: 'Usufruit de la totalité' }, { value: 'quart', label: '1/4 en PP et 3/4 en usufruit' }, { value: 'autre', label: 'Autre' }];
+  const OPTIONS = [{ value: 'usufruit', label: 'Usufruit de la totalité' }, { value: 'quart', label: '1/4 en PP et 3/4 en usufruit' }, { value: 'complement', label: 'Usufruit + complément (758-6)' }, { value: 'autre', label: 'Autre' }];
   const TITULAIRES = [{ value: 'defunt', label: 'Défunt' }, { value: 'conjoint', label: 'Conjoint' }, { value: 'joint', label: 'Compte-joint' }, { value: 'indivision', label: 'En indivision' }];
   const PROPRIETES = [{ value: 'commun', label: 'Commun (½ à la succession)' }, { value: 'propre', label: 'Propre du défunt (100 %)' }, { value: 'indivis', label: 'Indivis (quote-part)' }, { value: 'conjoint', label: 'Propre du conjoint (exclu)' }];
   const TYPES = ['compte', 'compte courant', 'Livret A', 'Livret Développement Durable', 'Livret d\'Epargne Populaire', 'compte sur livret', 'Plan d\'Epargne Logement', 'Compte Epargne Logement', 'compte titres'];
@@ -49,7 +49,21 @@
   }
   const nouvelActif = (s, o) => Object.assign({ id: uid('a'), etablissement: '', agence: '', titulaire: 'defunt', type: 'compte', numero: '', montant: null, propriete: proprieteDefaut(s, 'defunt'), part: '', soumis: true }, o || {});
   const partActif = (x) => (x.propriete === 'commun' ? '1/2' : x.propriete === 'indivis' ? (x.part || '1/2') : x.propriete === 'conjoint' ? '0' : '');
-  const partUsufruit = (s) => (s.option === 'quart' ? '3/4' : s.option === 'autre' ? s.partUsufruit || '' : '');
+  // Imputation (art. 758-6) : usufruit évalué à la date du décès (à défaut, de l'acte).
+  function imputation(s) {
+    const age = E.ageAu(s.usufruitier.naissance, s.dateDeces || s.dateActe);
+    if (age === null) return null;
+    const u = E.usufruitParAge(A.store.engineParams('commun').bareme669, age);
+    const x = E.complementConjoint(u);
+    return { age, u, x };
+  }
+  const pctTexte = (f) => A.util.fmtNum(Math.round(f * 10000) / 100, 2).replace(/,00$/, '') + ' %';
+  function partUsufruit(s) {
+    if (s.option === 'quart') return '3/4';
+    if (s.option === 'autre') return s.partUsufruit || '';
+    if (s.option === 'complement') { const im = imputation(s); return im && im.x > 0 ? pctTexte(1 - im.x) : ''; }
+    return '';
+  }
   const montantBase = (o) => (typeof o.montantBase === 'number' ? o.montantBase : o.montant);
   const SENS = (o) => (o.credit ? 'credit' : 'debit');
   const LIB_FRAIS_QU = 'frais de convention de quasi-usufruit';
@@ -65,7 +79,11 @@
         .concat(s.base.map((x) => ({ id: x.id, libelle: x.libelle, montant: x.montant, part: x.part })));
     const operations = s.operations.filter((o) => o.action === 'retranche')
       .concat(s.fraisQU ? [{ id: 'frais-qu', action: 'retranche', libelle: LIB_FRAIS_QU, montant: s.fraisQU, repartition: 'totalite' }] : []);
-    return Object.assign({}, s, { base, operations, partUsufruit: s.cas !== 'vente' ? partUsufruit(s) : '' });
+    const im = s.cas !== 'vente' && s.option === 'complement' ? imputation(s) : null;
+    const precisionUsufruit = im && im.x > 0
+      ? 'Précision étant faite que la valeur de l\'usufruit du conjoint survivant, évaluée à ' + pctTexte(im.u) + ' eu égard à son âge, étant inférieure au quart en pleine propriété de ses droits légaux, la libéralité s\'impute sur ces droits et il lui est assuré un complément de ' + pctTexte(im.x) + ' en pleine propriété (article 758-6 du Code civil) ; ses droits en usufruit portent ainsi sur ' + pctTexte(1 - im.x) + ' des biens de la succession.'
+      : '';
+    return Object.assign({}, s, { base, operations, partUsufruit: s.cas !== 'vente' ? partUsufruit(s) : '', precisionUsufruit });
   }
   const compute = (s, p) => E.calculer(donnees(s), p);
 
@@ -186,7 +204,8 @@
     if (s.actif.some((x) => x.montant !== null && x.montant !== undefined) && !(await ui.confirm('Remplacer les comptes ?', 'Les comptes déjà saisis seront remplacés par ceux de la déclaration.', 'Remplacer'))) return;
     s.cas = 'succession';
     if (lu.regime) s.regime = lu.regime;
-    if (lu.option === 'usufruit' || lu.option === 'quart') s.option = lu.option;
+    if (['usufruit', 'quart', 'complement'].includes(lu.option)) s.option = lu.option;
+    if (lu.deces) s.dateDeces = lu.deces;
     if (!s.reference && lu.defunt) s.reference = 'Succession ' + lu.defunt;
     if (lu.conjoint) {
       if (!s.usufruitier.nom) s.usufruitier.nom = lu.conjoint.nom;
@@ -277,7 +296,16 @@
     } }));
     const option = h('div', { class: 'qu-option' },
       f('Option du conjoint', ctx.segmented(s, 'option', OPTIONS, { small: true, structural: true })),
-      s.option === 'autre' ? f('Part de la succession en usufruit', ctx.text(s, 'partUsufruit', { placeholder: 'ex. 3/4' })) : null);
+      s.option === 'autre' ? f('Part de la succession en usufruit', ctx.text(s, 'partUsufruit', { placeholder: 'ex. 3/4' })) : null,
+      s.option === 'complement' ? h('div', { class: 'stack-sm' },
+        f('Date du décès', ctx.date(s, 'dateDeces'), { help: 'Âge de l\'usufruitier au décès, pour évaluer l\'usufruit.' }),
+        ctx.live(() => {
+          const im = imputation(s);
+          if (!im) return ui.note('Indiquez la date de naissance du conjoint (Les parties) et la date du décès.', 'warn');
+          return im.x > 0
+            ? ui.note('Usufruit évalué à ' + pctTexte(im.u) + ' (' + im.age + ' ans), moins que le quart légal en pleine propriété (25 %) : complément de ' + pctTexte(im.x) + ' en pleine propriété (art. 758-6 C. civ.). Le quasi-usufruit porte sur ' + pctTexte(1 - im.x) + ' de la part de la succession.', 'info')
+            : ui.note('Usufruit évalué à ' + pctTexte(im.u) + ' (' + im.age + ' ans) : il couvre le quart légal, pas de complément. Le quasi-usufruit porte sur la totalité.', 'info');
+        })) : null);
     const lignes = s.actif.map((x) => h('div', { class: ['row-line', 'qu-compte', x.soumis && x.propriete !== 'conjoint' ? '' : 'qu-actif-hors'] },
       f('Banque', ctx.text(x, 'etablissement', { placeholder: 'ex. BNP PARIBAS' })),
       f('Agence', ctx.text(x, 'agence', { placeholder: 'ex. ORANGE (84100)' })),
