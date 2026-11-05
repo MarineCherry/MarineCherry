@@ -28,7 +28,8 @@
   const isNum = (v) => typeof v === 'number' && isFinite(v);
   const n = (v) => (isNum(v) ? v : 0);
   const sum = (arr, f) => arr.reduce((s, x) => s + f(x), 0);
-  const arrondi = (x) => Math.round(x * 100) / 100;
+  // Arrondi au centime (au plus proche, 0,005 arrondi au centime supérieur malgré l'imprécision des nombres décimaux).
+  const arrondi = (x) => (x < 0 ? -1 : 1) * Math.round(Math.abs(x) * 100 + 1e-6) / 100;
   const sansAccents = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
   const norm = (s) => sansAccents(s).toUpperCase().replace(/\s+/g, ' ').trim();
 
@@ -203,14 +204,23 @@
    * p = { bareme669 }
    */
   function calculer(d, p) {
-    const base = (d.base || []).filter((x) => n(x.montant));
+    // Les comptes au décès sont gardés même à solde nul (ils figurent dans le détail de l'acte).
+    const base = (d.base || []).filter((x) => n(x.montant) || (x.compte && isNum(x.montant)));
     const lignesBase = base.map((x) => {
       const f = fraction(x.part);
       const part = f === null ? 1 : f;
-      return { id: x.id, libelle: x.libelle || '', montant: n(x.montant), partTexte: String(x.part || '').trim(), part, demembre: n(x.montant) * part, groupe: x.groupe || '' };
+      return {
+        id: x.id, libelle: x.libelle || '', montant: n(x.montant), partTexte: String(x.part || '').trim(), part, demembre: n(x.montant) * part,
+        groupe: x.groupe || (Math.abs(part - 0.5) < 1e-9 ? 'commun' : part < 1 ? 'indivis' : 'propre'),
+        compte: x.compte || null,
+      };
     });
     const brutTotal = sum(lignesBase, (x) => x.montant);
-    const brut = sum(lignesBase, (x) => x.demembre);
+    // Succession : part de la succession sur laquelle le conjoint a l'usufruit, selon son option (ex. 3/4).
+    const fu = fraction(d.partUsufruit);
+    const partUsufruit = fu === null || fu <= 0 ? 1 : Math.min(1, fu);
+    const brutSuccession = arrondi(sum(lignesBase, (x) => x.demembre));
+    const brut = arrondi(brutSuccession * partUsufruit);
     const q = brutTotal > 0 ? brut / brutTotal : 1;
 
     const nus = (d.nus || []).filter(Boolean);
@@ -263,50 +273,62 @@
     if (!nus.length) alertes.push('Aucun nu-propriétaire saisi.');
     if (lignesNus.some((x) => x.mode === 'bareme') && usufruit === null) alertes.push('Âge de l\'usufruitier manquant : la répartition selon le barème ne peut pas être calculée.');
     if (net < 0) alertes.push('Les éléments retranchés dépassent la base de départ.');
-    return { lignesBase, brutTotal, brut, q, frais, totalFrais, net, age, usufruit, nus: lignesNus, assietteQU, alertes };
+    return { lignesBase, brutTotal, brutSuccession, partUsufruit, partUsufruitTexte: String(d.partUsufruit || '').trim(), brut, q, frais, totalFrais, net, age, usufruit, nus: lignesNus, assietteQU, alertes };
   }
 
   /* ---------- 4. Tableau et paragraphes pour la convention ---------- */
-  const euros = (x) => (Math.round(x * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/[  ]/g, ' ') + ' €';
+  const euros = (x) => arrondi(x).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/[  ]/g, ' ') + ' €';
   /*
-   * Blocs : { type: 'sous-titre' | 'p' | 'table', texte, lignes, gras }.
+   * Blocs : { type: 'titre' | 'sous-titre' | 'p' | 'table', texte, lignes, gras, droite, sansBordure }.
    * enLettres(x) : montant en toutes lettres suivi des chiffres.
+   * Succession : trame « II – Calcul des droits sur lesquels s'exerce le quasi-usufruit » (comptes regroupés
+   * par établissement, détail des comptes au décès, assiette). Vente : détermination des sommes.
+   * La dette de restitution est indiquée pour son montant global.
    */
+  const TITULAIRES = { defunt: 'Au nom du DEFUNT', conjoint: 'Au nom du CONJOINT', joint: 'En compte-joint' };
+  const estLivret = (t) => /LIVRET|LDD|LEP|PEL|CEL|EPARGNE|PLAN/i.test(t || '');
   function blocs(d, r, enLettres) {
     const lettres = enLettres || ((x) => euros(x));
     const succession = d.cas !== 'vente';
     const B = [];
     const lignes = [];
     const gras = ['Total', 'Total frais :', 'Solde :', 'Assiette du quasi-usufruit :', 'Déduction faite des frais :'];
-    const parGroupe = succession && r.lignesBase.some((x) => x.groupe);
-    if (parGroupe) {
-      // Actif successoral par origine : communauté (moitié), biens propres, biens indivis (quote-part).
+    const nomEtab = (x) => ((x.compte && x.compte.etablissement) || x.libelle || 'Liquidités').trim();
+    // Comptes regroupés par établissement : « Comptes BNP PARIBAS ».
+    const parEtablissement = (ls) => {
+      const g = [];
+      ls.forEach((x) => {
+        const k = nomEtab(x).toUpperCase();
+        let e = g.find((y) => y.cle === k);
+        if (!e) g.push((e = { cle: k, nom: nomEtab(x), montant: 0, nb: 0, lignes: [] }));
+        e.montant += x.montant; e.nb++; e.lignes.push(x);
+      });
+      return g;
+    };
+    const libGroupe = (e) => (e.lignes.some((x) => x.compte) ? (e.nb > 1 ? 'Comptes ' : 'Compte ') + e.nom : e.nom);
+    if (succession) {
       const titres = { commun: 'ACTIF DE COMMUNAUTE', propre: 'BIENS PROPRES DU DEFUNT', indivis: 'BIENS INDIVIS' };
-      ['commun', 'propre', 'indivis'].forEach((g) => {
+      const groupes = ['commun', 'propre', 'indivis'].filter((g) => r.lignesBase.some((x) => (x.groupe || 'propre') === g));
+      groupes.forEach((g) => {
         const ls = r.lignesBase.filter((x) => (x.groupe || 'propre') === g);
-        if (!ls.length) return;
         lignes.push([titres[g], '']);
         gras.push(titres[g]);
-        ls.forEach((x) => lignes.push([x.libelle || 'Liquidités', euros(x.montant)]));
+        const etabs = parEtablissement(ls);
+        etabs.forEach((e) => lignes.push([libGroupe(e), euros(e.montant)]));
         const total = sum(ls, (x) => x.montant), dem = sum(ls, (x) => x.demembre);
-        if (g === 'commun') {
-          if (ls.length > 1) lignes.push(['Total', euros(total)]);
-          lignes.push(['1/2 revenant à la succession :', euros(dem)]);
-        } else if (g === 'indivis') {
-          lignes.push(['Quote-part revenant à la succession :', euros(dem)]);
-        } else if (ls.length > 1) lignes.push(['Total', euros(total)]);
+        if (etabs.length > 1 || g === 'commun') lignes.push(['Total', euros(total)]);
+        if (g === 'commun') lignes.push(['1/2 revenant à la succession :', euros(dem)]);
+        else if (g === 'indivis') lignes.push(['Quote-part revenant à la succession :', euros(dem)]);
       });
-      if (new Set(r.lignesBase.map((x) => x.groupe || 'propre')).size > 1) { lignes.push(['Total revenant à la succession :', euros(r.brut)]); gras.push('Total revenant à la succession :'); }
+      if (groupes.length > 1) { lignes.push(['Total revenant à la succession :', euros(r.brutSuccession)]); gras.push('Total revenant à la succession :'); }
+      if (r.partUsufruit < 1) lignes.push(['Droits du conjoint en usufruit (' + (r.partUsufruitTexte || fmtFraction(r.partUsufruit)) + ') :', euros(r.brut)]);
     } else {
-      r.lignesBase.forEach((x) => lignes.push([x.libelle || (succession ? 'Liquidités' : 'Prix de vente'), euros(x.montant)]));
+      r.lignesBase.forEach((x) => lignes.push([x.libelle || 'Prix de vente', euros(x.montant)]));
       if (r.lignesBase.length > 1) lignes.push(['Total', euros(r.brutTotal)]);
-    }
-    if (!parGroupe && Math.abs(r.brut - r.brutTotal) > 0.005) {
-      const parts = [...new Set(r.lignesBase.map((x) => x.partTexte).filter(Boolean))];
-      const libPart = succession
-        ? (parts.length === 1 ? parts[0] + ' revenant à la succession' : 'Part revenant à la succession')
-        : 'Quote-part sur laquelle s\'exerce le démembrement de propriété' + (parts.length === 1 ? ' (' + parts[0] + ')' : '');
-      lignes.push([libPart + ' :', euros(r.brut)]);
+      if (Math.abs(r.brut - r.brutTotal) > 0.005) {
+        const parts = [...new Set(r.lignesBase.map((x) => x.partTexte).filter(Boolean))];
+        lignes.push(['Quote-part sur laquelle s\'exerce le démembrement de propriété' + (parts.length === 1 ? ' (' + parts[0] + ')' : '') + ' :', euros(r.brut)]);
+      }
     }
     if (r.frais.length) {
       lignes.push(['Déduction faite des frais :', '']);
@@ -314,8 +336,8 @@
       lignes.push(['Total frais :', euros(r.totalFrais)]);
     }
     lignes.push(['Solde :', euros(r.net)]);
-    const plusieurs = r.nus.length > 1 && (r.nus.some((x) => x.propres.length) || r.nus.some((x) => x.mode === 'bareme'));
-    if (plusieurs) {
+    const detailNus = r.nus.length > 1 && (r.nus.some((x) => x.propres.length) || r.nus.some((x) => x.mode === 'bareme'));
+    if (detailNus) {
       r.nus.forEach((x) => {
         lignes.push(['Revenant à ' + (x.nom || 'XXXX') + ' (' + (x.partTexte || fmtFraction(x.part)) + ')', euros(x.quote)]);
         x.propres.forEach((o) => lignes.push([o.libelle + (/^plus-value$/i.test(o.libelle) ? ' due par ' + (x.nom || 'XXXX') : ''), euros(o.montant)]));
@@ -325,20 +347,43 @@
       r.nus[0].propres.forEach((o) => lignes.push([o.libelle + (/^plus-value$/i.test(o.libelle) ? ' due par ' + (r.nus[0].nom || 'XXXX') : ''), euros(o.montant)]));
       lignes.push(['Assiette du quasi-usufruit :', euros(r.nus[0].assiette)]);
     }
-    B.push({ type: 'sous-titre', texte: succession ? 'Calcul des droits sur lesquels s\'exerce le quasi-usufruit' : 'Détermination des sommes objets du quasi-usufruit' });
-    B.push({ type: 'table', lignes, gras });
-    if (!plusieurs && !(r.nus.length === 1 && r.nus[0].propres.length)) B.push({ type: 'p', texte: 'sur lequel s\'exerce les droits en usufruit du conjoint.' });
+    B.push({ type: 'sous-titre', texte: succession ? 'II - CALCUL DES DROITS SUR LESQUELS S\'EXERCE LE QUASI-USUFRUIT' : 'DETERMINATION DES SOMMES OBJETS DU QUASI-USUFRUIT' });
+    B.push({ type: 'table', lignes, gras, sansBordure: true });
+    if (!detailNus && !(r.nus.length === 1 && r.nus[0].propres.length)) B.push({ type: 'p', texte: 'sur lequel s\'exerce les droits en usufruit du conjoint.' });
+
+    // Détail des comptes au décès (déclaration de succession).
+    const comptes = r.lignesBase.filter((x) => x.compte);
+    if (succession && comptes.length) {
+      B.push({ type: 'p', texte: 'Précision étant ici faite que les comptes bancaires se composaient au décès des comptes suivants :' });
+      parEtablissement(comptes).forEach((e) => {
+        const c0 = e.lignes[0].compte;
+        B.push({ type: 'p', texte: 'Auprès de ' + e.nom + (c0.agence ? ', agence de ' + c0.agence : '') + ',' });
+        e.lignes.forEach((x) => {
+          const c = x.compte;
+          const type = (c.type || 'compte').trim();
+          const designation = /^compte/i.test(type) ? 'le ' + type.charAt(0).toLowerCase() + type.slice(1) : 'le ' + type;
+          B.push({ type: 'p', texte: '- ' + (TITULAIRES[c.titulaire] || TITULAIRES.defunt) + ', ' + designation + (c.numero ? ' numéro ' + c.numero : '') + ', '
+            + (estLivret(type) ? 'd\'un montant en capital et intérêts' : 'd\'un solde créditeur') + ', au jour du décès, de ' + lettres(x.montant) + ',' });
+          B.push({ type: 'p', texte: 'Ci, ' + euros(x.montant), droite: true });
+        });
+        if (e.nb > 1) B.push({ type: 'p', texte: 'Soit un montant total auprès de ' + e.nom + ', de ' + lettres(e.montant) + '.' });
+      });
+      const plusieurs = r.nus.length > 1;
+      B.push({ type: 'p', texte: plusieurs ? 'Les nus-propriétaires déclarent renoncer à demander qu\'il soit fait plus ample inventaire, l\'état de l\'actif net ainsi déclaré leur étant suffisant.'
+        : 'Le nu-propriétaire déclare renoncer à demander qu\'il soit fait plus ample inventaire, l\'état de l\'actif net ainsi déclaré lui étant suffisant.' });
+    }
 
     const qu = r.nus.filter((x) => x.mode === 'qu');
-    if (qu.length) {
-      B.push({ type: 'sous-titre', texte: 'Assiette du quasi-usufruit' });
-      B.push({ type: 'p', texte: 'En application de l\'article 587 du Code civil, le QUASI-USUFRUITIER exercera un quasi-usufruit sur les sommes ci-dessus déterminées, arrêtées à la somme de : ' + lettres(r.assietteQU) + ' ;' });
-      B.push({ type: 'p', texte: 'A l\'extinction de son droit d\'usufruit, le QUASI-USUFRUITIER sera tenu d\'une obligation de restitution ayant pour objet la valeur nominale de ces sommes, soit au profit de chacun des NUS-PROPRIETAIRES :' });
-      qu.forEach((x) => B.push({ type: 'p', texte: '- ' + (x.nom || 'XXXX') + ' : ' + lettres(x.creance) + '.' }));
+    if (qu.length || !r.nus.length) {
+      B.push({ type: 'sous-titre', texte: 'ASSIETTE DU QUASI-USUFRUIT' });
+      B.push({ type: 'p', texte: succession
+        ? 'En application pure et simple de l\'article 587 du Code civil, le QUASI-USUFRUITIER exercera un quasi-usufruit sur les actifs financiers ci-dessus énumérés et arrêtés au jour du décès à la somme de : ' + lettres(r.assietteQU) + ' ;'
+        : 'En application pure et simple de l\'article 587 du Code civil, le QUASI-USUFRUITIER exercera un quasi-usufruit sur la quote-part du prix de vente ci-dessus déterminée, arrêtée à la somme de : ' + lettres(r.assietteQU) + ' ;' });
+      B.push({ type: 'p', texte: 'A l\'extinction de son droit d\'usufruit, le QUASI-USUFRUITIER sera tenu d\'une obligation de restitution, ayant pour objet la valeur nominale des sommes ci-dessus déterminées, soit la somme globale de ' + lettres(r.assietteQU) + '.' });
     }
     const bar = r.nus.filter((x) => x.mode === 'bareme');
     if (bar.length) {
-      B.push({ type: 'sous-titre', texte: 'Répartition selon le barème fiscal' });
+      B.push({ type: 'sous-titre', texte: 'REPARTITION SELON LE BAREME FISCAL' });
       B.push({ type: 'p', texte: 'Les sommes revenant aux NUS-PROPRIETAIRES ci-après sont réparties entre l\'usufruitier et le nu-propriétaire selon le barème de l\'article 669 du Code général des impôts'
         + (r.age !== null ? ', l\'usufruitier étant âgé de ' + r.age + ' ans (usufruit ' + Math.round(r.usufruit * 100) + ' %, nue-propriété ' + Math.round((1 - r.usufruit) * 100) + ' %)' : '') + ' :' });
       bar.forEach((x) => B.push({ type: 'p', texte: '- sur ' + euros(x.assiette) + ' revenant à ' + (x.nom || 'XXXX') + ' : ' + (x.usufruitier === null ? 'âge de l\'usufruitier à compléter.'

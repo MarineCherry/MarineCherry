@@ -118,7 +118,10 @@ test('Succession : moitié des comptes de communauté, frais regroupés, créanc
   assert.ok(t.includes('1/2 revenant à la succession :\t40 000,00 €'));
   assert.ok(t.includes('Total frais :\t4 560,00 €'));
   assert.ok(t.includes('Solde :\t35 440,00 €'));
-  assert.ok(t.includes('Madame Claire DURAND : 17 720,00 €.'));
+  assert.ok(t.includes('ACTIF DE COMMUNAUTE\t\nComptes BANQUE EXEMPLE\t80 000,00 €\nTotal\t80 000,00 €'));
+  // Dette de restitution : montant global.
+  assert.ok(t.includes('soit la somme globale de 35 440,00 €.'));
+  assert.ok(!t.includes('Madame Claire DURAND :'));
 });
 
 test('Vente : quote-part démembrée, prêt au prorata, plus-value propre, répartition selon le barème', () => {
@@ -144,7 +147,7 @@ test('Vente : quote-part démembrée, prêt au prorata, plus-value propre, répa
   const t = Q.texte(Q.blocs(d, r, (x) => 'MONTANT (' + Q.euros(x) + ')'));
   assert.ok(t.includes('Quote-part sur laquelle s\'exerce le démembrement de propriété (95/100) :\t190 000,00 €'));
   assert.ok(t.includes('plus-value due par Monsieur Luc MARTIN\t1 000,00 €'));
-  assert.ok(t.includes('arrêtées à la somme de : MONTANT (41 500,00 €) ;'));
+  assert.ok(t.includes('arrêtée à la somme de : MONTANT (41 500,00 €) ;'));
   assert.ok(t.includes('usufruit 30 %, nue-propriété 70 %'));
   assert.ok(t.includes('12 750,00 € à l\'usufruitier (Madame Anne MARTIN) et 29 750,00 € au nu-propriétaire.'));
 });
@@ -178,9 +181,35 @@ test('Succession : actif par origine (communauté, propre, indivis) dans le tabl
   near(r.brut, 50000 + 20000 + 3000, 'revenant à la succession');
   near(r.assietteQU, 72500, 'assiette');
   const t = Q.texte(Q.blocs(d, r));
-  assert.ok(t.includes('ACTIF DE COMMUNAUTE\t\nBANQUE EXEMPLE : comptes et livrets\t100 000,00 €\n1/2 revenant à la succession :\t50 000,00 €'));
+  assert.ok(t.includes('ACTIF DE COMMUNAUTE\t\nBANQUE EXEMPLE : comptes et livrets\t100 000,00 €\nTotal\t100 000,00 €\n1/2 revenant à la succession :\t50 000,00 €'));
   assert.ok(t.includes('BIENS PROPRES DU DEFUNT\t\nLivret A au nom du défunt (bien propre)\t20 000,00 €'));
   assert.ok(t.includes('Quote-part revenant à la succession :\t3 000,00 €'));
   assert.ok(t.includes('Total revenant à la succession :\t73 000,00 €'));
   assert.ok(t.includes('Solde :\t72 500,00 €'));
+});
+
+test('Succession : comptes de la déclaration regroupés par banque, option 1/4 PP 3/4 US, détail des comptes au décès', () => {
+  const c = (o) => Object.assign({ etablissement: 'BANQUE EXEMPLE', agence: 'ORANGE (84100)', titulaire: 'defunt' }, o);
+  const d = {
+    cas: 'succession', partUsufruit: '3/4', nus: [{ id: 'a' }, { id: 'b' }],
+    base: [
+      { montant: 10000, part: '1/2', groupe: 'commun', compte: c({ type: 'compte', numero: '111' }) },
+      { montant: 20000, part: '1/2', groupe: 'commun', compte: c({ type: 'Livret A', numero: '222' }) },
+      { montant: 6000, part: '1/2', groupe: 'commun', compte: c({ etablissement: 'AUTRE BANQUE', agence: '', titulaire: 'joint', type: 'compte', numero: '333' }) },
+    ],
+    operations: [{ action: 'retranche', libelle: 'frais de notoriété', montant: 500 }],
+  };
+  const r = Q.calculer(d, P);
+  near(r.brutSuccession, 18000, 'moitié revenant à la succession');
+  near(r.brut, 13500, 'droits du conjoint en usufruit (3/4)');
+  near(r.assietteQU, 13000, 'assiette');
+  const t = Q.texte(Q.blocs(d, r, (x) => 'L(' + Q.euros(x) + ')'));
+  assert.ok(t.includes('Comptes BANQUE EXEMPLE\t30 000,00 €\nCompte AUTRE BANQUE\t6 000,00 €\nTotal\t36 000,00 €\n1/2 revenant à la succession :\t18 000,00 €\nDroits du conjoint en usufruit (3/4) :\t13 500,00 €'));
+  assert.ok(t.includes('Auprès de BANQUE EXEMPLE, agence de ORANGE (84100),'));
+  assert.ok(t.includes('- Au nom du DEFUNT, le compte numéro 111, d\'un solde créditeur, au jour du décès, de L(10 000,00 €),\n\nCi, 10 000,00 €'));
+  assert.ok(t.includes('- Au nom du DEFUNT, le Livret A numéro 222, d\'un montant en capital et intérêts'));
+  assert.ok(t.includes('Soit un montant total auprès de BANQUE EXEMPLE, de L(30 000,00 €).'));
+  assert.ok(t.includes('- En compte-joint, le compte numéro 333'));
+  assert.ok(t.includes('Les nus-propriétaires déclarent renoncer'));
+  assert.ok(t.includes('soit la somme globale de L(13 000,00 €).'));
 });

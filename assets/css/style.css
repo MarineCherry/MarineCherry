@@ -1292,3 +1292,18 @@ td .pos { color: #2f7d5b; }
 .qu-actif > .btn-icon { grid-column: 4; grid-row: 1; }
 .qu-actif-hors { opacity: .7; }
 @media (max-width: 640px) { .qu-actif { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .qu-actif > .field:first-child { grid-column: 1 / -1; } .qu-actif > .btn-icon { grid-column: 1 / -1; grid-row: auto; order: 9; justify-self: end; } }
+.qt-acte-table-nue td, .qt-acte-table-nue th { border: 0; padding: 1px 10px 1px 0; }
+.qt-acte-table-nue { min-width: 70%; }
+.qt-acte p.qt-acte-droite { text-align: right; }
+.qu-compte { grid-template-columns: repeat(3, minmax(0, 1fr)) 32px; }
+.qu-compte > .btn-icon { grid-column: 4; grid-row: 1; }
+.qu-compte > .field:nth-child(7), .qu-compte > .field:nth-child(10) { grid-column: 3 / 5; }
+.qu-option { display: flex; flex-direction: column; gap: 10px; }
+.qu-frais-qu { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); background: #eef4f0; }
+@media (max-width: 640px) {
+  .qu-compte { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .qu-compte > .field:first-child { grid-column: 1 / -1; }
+  .qu-compte > .field:nth-child(7), .qu-compte > .field:nth-child(10), .qu-compte > .field:nth-child(2) { grid-column: auto; }
+  .qu-compte > .btn-icon { grid-column: 1 / -1; grid-row: auto; order: 9; justify-self: end; }
+  .qu-frais-qu { grid-template-columns: 1fr; }
+}
