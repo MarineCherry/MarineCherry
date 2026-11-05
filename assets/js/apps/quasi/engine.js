@@ -143,7 +143,13 @@
         const r = rangs.find((x) => Math.abs(x.y - i.y) <= 2);
         if (r) r.items.push(i); else rangs.push({ y: i.y, items: [i] });
       });
-      rangs.forEach((r) => lignes.push(r.items.sort((a, b) => a.x - b.x).map((i) => i.str.trim()).join(' ')));
+      // Éléments accolés (sans espace dans le PDF) : réunis sans espace (« ORANG » + « E »).
+      rangs.forEach((r) => lignes.push(r.items.sort((a, b) => a.x - b.x).reduce((t, i, k, arr) => {
+        if (!k) return i.str.trim();
+        const prec = arr[k - 1];
+        const colle = isNum(prec.w) && i.x - (prec.x + prec.w) < 0.8 && !/\s$/.test(prec.str) && !/^\s/.test(i.str);
+        return t + (colle ? '' : ' ') + i.str.trim();
+      }, '')));
     });
     return lignes;
   }
@@ -164,7 +170,8 @@
   function lireDDS(source) {
     const lignes = typeof source === 'string' ? source.split('\n') : Array.isArray(source) && typeof source[0] === 'string' ? source : texteDesPages(source);
     const utiles = lignes.map((l) => l.replace(/\s+/g, ' ').trim()).filter((l) => l && !RE_FORMULAIRE.some((re) => re.test(l)));
-    const T = utiles.join(' ').replace(/\s+/g, ' ').replace(/\s*-\s*joint/gi, '-joint').replace(/\s+,/g, ',').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')');
+    const T = utiles.join(' ').replace(/\s+/g, ' ').replace(/\s*-\s*joint/gi, '-joint').replace(/\s+,/g, ',').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')')
+      .replace(/\((\d+)\s*\/\s*(\d+)\)/g, '($1/$2)');
     const res = { defunt: '', regime: null, option: null, conjoint: null, heritiers: [], comptes: [], avertissements: [] };
 
     // Défunt.
@@ -178,9 +185,16 @@
     else if (/r[ée]gime de la communaut[ée]/i.test(T)) res.regime = 'communaute';
     else if (/r[ée]gime de la s[ée]paration de biens/i.test(T)) res.regime = 'separation';
     // Option du conjoint survivant.
-    const opt = /option du conjoint survivant(.{0,700}?)(?:Absence de partage|ABSENCE|Attestation|Notori[ée]t[ée]|$)/i.exec(T);
+    const opt = /(?:option du conjoint survivant|Acceptation de la donation entre [ée]poux)(.{0,700}?)(?:Absence de partage|ABSENCE|Attestation|Notori[ée]t[ée]|Consentement|$)/i.exec(T);
     const texteOption = opt ? opt[1] : ((/Quotit[ée] \(part disponible\) choisie\s*:\s*(.*?)\s+Dispositions testamentaires/i.exec(T) || [])[1] || '');
+    // Cumul des droits légaux (1/4 en propriété) et de la donation entre époux (usufruit du surplus) :
+    // les enfants reçoivent leur part « des TROIS QUARTS des biens de succession ».
+    const cumul = /des TROIS QUARTS\s*\(3\/4\)\s*des biens de succession/i.test(T);
     if (/trois quarts en usufruit|3\s*\/\s*4 en usufruit/i.test(texteOption)) res.option = 'quart';
+    else if (cumul) {
+      res.option = 'quart';
+      res.avertissements.push('Droits du conjoint : 1/4 en pleine propriété (droits légaux) et usufruit des 3/4 (donation entre époux), d\'après la liquidation de la déclaration. À vérifier.');
+    }
     else if (/usufruit/i.test(texteOption)) res.option = 'usufruit';
     else if (/quart en (pleine )?propri/i.test(texteOption)) { res.option = 'propriete'; res.avertissements.push('Le conjoint a opté pour une part en pleine propriété : pas d\'usufruit, à vérifier.'); }
     // Conjoint survivant (quasi-usufruitier).
@@ -199,7 +213,7 @@
       let m;
       while ((m = re.exec(prop[1]))) {
         const mots = m[2].toUpperCase().split(/\s+/);
-        const h = res.heritiers.find((x) => mots.every((w) => x.nom.toUpperCase().includes(w)));
+        const h = res.heritiers.find((x) => { const ws = x.nom.toUpperCase().split(/\s+/); return mots.every((w) => ws.includes(w)); });
         if (h) h.part = m[3].replace(/\s/g, '');
       }
     }
@@ -213,20 +227,23 @@
       if (!m) return;
       const zone = m[1];
       const tetes = [];
-      const reTete = /(\d+)\)\s*(?:A|Au|Aux|À|Auprès de)\s+(?:la\s+|le\s+|l')?(.+?),\s*agence\s+(?:de\s+|d')?(.+?),\s*(?:\((\d{5})\),?)?/g;
+      const reTete = /(\d+)\)\s*(?:A|Au|Aux|À|Auprès de)\s+(?:la\s+|le\s+|l')?(.+?),\s*agence\s+(?:de\s+|d')?(.+?),\s*(?:\((\d{5})\)\s*,?\s*:?)?/g;
       let t;
       while ((t = reTete.exec(zone))) tetes.push({ index: t.index, fin: reTete.lastIndex, etab: t[2].trim(), agence: t[3].trim() + (t[4] ? ' (' + t[4] + ')' : '') });
       tetes.forEach((tt, k) => {
         let bloc = zone.slice(tt.fin, k + 1 < tetes.length ? tetes[k + 1].index : zone.length);
         const coupe = /\s\d+\)\s*(?:La|Le|Les|L')\s/.exec(bloc);
         if (coupe) bloc = bloc.slice(0, coupe.index);
-        const reCompte = /-\s*(Au nom du (D[ÉE]FUNT|CONJOINT)|Au nom de\s+[^,]+|En compte-joint|Au nom des deux [ée]poux)\s*,\s*(?:le|la|l')\s*(.+?)\s+num[ée]ro\s+([^,]+?)\s*,(.*?)\(([\d\s.]+,\d{2})\s*€\)/gi;
+        const reCompte = /-\s*(Au nom du (D[ÉE]FUNT|CONJOINT)|Au nom de\s+[^,]+|En compte-joint|En indivision|Au nom des deux [ée]poux)\s*,\s*(?:le|la|l')\s*(.+?)\s+num[ée]ro\s+([^,]+?)\s*,(.*?)\(([\d\s.]+,\d{2})\s*€\)(?=(.{0,60}))/gi;
         let c;
         while ((c = reCompte.exec(bloc))) {
-          const tit = /CONJOINT/i.test(c[1]) ? 'conjoint' : /joint|deux/i.test(c[1]) ? 'joint' : 'defunt';
+          const tit = /CONJOINT/i.test(c[1]) ? 'conjoint' : /joint|deux|indivision/i.test(c[1]) ? 'joint' : 'defunt';
+          // « dont la moitié (1/2) appartenant à la succession ».
+          const qp = /dont\s+(?:la|une)?\s*[^()]{0,30}\((\d+\/\d+)\)\s*appartenant/i.exec(c[7]);
           res.comptes.push({
             etablissement: tt.etab, agence: tt.agence, titulaire: tit, type: c[3].replace(/\s+/g, ' ').trim(), numero: c[4].replace(/\s+/g, ''),
-            montant: montant(c[6]), section: sec.code,
+            montant: montant(c[6]), section: sec.code, part: qp ? qp[1] : '', indivision: /indivision/i.test(c[1]),
+            formule: /capital et int[ée]r[êe]ts/i.test(c[5]) ? 'capital' : /solde cr[ée]diteur/i.test(c[5]) ? 'solde' : '',
           });
         }
       });
@@ -314,7 +331,7 @@
       const f = fraction(x.part);
       const part = f === null ? 1 : f;
       return {
-        id: x.id, libelle: x.libelle || '', montant: n(x.montant), partTexte: String(x.part || '').trim(), part, demembre: n(x.montant) * part,
+        id: x.id, libelle: x.libelle || '', montant: n(x.montant), partTexte: String(x.part || '').trim(), part, demembre: arrondi(n(x.montant) * part),
         groupe: x.groupe || (Math.abs(part - 0.5) < 1e-9 ? 'commun' : part < 1 ? 'indivis' : 'propre'),
         compte: x.compte || null,
       };
@@ -389,7 +406,8 @@
    * par établissement, détail des comptes au décès, assiette). Vente : détermination des sommes.
    * La dette de restitution est indiquée pour son montant global.
    */
-  const TITULAIRES = { defunt: 'Au nom du DEFUNT', conjoint: 'Au nom du CONJOINT', joint: 'En compte-joint' };
+  const TITULAIRES = { defunt: 'Au nom du DEFUNT', conjoint: 'Au nom du CONJOINT', joint: 'En compte-joint', indivision: 'En indivision' };
+  const FRACTIONS_LETTRES = { '1/2': 'la moitié', '1/3': 'le tiers', '2/3': 'les deux tiers', '1/4': 'le quart', '3/4': 'les trois quarts' };
   const estLivret = (t) => /LIVRET|LDD|LEP|PEL|CEL|EPARGNE|PLAN/i.test(t || '');
   function blocs(d, r, enLettres) {
     const lettres = enLettres || ((x) => euros(x));
@@ -410,7 +428,16 @@
       return g;
     };
     const libGroupe = (e) => (e.lignes.some((x) => x.compte) ? (e.nb > 1 ? 'Comptes ' : 'Compte ') + e.nom : e.nom);
-    if (succession) {
+    const sansCommunaute = succession && !r.lignesBase.some((x) => x.groupe === 'commun');
+    if (sansCommunaute) {
+      // Pas de communauté : actif de succession par banque, pour la part revenant à la succession (comme la déclaration).
+      lignes.push(['ACTIF DE SUCCESSION', '']);
+      gras.push('ACTIF DE SUCCESSION');
+      const etabs = parEtablissement(r.lignesBase);
+      etabs.forEach((e) => lignes.push([libGroupe(e), euros(sum(e.lignes, (x) => x.demembre))]));
+      if (etabs.length > 1) lignes.push(['Total', euros(r.brutSuccession)]);
+      if (r.partUsufruit < 1) lignes.push(['Droits du conjoint en usufruit (' + (r.partUsufruitTexte || fmtFraction(r.partUsufruit)) + ') :', euros(r.brut)]);
+    } else if (succession) {
       const titres = { commun: 'ACTIF DE COMMUNAUTE', propre: 'BIENS PROPRES DU DEFUNT', indivis: 'BIENS INDIVIS' };
       const groupes = ['commun', 'propre', 'indivis'].filter((g) => r.lignesBase.some((x) => (x.groupe || 'propre') === g));
       groupes.forEach((g) => {
@@ -466,11 +493,14 @@
           const c = x.compte;
           const type = (c.type || 'compte').trim();
           const designation = /^compte/i.test(type) ? 'le ' + type.charAt(0).toLowerCase() + type.slice(1) : 'le ' + type;
+          const qp = x.groupe === 'indivis' && x.part < 1 ? (x.partTexte || fmtFraction(x.part)) : '';
           B.push({ type: 'p', texte: '- ' + (TITULAIRES[c.titulaire] || TITULAIRES.defunt) + ', ' + designation + (c.numero ? ' numéro ' + c.numero : '') + ', '
-            + (estLivret(type) ? 'd\'un montant en capital et intérêts' : 'd\'un solde créditeur') + ', au jour du décès, de ' + lettres(x.montant) + ',' });
-          B.push({ type: 'p', texte: 'Ci, ' + euros(x.montant), droite: true });
+            + ((c.formule ? c.formule === 'capital' : estLivret(type)) ? 'd\'un montant en capital et intérêts' : 'd\'un solde créditeur') + ', au jour du décès, de ' + lettres(x.montant)
+            + (qp ? ', dont ' + (FRACTIONS_LETTRES[qp] || qp) + ' (' + qp + ') appartenant à la succession, soit la somme de ' + lettres(x.demembre) : '') + ',' });
+          B.push({ type: 'p', texte: 'Ci, ' + euros(qp ? x.demembre : x.montant), droite: true });
         });
-        if (e.nb > 1) B.push({ type: 'p', texte: 'Soit un montant total auprès de ' + e.nom + ', de ' + lettres(e.montant) + '.' });
+        const totalEtab = sansCommunaute ? sum(e.lignes, (x) => x.demembre) : e.montant;
+        if (e.nb > 1) B.push({ type: 'p', texte: 'Soit un montant total auprès de ' + e.nom + ', de ' + lettres(totalEtab) + '.' });
       });
       const plusieurs = r.nus.length > 1;
       B.push({ type: 'p', texte: plusieurs ? 'Les nus-propriétaires déclarent renoncer à demander qu\'il soit fait plus ample inventaire, l\'état de l\'actif net ainsi déclaré leur étant suffisant.'

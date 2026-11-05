@@ -36,7 +36,7 @@
   /* ---------- Comptes bancaires au décès (succession) ---------- */
   const REGIMES = [{ value: 'communaute', label: 'Communauté' }, { value: 'separation', label: 'Séparation de biens' }, { value: 'aucun', label: 'Non marié / veuf' }];
   const OPTIONS = [{ value: 'usufruit', label: 'Usufruit de la totalité' }, { value: 'quart', label: '1/4 en PP et 3/4 en usufruit' }, { value: 'autre', label: 'Autre' }];
-  const TITULAIRES = [{ value: 'defunt', label: 'Défunt' }, { value: 'conjoint', label: 'Conjoint' }, { value: 'joint', label: 'Compte-joint' }];
+  const TITULAIRES = [{ value: 'defunt', label: 'Défunt' }, { value: 'conjoint', label: 'Conjoint' }, { value: 'joint', label: 'Compte-joint' }, { value: 'indivision', label: 'En indivision' }];
   const PROPRIETES = [{ value: 'commun', label: 'Commun (½ à la succession)' }, { value: 'propre', label: 'Propre du défunt (100 %)' }, { value: 'indivis', label: 'Indivis (quote-part)' }, { value: 'conjoint', label: 'Propre du conjoint (exclu)' }];
   const TYPES = ['compte', 'compte courant', 'Livret A', 'Livret Développement Durable', 'Livret d\'Epargne Populaire', 'compte sur livret', 'Plan d\'Epargne Logement', 'Compte Epargne Logement', 'compte titres'];
   // Origine par défaut d'après le régime et le titulaire : communauté → commun ; séparation → propre,
@@ -44,7 +44,7 @@
   function proprieteDefaut(s, titulaire) {
     if (s.regime === 'communaute') return 'commun';
     if (titulaire === 'conjoint') return s.regime === 'separation' ? 'conjoint' : 'propre';
-    if (titulaire === 'joint') return 'indivis';
+    if (titulaire === 'joint' || titulaire === 'indivision') return 'indivis';
     return 'propre';
   }
   const nouvelActif = (s, o) => Object.assign({ id: uid('a'), etablissement: '', agence: '', titulaire: 'defunt', type: 'compte', numero: '', montant: null, propriete: proprieteDefaut(s, 'defunt'), part: '', soumis: true }, o || {});
@@ -59,7 +59,7 @@
     const base = s.cas !== 'vente'
       ? s.actif.filter((x) => x.soumis && x.propriete !== 'conjoint').map((x) => ({
         id: x.id, libelle: x.etablissement, montant: x.montant, part: partActif(x), groupe: x.propriete,
-        compte: { etablissement: (x.etablissement || '').trim(), agence: (x.agence || '').trim(), titulaire: x.titulaire, type: x.type, numero: (x.numero || '').trim() },
+        compte: { etablissement: (x.etablissement || '').trim(), agence: (x.agence || '').trim(), titulaire: x.titulaire, type: x.type, numero: (x.numero || '').trim(), formule: x.formule || '' },
       }))
       : s.operations.filter((o) => o.action === 'base').map((o) => ({ id: o.id, libelle: o.libelle || o.libelleReleve, montant: montantBase(o), part: o.part }))
         .concat(s.base.map((x) => ({ id: x.id, libelle: x.libelle, montant: x.montant, part: x.part })));
@@ -195,9 +195,9 @@
     if (lu.heritiers.length && s.nus.every((x) => !x.nom)) s.nus = lu.heritiers.map((x) => Object.assign(nouveauNu(), { nom: x.nom, part: x.part }));
     // Comptes : origine d'après la section de la déclaration (actif de communauté ou biens propres).
     s.actif = lu.comptes.map((c) => nouvelActif(s, {
-      etablissement: c.etablissement, agence: c.agence, titulaire: c.titulaire, type: c.type, numero: c.numero, montant: c.montant,
-      propriete: c.section === 'communaute' ? 'commun' : c.titulaire === 'joint' ? 'indivis' : c.titulaire === 'conjoint' ? 'conjoint' : 'propre',
-      part: c.section !== 'communaute' && c.titulaire === 'joint' ? '1/2' : '',
+      etablissement: c.etablissement, agence: c.agence, titulaire: c.indivision ? 'indivision' : c.titulaire, type: c.type, numero: c.numero, montant: c.montant, formule: c.formule || '',
+      propriete: c.section === 'communaute' ? 'commun' : c.part || c.titulaire === 'joint' ? 'indivis' : c.titulaire === 'conjoint' ? 'conjoint' : 'propre',
+      part: c.section !== 'communaute' && (c.part || c.titulaire === 'joint') ? c.part || '1/2' : '',
     }));
     s.dds = { fichier: fichier.name, avertissements: lu.avertissements };
     ctx.render();

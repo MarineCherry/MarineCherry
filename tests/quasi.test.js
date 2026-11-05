@@ -263,3 +263,57 @@ test('Déclaration de succession (2705-SD) : régime, option, conjoint, héritie
   ]);
   assert.deepStrictEqual(r.avertissements, []);
 });
+
+test('Déclaration sans communauté : comptes en indivision (quote-part), cumul 1/4 PP et usufruit des 3/4, texte de l\'acte', () => {
+  const lignes = [
+    'Régime matrimonial adopté par les époux : la séparation de biens',
+    'En cas d\'absence de contrat de mariage, cochez la case ☒',
+    'Ses héritiers',
+    '1) Madame Anne Françoise DURAND, demeurant à LYON,',
+    '2) Monsieur François DURAND, demeurant à PARIS,',
+    'Qualités héréditaires',
+    'Proportions héréditaires',
+    '- Madame Anne DURAND , pour LA MOITIÉ ( 1 / 2 )',
+    '- Monsieur François DURAND , pour LA MOITIÉ ( 1 / 2 )',
+    'EXPOSE',
+    'LIQUIDATION DE LA SUCCESSION',
+    'ACTIF DE SUCCESSION',
+    '1) A la BANQUE EXEMPLE, agence de ORANGE,',
+    '(84100), :',
+    '- En indivision, le compte numéro 0001,',
+    'd\'un solde créditeur au jour du décès de MILLE EUROS (1 000,00 €), dont La moitié (1/2)',
+    'appartenant à la succession, soit la somme de CINQ CENTS EUROS (500,00),',
+    'Ci, .......... 500,00 €',
+    '- Au nom du DEFUNT, le Livret A numéro 0002, d\'un montant en capital et intérêts au',
+    'jour du décès de DEUX MILLE EUROS (2 000,00 €),',
+    'Ci, .......... 2 000,00 €',
+    '2) Au AUTRE BANQUE, agence de AVIGNON, (84000) :',
+    '- Au nom du DEFUNT, le compte sur livret numéro 0003, d\'un solde créditeur au jour du décès de CENT EUROS (100,00 €),',
+    'Ci, .......... 100,00 €',
+    'PASSIF DE SUCCESSION',
+    '2 - REVENANT A : Madame Anne DURAND :',
+    'UN DEMI ( 1 / 2 ) des TROIS QUARTS (3/4) des',
+    'biens de succession restant à partager après déduction',
+  ];
+  const r = Q.lireDDS(lignes);
+  assert.strictEqual(r.regime, 'separation');
+  assert.strictEqual(r.option, 'quart');
+  assert.deepStrictEqual(r.heritiers.map((x) => x.part), ['1/2', '1/2']);
+  assert.deepStrictEqual(r.comptes.map((c) => [c.etablissement, c.agence, c.titulaire, c.indivision, c.part, c.type, c.montant]), [
+    ['BANQUE EXEMPLE', 'ORANGE (84100)', 'joint', true, '1/2', 'compte', 1000],
+    ['BANQUE EXEMPLE', 'ORANGE (84100)', 'defunt', false, '', 'Livret A', 2000],
+    ['AUTRE BANQUE', 'AVIGNON (84000)', 'defunt', false, '', 'compte sur livret', 100],
+  ]);
+  const d = {
+    cas: 'succession', partUsufruit: '3/4', nus: [{ id: 'a' }, { id: 'b' }],
+    base: r.comptes.map((c) => ({ montant: c.montant, part: c.part, groupe: c.part ? 'indivis' : 'propre', compte: Object.assign({}, c, { titulaire: c.indivision ? 'indivision' : c.titulaire }) })),
+    operations: [],
+  };
+  const calc = Q.calculer(d, P);
+  near(calc.brutSuccession, 2600, 'revenant à la succession');
+  near(calc.brut, 1950, 'usufruit des 3/4');
+  const t = Q.texte(Q.blocs(d, calc, (x) => 'L(' + Q.euros(x) + ')'));
+  assert.ok(t.includes('ACTIF DE SUCCESSION\t\nComptes BANQUE EXEMPLE\t2 500,00 €\nCompte AUTRE BANQUE\t100,00 €\nTotal\t2 600,00 €\nDroits du conjoint en usufruit (3/4) :\t1 950,00 €'));
+  assert.ok(t.includes('- En indivision, le compte numéro 0001, d\'un solde créditeur, au jour du décès, de L(1 000,00 €), dont la moitié (1/2) appartenant à la succession, soit la somme de L(500,00 €),\n\nCi, 500,00 €'));
+  assert.ok(t.includes('Soit un montant total auprès de BANQUE EXEMPLE, de L(2 500,00 €).'));
+});
