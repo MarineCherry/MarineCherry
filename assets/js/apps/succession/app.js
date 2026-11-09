@@ -145,9 +145,11 @@
     ];
   }
 
+  const proprietaire = (s, b) => (s.nbParents === 1 ? 'P1' : engine.proprietaireEffectif(b, s));
   function tabPatrimoine(ctx) {
     const s = ctx.state;
     const p = ctx.params();
+    const changement = s.nbParents === 2 && !!s.changementRegime;
     const regimes = p.regimes.map((r) => r.nom);
     s.biens.forEach((b) => { if (b.regime && !regimes.includes(b.regime)) regimes.push(b.regime); });
     const rub = rubriques(s);
@@ -160,9 +162,11 @@
         h('td', null, ctx.select(b, 'nature', p.natures, { ariaLabel: 'Nature' })),
         h('td', null, ctx.num(b, 'valeur', { suffix: '€', ariaLabel: 'Valeur' })),
         h('td', null, ctx.select(b, 'regime', regimes, { ariaLabel: 'Régime fiscal' })),
-        s.nbParents === 2 ? h('td', null, ctx.select(b, 'proprietaire', [
+        s.nbParents === 2 ? h('td', null, h('div', { class: 'apport-cell' }, ctx.select(b, 'proprietaire', [
           { value: 'P1', label: 'Propre ' + parentNom(s, 0) }, { value: 'P2', label: 'Propre ' + parentNom(s, 1) }, { value: 'commun', label: 'Commun' },
-        ], { structural: true, ariaLabel: 'Appartient à' })) : null,
+        ], { structural: true, ariaLabel: 'Appartient à' }),
+        changement && rb.code !== 'commun' ? h('div', { class: 'apport-choix' }, h('span', { class: 'small muted' }, 'Apporté à la communauté'),
+          ui.yesNo(!!b.apport, (v) => { b.apport = v; ctx.render(); ctx.changed(); }, true)) : null)) : null,
         h('td', null, ui.button('Retirer ce bien', {
           icon: 'trash', iconOnly: true, variant: 'ghost', small: true,
           onClick: () => {
@@ -174,7 +178,7 @@
         }))));
       const head = ['Désignation du bien', 'Nature', 'Valeur', 'Régime fiscal'].concat(s.nbParents === 2 ? ['Appartient à'] : []).concat(['']);
       return ui.card(rb.titre, h('div', { class: 'stack-sm' },
-        h('div', { class: 'table-wrap' }, h('table', { class: 'table table-input' },
+        h('div', { class: 'table-wrap' }, h('table', { class: 'table table-input table-biens' },
           h('thead', null, h('tr', null, head.map((x) => h('th', null, x)))),
           h('tbody', null, rows.length ? rows : h('tr', null, h('td', { colspan: head.length, class: 'empty' }, 'Aucun bien.'))),
           h('tfoot', null, h('tr', null, h('td', null, 'Total'), h('td'),
@@ -189,7 +193,18 @@
         s.nbParents === 2 ? 'propres + moitié des biens communs' : null)),
       ui.stat('Patrimoine total', fmtEuro(r.patrimoineTotal), null, 'strong'))));
 
-    return h('div', { class: 'stack' }, resume, cartes,
+    const regime = s.nbParents === 2 ? ui.card('Changement de régime matrimonial', h('div', { class: 'stack-sm' },
+      ui.field('Envisager un changement de régime avec apport de biens propres à la communauté', ctx.yesNo(s, 'changementRegime', { small: true, structural: true }),
+        { help: 'Oui : pour chaque bien propre, indiquez s\'il est apporté à la communauté. Il devient commun : chaque parent en détient la moitié et peut la donner.' }),
+      changement ? ctx.live((r) => r.apports.length
+        ? h('div', { class: 'stack-sm' },
+          h('ul', { class: 'bullets small' }, r.apports.map((a) => h('li', null, (a.designation || 'Bien') + ' (' + fmtEuro(a.valeur) + ') : apporté par ' + parentNom(s, a.de === 'P2' ? 1 : 0)
+            + ', soit ' + fmtEuro(a.transfert) + ' qui passent dans la branche de ' + parentNom(s, a.de === 'P2' ? 0 : 1) + '.'))),
+          h('p', { class: 'small muted' }, 'L\'apport n\'est pas taxé comme une donation (avantage matrimonial). Frais de l\'acte de changement de régime non calculés (émoluments, et taxe de publicité foncière pour les immeubles apportés).'))
+        : h('p', { class: 'small muted' }, 'Aucun bien apporté pour l\'instant : cochez « Oui » sur les biens propres concernés ci-dessous.')) : null),
+    { subtitle: 'Par exemple, adoption de la communauté universelle ou apport d\'un bien propre à la communauté, avant les donations.' }) : null;
+
+    return h('div', { class: 'stack' }, regime, resume, cartes,
       h('details', { class: 'card details' },
         h('summary', null, 'Aide à la saisie'),
         h('ul', { class: 'bullets' },
@@ -201,7 +216,7 @@
   /* ---------- Onglet « Donations envisagées » ---------- */
   function biensDuDonateur(s, g) {
     return s.biens.filter((b) => {
-      const pr = s.nbParents === 1 ? 'P1' : b.proprietaire || 'commun';
+      const pr = proprietaire(s, b);
       if (g === 'deux') return pr === 'commun';
       return pr === g || pr === 'commun';
     });
@@ -212,7 +227,7 @@
     const s = ctx.state;
     const deja = new Set(s.donations.map((d) => d.bienId).filter(Boolean));
     const ajouts = s.biens.filter((b) => isNum(b.valeur) && b.valeur > 0 && !deja.has(b.id)).map((b) => {
-      const pr = s.nbParents === 1 ? 'P1' : b.proprietaire || 'commun';
+      const pr = proprietaire(s, b);
       return Object.assign(newDonation(pr === 'commun' ? 'deux' : pr), { bienId: b.id });
     });
     if (!ajouts.length) {
@@ -422,6 +437,9 @@
       'Droits en ligne directe (barème de l\'art. 777 CGI) ; abattement de ' + fmtEuro(p.abattEnfant) + ' par parent et par enfant, renouvelé tous les ' + p.delaiRappel + ' ans.',
       "Usufruit viager valorisé selon le barème fiscal de l'article 669 du CGI, à l'âge de chaque parent ; il s'éteint au décès sans droits supplémentaires.",
       'Chaque parent transmet ses biens propres et la moitié des biens communs ; les droits du conjoint survivant ne sont pas modélisés.',
+      s.nbParents === 2 && s.changementRegime && s.biens.some((b) => b.apport && b.proprietaire !== 'commun')
+        ? 'Changement de régime matrimonial envisagé : apport à la communauté de ' + s.biens.filter((b) => b.apport && b.proprietaire !== 'commun').map((b) => (b.designation || 'un bien') + ' (bien propre de ' + parentNom(s, b.proprietaire === 'P2' ? 1 : 0) + ')').join(', ')
+          + ' ; ces biens deviennent communs et chaque parent en transmet la moitié. Frais du changement de régime non inclus.' : null,
       nonCommuns(s) && s.enfants.some((e) => e.nom && (e.de === 'P1' || e.de === 'P2'))
         ? 'Enfants non communs : chacun ne reçoit que de son parent et n\'hérite que de lui. Un bien commun attribué en entier à l\'enfant d\'un seul des époux est donné par ce seul parent, son conjoint n\'étant pas codonateur (art. 1076-1 C. civ.) ; la récompense éventuellement due à la communauté n\'est pas calculée.' : null,
       s.hypotheseD === false ? null : 'Hypothèse D : montage optimisé en nue-propriété. Pour chaque branche, part des biens désignés donnée à l\'enfant, don aux petits-enfants (même montant par branche, partagé entre eux) et part gardée pour la succession, choisis pour que le total des droits soit le plus faible ; abattement de ' + fmtEuro(p.abattPetitEnfant) + ' par grand-parent et par petit-enfant.',
@@ -514,7 +532,7 @@
         ], r.parents.filter((x) => x.actif).map((x) => Object.assign({}, x, { nom: parentNom(s, x.index) })), { compact: true }),
         ui.table([
           { label: 'Bien', render: (x) => x.source.designation || '—' }, { label: 'Nature', render: (x) => x.source.nature || '' },
-          { label: 'Appartient à', render: (x) => (x.total ? '' : s.nbParents === 1 ? parentNom(s, 0) : x.source.proprietaire === 'commun' ? 'Commun' : 'Propre ' + parentNom(s, x.source.proprietaire === 'P2' ? 1 : 0)) },
+          { label: 'Appartient à', render: (x) => (x.total ? '' : s.nbParents === 1 ? parentNom(s, 0) : proprietaire(s, x.source) === 'commun' ? (proprietaire(s, x.source) !== x.source.proprietaire ? 'Commun (apporté par ' + parentNom(s, x.source.proprietaire === 'P2' ? 1 : 0) + ')' : 'Commun') : 'Propre ' + parentNom(s, x.source.proprietaire === 'P2' ? 1 : 0)) },
           { label: 'Valeur', num: true, render: (x) => fmtEuro(x.valeur) },
           { label: 'Régime', render: (x) => x.source.regime || '' },
         ], r.biens.filter((b) => b.valeur), { compact: true, total: { total: true, source: { designation: 'Total' }, valeur: r.patrimoineTotal } }),
@@ -729,6 +747,7 @@
     // Anciens dossiers : hypothèse D étudiée s'il y a des petits-enfants.
     if (typeof s.hypotheseD !== 'boolean') s.hypotheseD = s.petitsEnfants.some((x) => x.nom);
     s.enfantsNonCommuns = !!s.enfantsNonCommuns;
+    s.changementRegime = !!s.changementRegime;
     s.taxe = Object.assign({ forme: null, typeActe: 'Donation-partage', observations: '' }, s.taxe || {});
     s.enfants = (s.enfants || []).map((x) => Object.assign({ de: 'deux' }, x));
     migrer(s);

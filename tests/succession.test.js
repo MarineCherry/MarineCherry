@@ -185,3 +185,25 @@ test('Taxe : montants donnés en pleine propriété et en nue-propriété, par c
   assert.strictEqual(D.code, 'D');
   assert.ok(D.lignes.every((x) => x.pp <= 1200000 + 0.01));
 });
+
+test('Changement de régime : bien propre apporté à la communauté, donné par les deux parents', () => {
+  // Le compte titres propre de Jean (300 000) est apporté à la communauté.
+  const d = dossier({
+    changementRegime: true,
+    biens: [
+      { id: 'm', designation: 'Maison', nature: 'Immobilier', valeur: 1200000, proprietaire: 'commun', regime: 'Aucun' },
+      { id: 'c', designation: 'Compte titres', nature: 'Titres / parts sociales', valeur: 300000, proprietaire: 'P1', regime: 'Aucun', apport: true },
+    ],
+    donations: [{ id: 'd1', donateur: 'deux', bienId: 'c', montant: null, beneficiaire: 'tous' }],
+  });
+  const r = S.calculer(d, P);
+  near(r.patrimoine.P1.brut, 600000 + 150000, 'branche de Jean');
+  near(r.patrimoine.P2.brut, 600000 + 150000, 'branche de Marie');
+  assert.deepStrictEqual(r.apports.map((a) => [a.id, a.de, a.transfert]), [['c', 'P1', 150000]]);
+  near(r.lignes[0].parDonateur.P1, 150000, 'donné par Jean');
+  near(r.lignes[0].parDonateur.P2, 150000, 'donné par Marie');
+  // Sans changement de régime, le bien reste propre à Jean.
+  const r2 = S.calculer(Object.assign({}, d, { changementRegime: false }), P);
+  near(r2.patrimoine.P1.brut, 900000, 'bien propre');
+  assert.deepStrictEqual(r2.apports, []);
+});

@@ -84,6 +84,14 @@
   }
   const VIDE = liquider([{ de: 0, taux: 0 }], 0, 0, 0, 0, 0);
 
+  /*
+   * Changement de régime matrimonial : un bien propre apporté à la communauté devient commun ;
+   * chaque parent en détient alors la moitié et peut la donner.
+   */
+  function proprietaireEffectif(b, d) {
+    const pr = b.proprietaire || 'commun';
+    return d && d.changementRegime && d.nbParents !== 1 && b.apport && (pr === 'P1' || pr === 'P2') ? 'commun' : pr;
+  }
   // Part de chaque parent dans un bien : propre (100 %) ou commun (50 %).
   function partsBien(b, nbParents) {
     if (nbParents === 1) return { P1: 1, P2: 0 };
@@ -152,10 +160,13 @@
     // Biens : parts par parent, exonérations, disponible pour donner.
     const regimes = {};
     (p.regimes || []).forEach((r) => (regimes[r.nom] = r));
+    // Biens propres apportés à la communauté (changement de régime) : valeur qui passe d'une branche à l'autre.
+    const apports = (d.biens || []).filter((b) => proprietaireEffectif(b, d) !== (b.proprietaire || 'commun'))
+      .map((b) => ({ id: b.id, designation: b.designation || '', de: b.proprietaire, valeur: n(b.valeur), transfert: n(b.valeur) / 2 }));
     const biens = (d.biens || []).map((b) => {
       const valeur = n(b.valeur);
       const regime = regimes[b.regime] || { succession: 0, donation: 0 };
-      const parts = partsBien(b, nbParents);
+      const parts = partsBien(Object.assign({}, b, { proprietaire: proprietaireEffectif(b, d) }), nbParents);
       return {
         source: b, id: b.id, valeur, liquide: b.nature === NATURE_LIQUIDITES,
         exoSucc: n(regime.succession), exoDon: n(regime.donation), parts,
@@ -475,10 +486,11 @@
       { libelle: 'Donations envisagées', ok: dons.length > 0, message: 'aucune donation saisie : les hypothèses ' + actives.slice(1).map((h) => h.code).join(', ').replace(/, (\w)$/, ' et $1') + ' sont identiques à A' },
       brutes.D ? { libelle: 'Petits-enfants rattachés à un enfant', ok: petitsEnfants.every((x) => x.branche), message: 'un petit-enfant n\'est rattaché à aucun enfant (ignoré dans l\'hypothèse D)' } : null,
       { libelle: 'Montants donnés', ok: alertes.length === 0, message: alertes.join(' ') },
+      apports.length ? { libelle: 'Apport à la communauté', ok: !enfants.some((k) => !k.commun), message: 'en présence d\'un enfant non commun, l\'avantage matrimonial peut être réduit par l\'action en retranchement (art. 1527 C. civ.)' } : null,
     ];
 
     return {
-      parents, enfants, nonCommuns, petitsEnfants, biens, lignes, patrimoine, total, montage, limiteRappel: limiteRappel ? new Date(toTime(limiteRappel)).toISOString().slice(0, 10) : null,
+      parents, enfants, nonCommuns, petitsEnfants, biens, lignes, patrimoine, total, montage, apports, limiteRappel: limiteRappel ? new Date(toTime(limiteRappel)).toISOString().slice(0, 10) : null,
       hypotheses, actives, comparatif, meilleure, parNature, controles: controles.filter(Boolean), alertes,
       patrimoineTotal: total,
     };
@@ -547,5 +559,5 @@
     };
   }
 
-  return { calculer, taxe, liquider, droitsBareme, usufruitParAge, partsBien, NATURE_LIQUIDITES, HYPOTHESES, PARENTS };
+  return { calculer, taxe, liquider, droitsBareme, usufruitParAge, partsBien, proprietaireEffectif, NATURE_LIQUIDITES, HYPOTHESES, PARENTS };
 });
