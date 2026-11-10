@@ -207,3 +207,15 @@ test('Changement de régime : bien propre apporté à la communauté, donné par
   near(r2.patrimoine.P1.brut, 900000, 'bien propre');
   assert.deepStrictEqual(r2.apports, []);
 });
+
+test('Hypothèse D : enfants et petits-enfants ne reçoivent que les biens désignés', () => {
+  // Seule une maison commune de 400 000 € est désignée ; le reste du patrimoine est conservé.
+  const d = dossier({ hypotheseD: true, donations: [{ id: 'd1', donateur: 'deux', bienId: 'm', montant: 400000, beneficiaire: 'tous' }] });
+  const r = S.calculer(d, P);
+  ['P1', 'P2'].forEach((g) => {
+    const donnePP = r.montage[g].branches.reduce((t, b) => t + b.donnePP + b.pePP, 0);
+    assert.ok(donnePP <= 200000 + 1, g + ' : ' + donnePP + ' € donnés pour 200 000 € désignés');
+  });
+  const total = r.hypotheses.D.cumul.total.donation.transmis;
+  assert.ok(total <= 400000 * 0.6 + 1, 'valeur transmise en nue-propriété : ' + total);
+});

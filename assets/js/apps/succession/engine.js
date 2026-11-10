@@ -281,8 +281,9 @@
      *   - t : part de la donation envisagée (C) réellement donnée à l'enfant, en nue-propriété ;
      *     le reste est conservé et sera transmis par succession (nouvel abattement après 15 ans) ;
      *   - y : valeur en nue-propriété donnée aux petits-enfants de la branche, identique pour toutes
-     *     les branches (équité), partagée à égalité entre eux. Elle est prise sur ce que le grand-parent
-     *     conserve pour cette branche (biens non liquides) et réduit d'autant la succession de l'enfant.
+     *     les branches (équité), partagée à égalité entre eux. Elle est prise sur la part des biens désignés
+     *     (non liquides) qui n'est pas donnée à l'enfant : enfant et petits-enfants se partagent les seuls
+     *     biens désignés, et le don réduit d'autant la succession de l'enfant.
      * On retient les valeurs de t et y qui rendent le total des droits (donations + successions) minimal.
      */
     const branchesPE = (g) => enfants.filter((k) => k.de[g] && peDeBranche(k.id).length);
@@ -304,9 +305,9 @@
     function tMax(g, k, m, y) {
       const np = P[g].nuePropriete;
       if (!k.de[g] || !peDeBranche(k.id).length || !(y > 0)) return 1;
-      const manque = y / np - k.parts[g] * patrimoine[g].resteNL;
-      if (manque <= 0) return 1;
-      return m.ppNL > 0 ? Math.max(0, 1 - manque / m.ppNL) : 0;
+      // Le don aux petits-enfants est pris sur les biens désignés (non liquides) qui ne sont pas donnés à l'enfant :
+      // tout ce qui est donné (enfant + petits-enfants) reste dans la limite des biens désignés.
+      return m.ppNL > 0 ? Math.max(0, 1 - y / np / m.ppNL) : 0;
     }
     // Minimum d'une fonction sur [a, b] : grille puis affinage (fonctions affines par morceaux).
     function minimiser(fn, a, b, n) {
@@ -345,7 +346,7 @@
       const total = (y) => optT(y).reduce((a, x) => a + x.v, 0);
       const bPE = branchesPE(g);
       const yMax = bPE.length && np > 0
-        ? Math.min(...bPE.map((k) => (k.parts[g] * patrimoine[g].resteNL + mC[enfants.indexOf(k)].ppNL) * np)) : 0;
+        ? Math.min(...bPE.map((k) => mC[enfants.indexOf(k)].ppNL * np)) : 0;
       let y = 0;
       if (yMax > 0) {
         y = Math.min(yMax, Math.round(minimiser(total, 0, yMax, 24).x / 100) * 100);
@@ -529,7 +530,7 @@
       });
       if (ligne.pp > 0.005) lignes.push(ligne);
     });
-    // Hypothèse D : don aux petits-enfants (nue-propriété de biens non liquides conservés).
+    // Hypothèse D : don aux petits-enfants (nue-propriété d'une partie des biens désignés).
     let petitsEnfants = null;
     if (code === 'D') {
       const pe = { pp: 0, np: 0, nombre: r.petitsEnfants.filter((x) => x.branche).length };
