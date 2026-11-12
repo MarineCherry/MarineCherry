@@ -163,10 +163,24 @@
    */
   function calculer(dossier, params) {
     const vendeurs = (dossier.vendeurs || []).filter((v) => v.nom && v.nom.trim());
-    const origines = (dossier.origines || []).map((o) => ({
-      origine: o,
-      resultat: o.vendeur ? calculOrigine(o, dossier, params) : null,
-    }));
+    // Ventilation facultative terrain / construction (valeurs vénales à la date de la vente).
+    const vt = n(dossier.valeurTerrain), vc = n(dossier.valeurConstruction);
+    const ventilation = vt + vc === 0 ? null : { construction: vc / (vt + vc), terrain: 1 - vc / (vt + vc) };
+    // Part du prix de cession de chaque origine : rattachée à la ventilation (terrain ou construction), ou saisie.
+    const partDe = (o) => {
+      if (o.rattachement === 'terrain' || o.rattachement === 'construction') return ventilation ? ventilation[o.rattachement] : null;
+      if (o.rattachement === 'total') return 1;
+      return isNum(o.partPrix) ? o.partPrix : 1;
+    };
+    const origines = (dossier.origines || []).map((o) => {
+      const part = partDe(o);
+      const resultat = o.vendeur ? calculOrigine(Object.assign({}, o, { partPrix: part === null ? 0 : part }), dossier, params) : null;
+      if (resultat && part === null) {
+        resultat.controle = 'À contrôler : ventilation terrain / construction à saisir dans « La vente »';
+        resultat.alerte = true;
+      }
+      return { origine: o, resultat, partPrix: part };
+    });
 
     const champs = ['prixCessionBrut', 'fraisCession', 'prixCessionNet', 'prixAcquisition', 'fraisAcquisition', 'travaux', 'prixMajore', 'pvBrute', 'pvIR', 'pvPS'];
     const parVendeur = vendeurs.map((v) => {
@@ -203,10 +217,6 @@
       : lignes.some((x) => x.resultat.moinsValue)
         ? { ok: false, texte: 'Moins-value sur au moins une origine.' }
         : { ok: true, texte: 'Toutes les origines sont cohérentes.' };
-
-    // Ventilation facultative terrain / construction.
-    const vt = n(dossier.valeurTerrain), vc = n(dossier.valeurConstruction);
-    const ventilation = vt + vc === 0 ? null : { construction: vc / (vt + vc), terrain: 1 - vc / (vt + vc) };
 
     return {
       origines, parVendeur, total, controleRepartition, controleLignes, ventilation,

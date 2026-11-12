@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
   const A = root.Atelier;
-  const { h, uid, fmtEuro, fmtPct, fmtDate, todayISO } = A.util;
+  const { h, uid, fmtEuro, fmtPct, fmtDate, todayISO, isNum } = A.util;
   const ui = A.ui;
   const engine = A.engines.plusValue;
 
@@ -33,13 +33,17 @@
   }
   const isEmpty = (s) => !s.prixVente && !s.reference && s.vendeurs.every((v) => !v.nom) && s.origines.every((o) => !o.prix);
 
+  // Part du prix rattachée à l'origine : totalité, terrain ou construction (ventilation), ou part saisie.
+  // Anciens dossiers : part saisie différente de 100 % ; construction : part de la construction.
+  const RATTACHEMENTS = [{ value: 'total', label: 'Totalité' }, { value: 'terrain', label: 'Terrain' }, { value: 'construction', label: 'Construction' }, { value: 'autre', label: 'Autre' }];
+  const rattachementDe = (o) => o.rattachement || (o.nature === 'Construction' ? 'construction' : isNum(o.partPrix) && o.partPrix !== 1 ? 'autre' : 'total');
   // Le moteur rattache les origines aux vendeurs par leur nom.
   function compute(s, params) {
     const noms = {};
     s.vendeurs.forEach((v) => (noms[v.id] = (v.nom || '').trim()));
     const dossier = Object.assign({}, s, {
       vendeurs: s.vendeurs.map((v) => ({ nom: (v.nom || '').trim(), exonere: v.exonere, motif: v.motif })),
-      origines: s.origines.map((o) => Object.assign({}, o, { vendeur: noms[o.vendeurId] || '' })),
+      origines: s.origines.map((o) => Object.assign({}, o, { vendeur: noms[o.vendeurId] || '', rattachement: rattachementDe(o) })),
     });
     return engine.calculer(dossier, params);
   }
@@ -94,7 +98,7 @@
           h('div', null, h('span', null, 'Part du prix afférente à la construction'), h('strong', null, fmtPct(r.ventilation.construction))),
           h('div', null, h('span', null, 'Part du prix afférente au terrain'), h('strong', null, fmtPct(r.ventilation.terrain))))
         : null, 'div', { class: 'field-wide' }),
-      h('p', { class: 'field-help field-wide' }, 'Ventilation proposée au prorata des valeurs vénales, sauf ventilation prévue à l\'acte. À reporter dans « Part du prix de cession » des origines Terrain et Construction.')),
+      h('p', { class: 'field-help field-wide' }, 'Ventilation au prorata des valeurs vénales, sauf ventilation prévue à l\'acte. Elle s\'applique automatiquement aux origines rattachées au « Terrain » et à la « Construction ».')),
     { subtitle: 'Facultatif.' });
 
     return h('div', { class: 'stack' }, vente, vendeurs, usufruit, terrain);
@@ -124,7 +128,14 @@
         field('Droit reçu dans cette origine', ctx.select(o, 'droitRecu', engine.DROITS, { structural: true })),
         field('Droit cédé à la vente', ctx.select(o, 'droitCede', [{ value: '', label: 'Identique au droit reçu' }].concat(engine.DROITS.map((x) => ({ value: x, label: x }))))),
         field('Quote-part du bien (en pleine propriété)', ctx.pct(o, 'quotePart')),
-        field('Part du prix de cession rattachée à cet acte', ctx.pct(o, 'partPrix'), { help: '100 % sauf plusieurs actes, ou terrain / construction.' }),
+        field('Part du prix de cession rattachée', h('div', { class: 'stack-sm' },
+          ui.segmented({ value: rattachementDe(o), options: RATTACHEMENTS, small: true, onChange: (v) => { o.rattachement = v; ctx.render(); ctx.changed(); } }),
+          rattachementDe(o) === 'autre' ? ctx.pct(o, 'partPrix') : ctx.live((r) => {
+            const x = r.origines[i];
+            const t = rattachementDe(o);
+            if (t === 'total') return h('div', { class: 'readonly' }, '100 %');
+            return h('div', { class: 'readonly' }, x && x.partPrix !== null ? fmtPct(x.partPrix) + ' (ventilation)' : 'Ventilation à saisir dans « La vente »');
+          })), { help: 'Terrain bâti par le vendeur : « Terrain » sur l\'origine du terrain, « Construction » sur celle de la construction ; la part suit la ventilation de « La vente ».' }),
         field(LIBELLE_PRIX[o.nature], h('div', { class: 'with-unit' },
           ctx.num(o, 'prix', { suffix: o.devise === 'FRF' ? 'F' : '€' }),
           ctx.segmented(o, 'devise', [{ value: 'EUR', label: '€' }, { value: 'FRF', label: 'F' }], { structural: true, small: true, ariaLabel: 'Devise' }))),
@@ -173,7 +184,7 @@
           h('li', null, "Ligne du terrain : nature Onéreux (ou Gratuit), date d'acquisition du terrain, prix du terrain. Le forfait de 7,5 % ne porte que sur ce prix."),
           h('li', null, "Ligne de la construction : nature Construction, date de début d'exécution des travaux (récépissé de déclaration d'ouverture de chantier), coût réel de construction."),
           h('li', null, "Date d'achèvement de la construction sur les deux lignes : elle sert au test des 5 ans du forfait de 15 %."),
-          h('li', null, 'Part du prix de cession de chaque ligne : voir la ventilation proposée dans « La vente ».'),
+          h('li', null, 'Part du prix de cession : choisir « Terrain » sur la ligne du terrain et « Construction » sur celle de la construction ; la ventilation saisie dans « La vente » s\'applique automatiquement.'),
           h('li', null, "Abattements : la fraction du terrain court depuis l'acquisition du terrain, celle de la construction depuis le début des travaux."),
           h('li', null, 'Coût de construction : dépenses facturées par des entreprises, payées et justifiées (matériaux achetés par le vendeur exclus).'))));
   }

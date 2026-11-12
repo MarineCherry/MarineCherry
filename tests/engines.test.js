@@ -124,3 +124,22 @@ test('Abattements pour durée de détention', () => {
   assert.ok(Math.abs(pv.abattementPS(29) - 0.91) < 1e-9);
   assert.strictEqual(pv.abattementPS(30), 1);
 });
+
+test('Plus-value : terrain bâti par le vendeur, chaque origine rattachée à sa part de la ventilation', () => {
+  const dossier = {
+    dateCession: '2026-06-01', prixVente: 400000, fraisVendeurs: 0, bati: true, valeurTerrain: 100000, valeurConstruction: 300000,
+    vendeurs: [{ nom: 'Paul' }],
+    origines: [
+      { vendeur: 'Paul', nature: 'Onéreux', dateAcquisition: '2010-01-01', quotePart: 1, partPrix: 1, rattachement: 'terrain', prix: 50000 },
+      { vendeur: 'Paul', nature: 'Construction', dateAcquisition: '2011-01-01', dateAchevement: '2012-06-01', quotePart: 1, partPrix: 1, rattachement: 'construction', prix: 200000 },
+    ],
+  };
+  const r = pv.calculer(dossier, pvParams);
+  assert.deepStrictEqual(r.origines.map((x) => x.partPrix), [0.25, 0.75]);
+  near(r.origines[0].resultat.prixCessionBrut, 100000, 'prix du terrain');
+  near(r.origines[1].resultat.prixCessionBrut, 300000, 'prix de la construction');
+  assert.ok(r.controleRepartition.ok);
+  // Sans ventilation saisie : origines à contrôler, aucune part du prix.
+  const r2 = pv.calculer(Object.assign({}, dossier, { valeurTerrain: null, valeurConstruction: null }), pvParams);
+  assert.ok(r2.origines.every((x) => x.resultat.alerte && x.resultat.prixCessionBrut === 0));
+});
