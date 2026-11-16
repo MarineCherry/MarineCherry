@@ -167,11 +167,15 @@
   }
   const civiliteNom = (civ, nom) => (/^Mada/i.test(civ) ? 'Madame ' : 'Monsieur ') + nom.replace(/\s+/g, ' ').trim();
 
-  function lireDDS(source) {
+  // Texte continu de la déclaration, sans les mentions répétées du formulaire.
+  function texteDDS(source) {
     const lignes = typeof source === 'string' ? source.split('\n') : Array.isArray(source) && typeof source[0] === 'string' ? source : texteDesPages(source);
     const utiles = lignes.map((l) => l.replace(/\s+/g, ' ').trim()).filter((l) => l && !RE_FORMULAIRE.some((re) => re.test(l)));
-    const T = utiles.join(' ').replace(/\s+/g, ' ').replace(/\s*-\s*joint/gi, '-joint').replace(/\s+,/g, ',').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')')
+    return utiles.join(' ').replace(/\s+/g, ' ').replace(/\s*-\s*joint/gi, '-joint').replace(/\s+,/g, ',').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')')
       .replace(/\((\d+)\s*\/\s*(\d+)\)/g, '($1/$2)');
+  }
+  function lireDDS(source) {
+    const T = texteDDS(source);
     const res = { defunt: '', regime: null, option: null, conjoint: null, heritiers: [], comptes: [], avertissements: [] };
 
     // Défunt.
@@ -557,5 +561,5 @@
   }
   const texte = (B) => B.map((b) => (b.type === 'table' ? b.lignes.map((l) => l.join('\t')).join('\n') : b.texte)).join('\n\n');
 
-  return { complementConjoint, lireReleve, lireDDS, texteDesPages, classer, personneCitee, calculer, blocs, texte, fraction, montant, ageAu, usufruitParAge, euros, fmtFraction };
+  return { complementConjoint, lireReleve, lireDDS, texteDDS, texteDesPages, classer, personneCitee, calculer, blocs, texte, fraction, montant, ageAu, usufruitParAge, euros, fmtFraction };
 });

@@ -1330,3 +1330,8 @@ td .pos { color: #2f7d5b; }
 .table-biens .select, .table-biens .input { width: 100%; }
 @media (max-width: 760px) { .table-biens { table-layout: auto; min-width: 640px; } }
 .table.table-biens td .select, .table.table-biens td .input { min-width: 0; width: 100%; }
+
+/* Frais d'acquisition (bien reçu) */
+.fg-heritier { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, .8fr) auto 32px; }
+@media (max-width: 640px) { .fg-heritier { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .fg-heritier > .field:first-child { grid-column: 1 / -1; } .fg-heritier > .field:nth-child(2) { grid-column: auto; } }
+.fg-frais .qu-lib { display: flex; flex-direction: column; gap: 2px; min-width: 180px; font-size: 13px; }

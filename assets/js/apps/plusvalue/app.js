@@ -105,6 +105,17 @@
   }
 
   /* ---------- Onglet « Origines de propriété » ---------- */
+  // Bien reçu : reprise des frais calculés dans l'outil « Frais d'acquisition (bien reçu) », s'il a servi.
+  function reprendreFrais(ctx, o) {
+    const fg = A.store.getPref('fraisGratuit');
+    const vendeurs = fg && Array.isArray(fg.heritiers) ? fg.heritiers.filter((x) => x.total > 0) : [];
+    return h('div', { class: 'chips' },
+      vendeurs.map((x) => ui.button('Reprendre ' + (x.nom || 'vendeur') + ' : ' + A.util.fmtEuro(x.total, 2), {
+        variant: 'soft', small: true,
+        onClick: () => { o.fraisReels = x.total; ctx.render(); ctx.changed(); ui.toast('Frais d\'acquisition repris' + (fg.reference ? ' (' + fg.reference + ')' : '') + '.'); },
+      })),
+      h('a', { href: '#/frais-gratuit', class: 'small' }, vendeurs.length ? 'Recalculer les frais' : 'Calculer les droits et frais imputables au bien'));
+  }
   const LIBELLE_DATE = { 'Onéreux': "Date de l'acte d'acquisition", 'Gratuit': 'Date du décès ou de la donation', 'Construction': 'Date de début des travaux' };
   const LIBELLE_PRIX = {
     'Onéreux': "Prix d'acquisition (100 % du bien)",
@@ -139,7 +150,8 @@
         field(LIBELLE_PRIX[o.nature], h('div', { class: 'with-unit' },
           ctx.num(o, 'prix', { suffix: o.devise === 'FRF' ? 'F' : '€' }),
           ctx.segmented(o, 'devise', [{ value: 'EUR', label: '€' }, { value: 'FRF', label: 'F' }], { structural: true, small: true, ariaLabel: 'Devise' }))),
-        field("Frais d'acquisition réels", ctx.num(o, 'fraisReels', { suffix: '€', placeholder: o.nature === 'Onéreux' ? 'Forfait ' + fmtPct(p.forfaitFrais) : 'Aucun' }), { help: 'Vide = forfait pour un achat ; frais réels seulement pour un bien reçu.' }),
+        field("Frais d'acquisition réels", o.nature === 'Gratuit' ? h('div', { class: 'stack-sm' }, ctx.num(o, 'fraisReels', { suffix: '€', placeholder: 'Aucun' }), reprendreFrais(ctx, o))
+          : ctx.num(o, 'fraisReels', { suffix: '€', placeholder: o.nature === 'Onéreux' ? 'Forfait ' + fmtPct(p.forfaitFrais) : 'Aucun' }), { help: 'Vide = forfait pour un achat ; frais réels seulement pour un bien reçu.' }),
         field('Travaux réels justifiés', ctx.num(o, 'travauxReels', { suffix: '€', placeholder: 'Forfait ' + fmtPct(p.forfaitTravaux) + ' si éligible' })),
         field("Date d'achèvement de la construction", ctx.date(o, 'dateAchevement'), { optional: o.nature !== 'Construction', help: 'Terrain bâti par le vendeur : sur la ligne du terrain et celle de la construction.' })),
       ctx.live((r) => {

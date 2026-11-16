@@ -1,0 +1,60 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert');
+const E = require('../assets/js/apps/fraisgratuit/engine.js');
+
+test('frais gratuit : prorata des droits et des frais', () => {
+  const r = E.calculer({
+    baseTotale: 400000,
+    bien: { designation: 'Maison', valeur: 200000, residencePrincipale: false },
+    heritiers: [
+      { id: 'a', nom: 'Claire', droits: 10000, partFrais: '1/2', vendeur: true },
+      { id: 'b', nom: 'Paul', droits: 6000, partFrais: '50 %', vendeur: true },
+    ],
+    frais: [
+      { libelle: 'Déclaration de succession', montant: 3000, retenu: true },
+      { libelle: 'Attestation immobilière', montant: 1000, retenu: true },
+      { libelle: 'Procuration', montant: 200, retenu: false },
+    ],
+  });
+  assert.strictEqual(r.quotePart, 0.5);
+  assert.strictEqual(r.fraisRetenus, 4000);
+  assert.strictEqual(r.fraisBien, 2000);
+  assert.deepStrictEqual(r.heritiers.map((x) => [x.droitsImputables, x.fraisImputables, x.total]), [[5000, 1000, 6000], [3000, 1000, 4000]]);
+  assert.deepStrictEqual(r.alertes, []);
+});
+
+test('frais gratuit : résidence principale (−20 %) et alertes', () => {
+  const r = E.calculer({
+    baseTotale: 160000,
+    bien: { valeur: 250000, residencePrincipale: true },
+    heritiers: [{ nom: 'A', droits: 0, partFrais: '1/3' }],
+    frais: [{ libelle: 'Acte de PARTAGE', montant: 500, retenu: true }],
+  });
+  assert.strictEqual(r.valeurBien, 200000);
+  assert.strictEqual(r.quotePart, 1);
+  assert.ok(r.alertes.some((a) => /dépasse/.test(a)));
+  assert.ok(r.alertes.some((a) => /100 %/.test(a)));
+  assert.ok(r.alertes.some((a) => /partage/i.test(a)));
+});
+
+test('frais gratuit : fractions', () => {
+  assert.strictEqual(E.fraction('1/4'), 0.25);
+  assert.strictEqual(E.fraction('25 %'), 0.25);
+  assert.strictEqual(E.fraction('25'), 0.25);
+  assert.strictEqual(E.fraction('0,5'), 0.5);
+  assert.strictEqual(E.fraction(''), null);
+});
+
+test('frais gratuit : frais repris du relevé (partage et procuration non retenus)', () => {
+  const f = E.fraisDuReleve([
+    { libelle: 'DECLARATION DE SUCCESSION', debit: 1200 },
+    { libelle: 'ACTE DE PARTAGE', debit: 900 },
+    { libelle: 'PROCURATION', debit: 60 },
+    { libelle: 'VIREMENT RECU', credit: 5000 },
+  ]);
+  const par = (re) => f.find((x) => re.test(x.libelleReleve));
+  assert.ok(!f.some((x) => /VIREMENT/.test(x.libelleReleve)));
+  assert.strictEqual(par(/PARTAGE/).retenu, false);
+  assert.strictEqual(par(/PROCURATION/).retenu, false);
+});

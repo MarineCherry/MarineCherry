@@ -126,6 +126,8 @@
       input.click();
     });
   }
+  // Lecture de PDF partagée avec les autres outils (frais d'acquisition…).
+  A.lecturePdf = { pagesDuPdf, choisirFichier };
   const titreCase = (t) => String(t || '').toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (a, b, c) => b + c.toUpperCase());
   // « Mme BLANCHARD Annie Berthe » → « Madame Annie BLANCHARD » ; « M LECOUSTEY Sylvain » → « Monsieur Sylvain LECOUSTEY ».
   function nomDepuisReleve(t) {
