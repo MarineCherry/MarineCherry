@@ -104,3 +104,17 @@ test('frais gratuit : quotité reçue lue dans la déclaration', () => {
   assert.strictEqual(E.quotiteRecue('Monsieur C : LA TOTALITÉ de la pleine propriété des biens de succession Ci'), '1');
   assert.strictEqual(E.quotiteRecue('Madame D - Ses droits successoraux en usufruit'), '');
 });
+
+test('frais gratuit : droits répartis selon la quotité, sauf montant saisi', () => {
+  const d = (droitsB) => E.calculer({
+    baseTotale: 100000, droitsTotal: 10000, bien: { valeur: 50000 },
+    heritiers: [{ id: 'a', nom: 'Madame', droits: null, partFrais: '1/2' }, { id: 'b', nom: 'Monsieur', droits: droitsB, partFrais: '1/2' }], frais: [],
+  });
+  const r = d(null);
+  assert.deepStrictEqual(r.heritiers.map((x) => [x.droits, x.droitsImputables]), [[5000, 2500], [5000, 2500]]);
+  assert.deepStrictEqual(r.alertes, []);
+  // Monsieur a moins payé (donation antérieure) : Madame prend le reste du total.
+  const m = d(2000);
+  assert.deepStrictEqual(m.heritiers.map((x) => [x.droits, x.droitsImputables]), [[8000, 4000], [2000, 1000]]);
+  assert.deepStrictEqual(m.alertes, []);
+});

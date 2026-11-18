@@ -81,13 +81,24 @@
     const frais = (d.frais || []).filter((f) => n(f.montant));
     const fraisRetenus = arrondi(sum(frais.filter((f) => f.retenu !== false), (f) => n(f.montant)));
     const fraisBien = arrondi(fraisRetenus * quotePart);
-    const heritiers = (d.heritiers || []).map((h) => {
+    // Droits non saisis : le reste du total payé, réparti entre les autres héritiers selon leurs quotités.
+    const hs = d.heritiers || [];
+    const saisis = hs.filter((h) => isNum(h.droits));
+    const resteDroits = isNum(d.droitsTotal) ? d.droitsTotal - sum(saisis, (h) => h.droits) : null;
+    const quotitesLibres = sum(hs.filter((h) => !isNum(h.droits)), (h) => n(fraction(h.partFrais)));
+    const heritiers = hs.map((h) => {
       const pf = fraction(h.partFrais);
       const partFrais = pf === null ? 0 : pf;
-      const droitsImputables = arrondi(n(h.droits) * quotePart);
+      // Droits payés : saisis pour l'héritier, sinon le total des droits réparti selon sa quotité reçue.
+      const droitsSaisis = isNum(h.droits);
+      const droitsSelonQuotite = resteDroits === null ? null
+        : droitsSaisis ? arrondi(d.droitsTotal * partFrais)
+          : arrondi(saisis.length && quotitesLibres > 0 ? Math.max(0, resteDroits) * partFrais / quotitesLibres : d.droitsTotal * partFrais);
+      const droits = droitsSaisis ? h.droits : n(droitsSelonQuotite);
+      const droitsImputables = arrondi(droits * quotePart);
       const fraisImputables = arrondi(fraisRetenus * quotePart * partFrais);
       return {
-        id: h.id, nom: h.nom || '', vendeur: h.vendeur !== false, droits: n(h.droits), partFrais, partFraisTexte: String(h.partFrais || '').trim(),
+        id: h.id, nom: h.nom || '', vendeur: h.vendeur !== false, droits, droitsSaisis, droitsSelonQuotite, partFrais, partFraisTexte: String(h.partFrais || '').trim(),
         droitsImputables, fraisImputables, total: arrondi(droitsImputables + fraisImputables),
       };
     });
@@ -102,10 +113,12 @@
       if (x.fractionDivision !== null && x.fractionDivision > 1.0001) alertes.push(nom + 'la partie vendue dépasse le bien d\'origine, vérifiez les chiffres.');
       if (x.quoteInvalide || x.quoteVendue > 1) alertes.push(nom + 'quote-part vendue « ' + x.quoteTexte + ' » non comprise (ex. 1/3 ou 33,33 %).');
     });
+    const sommeDroits = arrondi(sum(heritiers, (h) => h.droits));
+    if (isNum(d.droitsTotal) && heritiers.length && Math.abs(sommeDroits - d.droitsTotal) > 1) alertes.push('Les droits des héritiers font ' + sommeDroits.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' € au lieu des ' + d.droitsTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' € payés au total : vérifiez la répartition.');
     const sommeParts = sum(heritiers, (h) => h.partFrais);
     if (heritiers.length && Math.abs(sommeParts - 1) > 0.001 && sommeParts > 0) alertes.push('Les parts des frais des héritiers font ' + (Math.round(sommeParts * 10000) / 100).toLocaleString('fr-FR') + ' % (au lieu de 100 %).');
     if (frais.some((f) => f.retenu !== false && /PARTAGE/i.test(f.libelle || ''))) alertes.push('Des frais de partage sont retenus : ils ne doivent pas l\'être (art. 150 U, IV CGI).');
-    return { parties, valeurDeclaree, valeurTotale, fractionDivision, valeurBien, base, quotePart, fraisRetenus, fraisBien, heritiers, alertes };
+    return { sommeDroits, parties, valeurDeclaree, valeurTotale, fractionDivision, valeurBien, base, quotePart, fraisRetenus, fraisBien, heritiers, alertes };
   }
 
   /* ---------- Lecture de la déclaration de succession ---------- */

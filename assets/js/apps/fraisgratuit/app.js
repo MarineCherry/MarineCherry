@@ -30,14 +30,14 @@
     surfaceTotale: x.surface && !x.copropriete ? x.surface : partie.surfaceTotale });
   function empty() {
     return {
-      reference: '', baseChoix: 'brut', actifBrut: null, actifNet: null, baseAutre: null,
+      reference: '', droitsTotal: null, baseChoix: 'brut', actifBrut: null, actifNet: null, baseAutre: null,
       bien: nouveauBien(),
       immeubles: [], heritiers: [nouvelHeritier()], frais: [], dds: null, releve: null,
     };
   }
   const isEmpty = (s) => !s.reference && !s.actifBrut && !s.bien.parties.some((x) => x.valeur) && !s.frais.length;
   const baseDe = (s) => (s.baseChoix === 'net' ? s.actifNet : s.baseChoix === 'autre' ? s.baseAutre : s.actifBrut);
-  const donnees = (s) => ({ baseTotale: baseDe(s), bien: s.bien, heritiers: s.heritiers, frais: s.frais });
+  const donnees = (s) => ({ baseTotale: baseDe(s), droitsTotal: s.droitsTotal, bien: s.bien, heritiers: s.heritiers, frais: s.frais });
   const compute = (s) => E.calculer(donnees(s));
   const f = (label, control, opts) => ui.field(label, control, opts);
   const retirer = (ctx, liste, x) => ui.button('Retirer', { icon: 'trash', iconOnly: true, variant: 'ghost', small: true, onClick: () => { liste.splice(liste.indexOf(x), 1); ctx.render(); ctx.changed(); } });
@@ -60,6 +60,7 @@
     s.heritiers = lu.heritiers.map((x) => nouvelHeritier({
       nom: x.nom, droits: x.droits, recu: x.recu, nature: x.nature, partFrais: x.quote || '', vendeur: x.nature !== 'US',
     }));
+    if (lu.heritiers.length && lu.heritiers.every((x) => typeof x.droits === 'number')) s.droitsTotal = lu.heritiers.reduce((t, x) => t + x.droits, 0);
     s.dds = { fichier: fichier.name, avertissements: lu.avertissements };
     ctx.render(); ctx.changed();
     ui.toast('Déclaration lue : actif, immeubles, héritiers et droits repris.');
@@ -72,6 +73,8 @@
     if (!lu.operations.length) return ui.toast(lu.avertissements[0] || 'Aucune opération trouvée.', 'error');
     const s = ctx.state;
     s.frais = s.frais.filter((x) => x.manuel).concat(E.fraisDuReleve(lu.operations).filter((x) => !x.droits).map((x) => nouveauFrais(Object.assign({}, x, { manuel: false }))));
+    const droitsReleve = E.fraisDuReleve(lu.operations).filter((x) => x.droits).reduce((t, x) => t + x.montant, 0);
+    if (droitsReleve && !(s.droitsTotal > 0)) s.droitsTotal = Math.round(droitsReleve * 100) / 100;
     s.releve = { fichier: fichier.name, periode: lu.periode };
     if (!s.reference) s.reference = lu.intitule;
     ctx.render(); ctx.changed();
@@ -151,14 +154,22 @@
     { subtitle: 'Un immeuble par ligne de la déclaration. Bien divisé : seule la partie vendue compte. Partie commune (chemin d\'accès…) : indiquez la quote-part vendue, ex. 1/3.' });
 
     const heritiers = ui.card('Les héritiers', h('div', { class: 'stack-sm' },
+      f('Droits de succession payés au total', ctx.num(s, 'droitsTotal', { suffix: '€' }), { help: 'Répartis selon la quotité de chacun, en grisé ci-dessous. Si les droits n\'ont pas suivi les quotités (donation antérieure, abattement déjà utilisé…), saisissez le montant réellement payé par l\'héritier : le reste du total est réparti entre les autres.' }),
       h('div', { class: 'rows' }, s.heritiers.map((x) => h('div', { class: 'row-line fg-heritier' },
         f('Héritier', ctx.text(x, 'nom', { placeholder: 'ex. Madame Claire DURAND' }), { help: x.nature ? ({ PP: 'Pleine propriété', NP: 'Nue-propriété', US: 'Usufruit' })[x.nature] + (x.recu ? ' · reçu ' + fmtEuro(x.recu) : '') : null }),
-        f('Droits de succession payés', ctx.num(x, 'droits', { suffix: '€' })),
-        f('Quotité reçue (part des frais)', ctx.text(x, 'partFrais', { placeholder: 'ex. 1/2' })),
+        f('Droits de succession payés', h('div', { class: 'stack-xs' },
+          ctx.num(x, 'droits', { suffix: '€', placeholder: s.droitsTotal > 0 ? 'Selon la quotité' : '' }),
+          ctx.live((r) => {
+            const y = r.heritiers.find((z) => z.id === x.id);
+            if (!y) return null;
+            if (!y.droitsSaisis) return y.droitsSelonQuotite !== null ? h('span', { class: 'small muted' }, (r.heritiers.some((z) => z.droitsSaisis) ? 'Reste du total : ' : 'Selon la quotité : ') + fmtEuro(y.droitsSelonQuotite)) : null;
+            return y.droitsSelonQuotite !== null && Math.abs(y.droits - y.droitsSelonQuotite) > 0.5 ? h('span', { class: 'small muted' }, 'Selon la quotité : ' + fmtEuro(y.droitsSelonQuotite) + ' (modifié)') : null;
+          }))),
+        f('Quotité reçue (part des frais)', ctx.text(x, 'partFrais', { placeholder: 'ex. 1/2', structural: true })),
         f('Vendeur', ctx.yesNo(x, 'vendeur', { small: true, structural: true })),
         s.heritiers.length > 1 ? retirer(ctx, s.heritiers, x) : h('span')))),
       ui.button('Ajouter un héritier', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.heritiers.push(nouvelHeritier()); ctx.render(); } })),
-    { subtitle: 'Droits de succession : ceux payés par chacun (déclaration). Part des frais : la quotité reçue par chacun dans la succession (ex. 1/2, ou 1/6 des 3/4 = 1/8), reprise de la déclaration.' });
+    { subtitle: 'Droits de succession : ceux payés par chacun (déclaration), ou le total réparti selon les quotités. Part des frais : la quotité reçue par chacun dans la succession (ex. 1/2, ou 1/6 des 3/4 = 1/8), reprise de la déclaration.' });
 
     const frais = ui.card('Frais d\'actes de la succession', h('div', { class: 'stack-sm' },
       s.frais.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'table table-input fg-frais' },
