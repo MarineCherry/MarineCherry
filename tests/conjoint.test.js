@@ -266,3 +266,18 @@ test('Enfant non commun : usufruit de la donation entre époux complété jusqu\
   near(c2.conjoint.pp, 0, 'pas de complément');
   near(c2.conjoint.usBase, 300000, 'usufruit de la totalité');
 });
+
+test('Quotité ordinaire épuisée par une donation hors part : le conjoint garde l\'usufruit de la réserve (Cass. 1re civ., 26 avr. 1984)', () => {
+  // Biens existants 159 930,05 ; donation hors part de 100 000 à un enfant ; masse 259 930,05 ; QD 1/3 = 86 643,35.
+  const r = C.calculer(dossier({
+    regime: 'separation', conjoint: { nom: 'Claire', age: 79 },
+    biens: [{ id: 'b1', designation: 'Actif net', valeur: 159930.05, propriete: 'defunt' }],
+    donations: [{ id: 'd', beneficiaire: 'e1', date: '2007-12-21', valeur: 100000, nature: 'horsPart' }],
+  }), P);
+  const m = scen(r, 'ddv-mixte');
+  near(m.conjoint.pp, 0, 'pleine propriété');
+  near(m.conjoint.usBase, 159930.05, 'usufruit sur tous les biens existants');
+  near(m.conjoint.valeur, 47979.02, 'valeur (30 %)');
+  const u = scen(r, 'ddv-us');
+  near(u.conjoint.usBase, 159930.05, 'usufruit de la totalité');
+});

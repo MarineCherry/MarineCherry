@@ -370,16 +370,24 @@
         conj.usBase = clamp0(dispo - conj.pp);
         const v = conj.pp + us * conj.usBase;
         if (v > disponibleConjoint + 0.5) {
-          // Réduction : la pleine propriété d'abord, l'usufruit ensuite.
-          if (us * dispo <= disponibleConjoint) {
-            conj.pp = clamp0((disponibleConjoint - us * dispo) / (1 - us));
-            conj.usBase = clamp0(dispo - conj.pp);
+          // Combinaison en nature (Cass. 1re civ., 26 avr. 1984) : la pleine propriété du conjoint est limitée au
+          // reste de la quotité ordinaire, mais il conserve l'usufruit de la réserve (biens existants).
+          const ppNature = Math.min(conj.pp, clamp0(reduction.qdRestante - Dc));
+          const nature = { pp: ppNature, usBase: clamp0(dispo - ppNature) };
+          // Combinaison en valeur : quotité spéciale − libéralités imputées ; la pleine propriété d'abord.
+          const valeur = us * dispo <= disponibleConjoint
+            ? { pp: clamp0((disponibleConjoint - us * dispo) / (1 - us)) } : { pp: 0, usBase: us > 0 ? disponibleConjoint / us : 0 };
+          if (valeur.usBase === undefined) valeur.usBase = clamp0(dispo - valeur.pp);
+          const val = (x) => x.pp + us * x.usBase;
+          if (val(nature) >= val(valeur) - 0.5) {
+            Object.assign(conj, nature);
+            calc.nature = { qdRestante: clamp0(reduction.qdRestante - Dc) };
+            alertes.push('La quotité disponible ordinaire est prise par d\'autres libéralités : la pleine propriété du conjoint est limitée à ce qu\'il en reste (' + euros(conj.pp) + '), mais il conserve l\'usufruit de la réserve, soit de tous les autres biens existants (' + euros(conj.usBase) + ') (combinaison des quotités, art. 1094-1 C. civ. ; Cass. 1re civ., 26 avr. 1984).');
           } else {
-            conj.pp = 0;
-            conj.usBase = us > 0 ? disponibleConjoint / us : 0;
+            Object.assign(conj, valeur);
+            calc.reduitA = disponibleConjoint;
+            alertes.push('¼ en pleine propriété et ¾ en usufruit (' + euros(v) + ') limité à ' + euros(disponibleConjoint) + ', reste de la quotité disponible après les libéralités déjà imputées : pleine propriété ramenée à ' + euros(conj.pp) + ' (art. 1094-1 C. civ.).');
           }
-          calc.reduitA = disponibleConjoint;
-          alertes.push('¼ en pleine propriété et ¾ en usufruit (' + euros(v) + ') limité à ' + euros(disponibleConjoint) + ', reste de la quotité disponible après les libéralités déjà imputées : pleine propriété ramenée à ' + euros(conj.pp) + ' (art. 1094-1 C. civ.).');
         }
       }
       if (code === 'ddv-us-complement') {
@@ -404,9 +412,9 @@
         }
       }
       if (code === 'ddv-us' && us * dispo > disponibleConjoint + 0.5) {
-        alertes.push('Usufruit de la totalité (' + euros(us * dispo) + ') limité à ' + euros(disponibleConjoint) + ', reste de la quotité disponible après les libéralités déjà imputées (art. 1094-1 C. civ.).');
-        conj.usBase = us > 0 ? disponibleConjoint / us : 0;
-        calc.reduitA = disponibleConjoint;
+        // L'usufruit de la réserve reste dû au conjoint même si la quotité ordinaire est prise (Cass. 1re civ., 26 avr. 1984).
+        calc.nature = { qdRestante: clamp0(reduction.qdRestante - Dc) };
+        alertes.push('Usufruit de la totalité maintenu sur tous les biens existants (' + euros(dispo) + ') bien que la quotité disponible soit prise par d\'autres libéralités : l\'usufruit porte sur la réserve sans l\'entamer en nue-propriété (combinaison des quotités, art. 1094-1 C. civ. ; Cass. 1re civ., 26 avr. 1984).');
       }
     }
     const parts = []; // { id, nom, lien, represente, souche, pp, np }

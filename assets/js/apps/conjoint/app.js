@@ -377,6 +377,12 @@
         { l: 'Moins : réserve restant due aux descendants', v: -ex.reserve, indent: true, note: 'réserve ' + fmtEuro(c.reserveGlobale) + (imputees > 0.5 ? ' − ' + fmtEuro(imputees) + ' déjà reçus par donations imputées sur la réserve' : '') },
         { l: 'Masse d\'exercice' + (sc.code === 'legal-pp' ? ' (art. 758-5 al. 2)' : ''), v: ex.masse, total: true },
         { l: 'Pleine propriété du conjoint', v: conj.pp + (conj.viager || 0), note: c.conjBrut > c.plafond + 0.5 ? 'limitée à la masse d\'exercice' : 'droits théoriques (dans la masse d\'exercice)' });
+    } else if (ex && c.nature && (sc.code === 'ddv-mixte' || sc.code === 'ddv-us')) {
+      // Combinaison en nature : quotité ordinaire restante en pleine propriété, usufruit de la réserve.
+      lignes.push(
+        { l: 'Quotité disponible ordinaire restante', v: c.nature.qdRestante, note: fmtEuro(c.qdo * c.M) + ' − libéralités déjà imputées' },
+        sc.code === 'ddv-mixte' ? { l: 'Pleine propriété du conjoint', v: conj.pp + (conj.viager || 0), note: 'limitée au reste de la quotité ordinaire' } : null,
+        { l: 'Usufruit de la réserve maintenu', v: conj.usBase, indent: true, note: 'tous les autres biens existants (Cass. 1re civ., 26 avr. 1984)' });
     } else if (ex && (sc.code === 'ddv-mixte' || sc.code === 'ddv-us')) {
       const deja = ex.impute + c.Dc + c.L;
       lignes.push(
