@@ -58,3 +58,24 @@ test('frais gratuit : frais repris du relevé (partage et procuration non retenu
   assert.strictEqual(par(/PARTAGE/).retenu, false);
   assert.strictEqual(par(/PROCURATION/).retenu, false);
 });
+
+test('frais gratuit : bien divisé depuis la succession (valeur ou surfaces)', () => {
+  const base = { baseTotale: 400000, heritiers: [{ nom: 'A', droits: 10000, partFrais: '1' }], frais: [{ libelle: 'Déclaration', montant: 2000 }] };
+  const s = E.calculer(Object.assign({}, base, { bien: { valeur: 200000, division: 'surface', surfaceTotale: 1000, surfaceVendue: 250 } }));
+  assert.strictEqual(s.valeurTotale, 200000);
+  assert.strictEqual(s.fractionDivision, 0.25);
+  assert.strictEqual(s.valeurBien, 50000);
+  assert.strictEqual(s.quotePart, 0.125);
+  assert.strictEqual(s.heritiers[0].total, 1250 + 250);
+  const v = E.calculer(Object.assign({}, base, { bien: { valeur: 200000, residencePrincipale: true, division: 'valeur', valeurPartie: 80000 } }));
+  assert.strictEqual(v.valeurBien, 64000);
+  assert.strictEqual(v.fractionDivision, 0.4);
+  const x = E.calculer(Object.assign({}, base, { bien: { valeur: 200000, division: 'surface', surfaceTotale: 100, surfaceVendue: 150 } }));
+  assert.ok(x.alertes.some((a) => /dépasse le bien d'origine/.test(a)));
+});
+
+test('frais gratuit : références cadastrales de la déclaration', () => {
+  const p = E.cadastre('Cadastrée : section : BT, numéro : 182, lieudit : RUE DU TERRIER, contenance : 0ha 09a 74ca . section : BT, numéro : 209, lieudit :, LE BARON, contenance : 1ha 07a 00ca .');
+  assert.deepStrictEqual(p.map((x) => [x.section, x.numero, x.lieudit, x.surface]), [['BT', '182', 'RUE DU TERRIER', 974], ['BT', '209', 'LE BARON', 10700]]);
+  assert.strictEqual(E.contenance(10700), '1 ha 07 a 00 ca');
+});

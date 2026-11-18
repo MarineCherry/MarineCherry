@@ -51,7 +51,17 @@
   function calculer(d) {
     const b = d.bien || {};
     const valeurDeclaree = n(b.valeur);
-    const valeurBien = b.residencePrincipale ? arrondi(valeurDeclaree * 0.8) : valeurDeclaree;
+    // Valeur du bien entier retenue pour les droits (après l'abattement de 20 % de la résidence principale).
+    const valeurTotale = b.residencePrincipale ? arrondi(valeurDeclaree * 0.8) : valeurDeclaree;
+    // Bien divisé depuis la succession : seule la partie vendue compte, par sa valeur ou au prorata des surfaces.
+    let valeurBien = valeurTotale, fractionDivision = null;
+    if (b.division === 'surface') {
+      fractionDivision = n(b.surfaceTotale) > 0 ? n(b.surfaceVendue) / n(b.surfaceTotale) : 0;
+      valeurBien = arrondi(valeurTotale * fractionDivision);
+    } else if (b.division === 'valeur') {
+      valeurBien = b.residencePrincipale ? arrondi(n(b.valeurPartie) * 0.8) : n(b.valeurPartie);
+      fractionDivision = valeurTotale > 0 ? valeurBien / valeurTotale : null;
+    }
     const base = n(d.baseTotale);
     const quotePart = base > 0 ? Math.min(1, valeurBien / base) : 0;
     const frais = (d.frais || []).filter((f) => n(f.montant));
@@ -69,12 +79,15 @@
     });
     const alertes = [];
     if (!(base > 0)) alertes.push('Indiquez la valeur totale de l\'actif de la succession.');
-    if (!(valeurBien > 0)) alertes.push('Indiquez la valeur du bien vendu dans la succession.');
+    if (!(valeurDeclaree > 0)) alertes.push('Indiquez la valeur du bien vendu dans la succession.');
+    if (b.division === 'surface' && !(n(b.surfaceTotale) > 0 && n(b.surfaceVendue) > 0)) alertes.push('Bien divisé : indiquez la superficie du bien d\'origine et celle de la partie vendue.');
+    if (b.division === 'valeur' && !(n(b.valeurPartie) > 0)) alertes.push('Bien divisé : indiquez la valeur de la partie vendue.');
+    if (fractionDivision !== null && fractionDivision > 1.0001) alertes.push('Bien divisé : la partie vendue dépasse le bien d\'origine, vérifiez les chiffres.');
     if (base > 0 && valeurBien > base + 0.005) alertes.push('La valeur du bien dépasse l\'actif de la succession : vérifiez les montants.');
     const sommeParts = sum(heritiers, (h) => h.partFrais);
     if (heritiers.length && Math.abs(sommeParts - 1) > 0.001 && sommeParts > 0) alertes.push('Les parts des frais des héritiers font ' + (Math.round(sommeParts * 10000) / 100).toLocaleString('fr-FR') + ' % (au lieu de 100 %).');
     if (frais.some((f) => f.retenu !== false && /PARTAGE/i.test(f.libelle || ''))) alertes.push('Des frais de partage sont retenus : ils ne doivent pas l\'être (art. 150 U, IV CGI).');
-    return { valeurDeclaree, valeurBien, base, quotePart, fraisRetenus, fraisBien, heritiers, alertes };
+    return { valeurDeclaree, valeurTotale, fractionDivision, valeurBien, base, quotePart, fraisRetenus, fraisBien, heritiers, alertes };
   }
 
   /* ---------- Lecture de la déclaration de succession ---------- */
@@ -90,20 +103,36 @@
     const items = [];
     let m;
     while ((m = reItem.exec(zone))) items.push({ index: m.index, quote: m[2] || '' });
+    let enAttente = ''; // article « évalué ensemble » avec le suivant (pas de « Ci » propre)
     items.forEach((it, k) => {
       let bloc = zone.slice(it.index, k + 1 < items.length ? items[k + 1].index : zone.length);
       const fin = /Soit,?\s+ensemble|FORFAIT MOBILIER|Soit un actif brut/i.exec(bloc);
       if (fin) bloc = bloc.slice(0, fin.index);
       const ci = [...bloc.matchAll(/Ci\s*[,.]?[\s.…]*([\d\s ]+,\d{2})\s*€/g)];
-      if (!ci.length) return;
+      if (!ci.length) { enAttente += bloc + ' '; return; }
+      bloc = enAttente + bloc;
+      enAttente = '';
       const valeurCi = montant(ci[ci.length - 1][1]);
       const commune = (/Sur la commune de\s+(.+?)(?:,|\s+Figurant|\s+Une\s|\s+Un\s)/i.exec(bloc) || [])[1] || '';
       const nature = ((/(Une? (?:maison|appartement|terrain|immeuble|local|parcelle|garage)[^.,]{0,60})/i.exec(bloc) || [])[1] || '').split(/\s+(?:Et|Lesquels|Figurant|comprenant)\b/i)[0];
       const designation = [nature.trim(), commune.trim() ? 'à ' + commune.trim() : ''].filter(Boolean).join(' ') || 'Immeuble n° ' + (k + 1);
-      out.push({ designation, valeurDeclaree: valeurCi, valeurSuccession: communaute ? arrondi(valeurCi / 2) : valeurCi, communaute });
+      const parcelles = cadastre(bloc);
+      out.push({ designation, valeurDeclaree: valeurCi, valeurSuccession: communaute ? arrondi(valeurCi / 2) : valeurCi, communaute,
+        parcelles, cadastre: texteCadastre(parcelles), copropriete: /copropri/i.test(bloc), surface: parcelles.reduce((t, x) => t + x.surface, 0) || null });
     });
     return out;
   }
+  // Parcelles : « section : AZ, numéro : 307, lieudit : RUE X, contenance : 0ha 05a 59ca ».
+  function cadastre(bloc) {
+    const re = /section\s*:\s*([A-Z0-9]{1,3})\s*,\s*num[ée]ro\s*:\s*(\d+)\s*,\s*lieu-?dit\s*:\s*(.*?)\s*,\s*contenance\s*:\s*(\d+)\s*ha\s*(\d+)\s*a\s*(\d+)\s*ca/gi;
+    return [...bloc.matchAll(re)].map((m) => ({
+      section: m[1].toUpperCase(), numero: m[2], lieudit: m[3].replace(/^[,\s]+|[,\s]+$/g, '').replace(/\s+/g, ' '),
+      surface: +m[4] * 10000 + +m[5] * 100 + +m[6],
+    }));
+  }
+  const contenance = (m2) => { const ha = Math.floor(m2 / 10000), a = Math.floor((m2 % 10000) / 100), ca = m2 % 100; return (ha ? ha + ' ha ' : '') + String(a).padStart(2, '0') + ' a ' + String(ca).padStart(2, '0') + ' ca'; };
+  const texteCadastre = (parcelles) => parcelles.map((x) => 'section ' + x.section + ' n° ' + x.numero + (x.lieudit ? ', ' + x.lieudit : '') + ' (' + contenance(x.surface) + ')').join(' ; ');
+
   function lireDDS(source) {
     const T = quasiEngine().texteDDS(source);
     const res = { actifBrut: null, passif: null, actifNet: null, immeubles: [], heritiers: [], avertissements: [] };
@@ -148,5 +177,5 @@
     }).filter((f) => f.nature !== 'versement' && f.nature !== 'autre-dossier');
   }
 
-  return { calculer, lireDDS, fraisDuReleve, fraction, arrondi };
+  return { calculer, lireDDS, fraisDuReleve, fraction, arrondi, cadastre, contenance };
 });
