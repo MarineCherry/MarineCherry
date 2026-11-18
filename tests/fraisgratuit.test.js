@@ -97,3 +97,10 @@ test('frais gratuit : plusieurs immeubles, lot divisé + 1/3 du chemin d\'accès
   assert.strictEqual(r.heritiers[0].total, 300 + 150);
   assert.deepStrictEqual(r.alertes, []);
 });
+
+test('frais gratuit : quotité reçue lue dans la déclaration', () => {
+  assert.strictEqual(E.quotiteRecue('Madame A : LA MOITIÉ (1/2) de la pleine-propriété des biens de succession, (707 102,29 € X 1/2 = 353 551,15 €) Ci'), '1/2');
+  assert.strictEqual(E.quotiteRecue('Madame B : UN SIXIÈME ( 1 / 6 ) des TROIS QUARTS (3/4) des biens de succession restant à partager Ci'), '1/8');
+  assert.strictEqual(E.quotiteRecue('Monsieur C : LA TOTALITÉ de la pleine propriété des biens de succession Ci'), '1');
+  assert.strictEqual(E.quotiteRecue('Madame D - Ses droits successoraux en usufruit'), '');
+});

@@ -56,11 +56,9 @@
     s.immeubles = lu.immeubles;
     if (lu.immeubles.length === 1 && !s.bien.parties[0].valeur) prendreImmeuble(s.bien.parties[0], lu.immeubles[0]);
     if (!s.bien.designation && s.bien.parties.length === 1 && s.bien.parties[0].designation) s.bien.designation = s.bien.parties[0].designation;
-    // Part des frais de chaque héritier : sa part de la valeur transmise.
-    const totalRecu = lu.heritiers.reduce((t, x) => t + (x.recu || 0), 0);
+    // Part des frais de chaque héritier : la quotité qu'il reçoit dans la succession (déclaration).
     s.heritiers = lu.heritiers.map((x) => nouvelHeritier({
-      nom: x.nom, droits: x.droits, recu: x.recu, nature: x.nature,
-      partFrais: totalRecu > 0 && x.recu ? pctTexte(x.recu / totalRecu) : '', vendeur: x.nature !== 'US',
+      nom: x.nom, droits: x.droits, recu: x.recu, nature: x.nature, partFrais: x.quote || '', vendeur: x.nature !== 'US',
     }));
     s.dds = { fichier: fichier.name, avertissements: lu.avertissements };
     ctx.render(); ctx.changed();
@@ -156,11 +154,11 @@
       h('div', { class: 'rows' }, s.heritiers.map((x) => h('div', { class: 'row-line fg-heritier' },
         f('Héritier', ctx.text(x, 'nom', { placeholder: 'ex. Madame Claire DURAND' }), { help: x.nature ? ({ PP: 'Pleine propriété', NP: 'Nue-propriété', US: 'Usufruit' })[x.nature] + (x.recu ? ' · reçu ' + fmtEuro(x.recu) : '') : null }),
         f('Droits de succession payés', ctx.num(x, 'droits', { suffix: '€' })),
-        f('Part des frais supportée', ctx.text(x, 'partFrais', { placeholder: 'ex. 1/2' })),
+        f('Quotité reçue (part des frais)', ctx.text(x, 'partFrais', { placeholder: 'ex. 1/2' })),
         f('Vendeur', ctx.yesNo(x, 'vendeur', { small: true, structural: true })),
         s.heritiers.length > 1 ? retirer(ctx, s.heritiers, x) : h('span')))),
       ui.button('Ajouter un héritier', { icon: 'plus', variant: 'soft', small: true, onClick: () => { s.heritiers.push(nouvelHeritier()); ctx.render(); } })),
-    { subtitle: 'Droits de succession : ceux payés par chacun (déclaration). Part des frais : par défaut, la part de la valeur transmise reçue par chacun.' });
+    { subtitle: 'Droits de succession : ceux payés par chacun (déclaration). Part des frais : la quotité reçue par chacun dans la succession (ex. 1/2, ou 1/6 des 3/4 = 1/8), reprise de la déclaration.' });
 
     const frais = ui.card('Frais d\'actes de la succession', h('div', { class: 'stack-sm' },
       s.frais.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'table table-input fg-frais' },

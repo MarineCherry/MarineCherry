@@ -151,6 +151,18 @@
   const contenance = (m2) => { const ha = Math.floor(m2 / 10000), a = Math.floor((m2 % 10000) / 100), ca = m2 % 100; return (ha ? ha + ' ha ' : '') + String(a).padStart(2, '0') + ' a ' + String(ca).padStart(2, '0') + ' ca'; };
   const texteCadastre = (parcelles) => parcelles.map((x) => 'section ' + x.section + ' n° ' + x.numero + (x.lieudit ? ', ' + x.lieudit : '') + ' (' + contenance(x.surface) + ')').join(' ; ');
 
+  // Quotité reçue : « LA MOITIÉ (1/2) de la pleine-propriété », « UN SIXIÈME (1/6) des TROIS QUARTS (3/4) » → 1/8.
+  const pgcd = (a, b) => (b ? pgcd(b, a % b) : a);
+  function quotiteRecue(bloc) {
+    const debut = bloc.slice(0, 300).split(/\bCi\b|biens de (?:la )?succession/i)[0];
+    const fr = [...debut.matchAll(/\(\s*(\d+)\s*\/\s*(\d+)\s*\)/g)];
+    if (!fr.length) return /^[^:]*:\s*(?:LA\s+)?TOTALIT[ÉE]/i.test(debut) ? '1' : '';
+    let num = 1, den = 1;
+    fr.forEach((m) => { num *= +m[1]; den *= +m[2]; });
+    const g = pgcd(num, den) || 1;
+    return den / g === 1 ? String(num / g) : num / g + '/' + den / g;
+  }
+
   function lireDDS(source) {
     const T = quasiEngine().texteDDS(source);
     const res = { actifBrut: null, passif: null, actifNet: null, immeubles: [], heritiers: [], avertissements: [] };
@@ -168,7 +180,7 @@
       // « Madame Prénom(s) NOM » : le nom s'arrête après les mots en capitales.
       const nom = (/^((?:Madame|Monsieur)\s+(?:\p{Lu}[\p{Ll}'-]+\s+)*(?:\p{Lu}[\p{Lu}'-]+)(?:\s+\p{Lu}[\p{Lu}'-]+)*)/u.exec(bloc) || [])[1] || '';
       const nature = /nue-propri/i.test(bloc.slice(0, 300)) ? 'NP' : /usufruit/i.test(bloc.slice(0, 300)) ? 'US' : 'PP';
-      const quote = (/\((\d+\/\d+)\)/.exec(bloc.slice(0, 300)) || [])[1] || '';
+      const quote = quotiteRecue(bloc);
       const recu = apres(bloc, /Montant [ée]gal [àa] ses droits\s*:?[\s.…]*([\d\s]+,\d{2})/i) || apres(bloc, /Part recueillie\s*:?[\s.…]*([\d\s]+,\d{2})/i)
         || apres(bloc, /MONTANT des DROITS DU CONJOINT\s*:?[\s.…]*([\d\s]+,\d{2})/i);
       let droits = apres(bloc, /Montant des droits [àa] acquitter\s*:?[\s.…]*([\d\s]+,\d{2})/i);
@@ -195,5 +207,5 @@
     }).filter((f) => f.nature !== 'versement' && f.nature !== 'autre-dossier');
   }
 
-  return { calculer, lireDDS, fraisDuReleve, fraction, arrondi, cadastre, contenance };
+  return { calculer, lireDDS, fraisDuReleve, fraction, arrondi, cadastre, contenance, quotiteRecue };
 });
