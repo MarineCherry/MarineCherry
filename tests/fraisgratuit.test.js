@@ -79,3 +79,21 @@ test('frais gratuit : références cadastrales de la déclaration', () => {
   assert.deepStrictEqual(p.map((x) => [x.section, x.numero, x.lieudit, x.surface]), [['BT', '182', 'RUE DU TERRIER', 974], ['BT', '209', 'LE BARON', 10700]]);
   assert.strictEqual(E.contenance(10700), '1 ha 07 a 00 ca');
 });
+
+test('frais gratuit : plusieurs immeubles, lot divisé + 1/3 du chemin d\'accès', () => {
+  // Terrain de 4 000 m² valant 120 000 € divisé en 4 : on vend un lot de 900 m² et 1/3 du chemin de 300 m².
+  const r = E.calculer({
+    baseTotale: 600000,
+    bien: { parties: [
+      { designation: 'Lot B', valeur: 120000, division: 'surface', surfaceTotale: 4000, surfaceVendue: 900 },
+      { designation: 'Chemin', valeur: 120000, division: 'surface', surfaceTotale: 4000, surfaceVendue: 300, quoteVendue: '1/3' },
+    ] },
+    heritiers: [{ nom: 'A', droits: 6000, partFrais: '1' }],
+    frais: [{ libelle: 'Déclaration', montant: 3000 }],
+  });
+  assert.deepStrictEqual(r.parties.map((x) => x.valeur), [27000, 3000]);
+  assert.strictEqual(r.valeurBien, 30000);
+  assert.strictEqual(r.quotePart, 0.05);
+  assert.strictEqual(r.heritiers[0].total, 300 + 150);
+  assert.deepStrictEqual(r.alertes, []);
+});

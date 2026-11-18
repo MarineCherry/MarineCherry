@@ -50,18 +50,32 @@
    */
   function calculer(d) {
     const b = d.bien || {};
-    const valeurDeclaree = n(b.valeur);
-    // Valeur du bien entier retenue pour les droits (après l'abattement de 20 % de la résidence principale).
-    const valeurTotale = b.residencePrincipale ? arrondi(valeurDeclaree * 0.8) : valeurDeclaree;
-    // Bien divisé depuis la succession : seule la partie vendue compte, par sa valeur ou au prorata des surfaces.
-    let valeurBien = valeurTotale, fractionDivision = null;
-    if (b.division === 'surface') {
-      fractionDivision = n(b.surfaceTotale) > 0 ? n(b.surfaceVendue) / n(b.surfaceTotale) : 0;
-      valeurBien = arrondi(valeurTotale * fractionDivision);
-    } else if (b.division === 'valeur') {
-      valeurBien = b.residencePrincipale ? arrondi(n(b.valeurPartie) * 0.8) : n(b.valeurPartie);
-      fractionDivision = valeurTotale > 0 ? valeurBien / valeurTotale : null;
-    }
+    // Le bien vendu peut réunir plusieurs immeubles de la succession (ou des parties d'immeubles divisés).
+    const parties = (Array.isArray(b.parties) && b.parties.length ? b.parties : [b]).map((x, i) => {
+      const valeurDeclaree = n(x.valeur);
+      // Valeur de l'immeuble entier retenue pour les droits (après l'abattement de 20 % de la résidence principale).
+      const valeurTotale = x.residencePrincipale ? arrondi(valeurDeclaree * 0.8) : valeurDeclaree;
+      // Immeuble divisé depuis la succession : seule la partie vendue compte, par sa valeur ou au prorata des surfaces.
+      let valeurPartie = valeurTotale, fractionDivision = null;
+      if (x.division === 'surface') {
+        fractionDivision = n(x.surfaceTotale) > 0 ? n(x.surfaceVendue) / n(x.surfaceTotale) : 0;
+        valeurPartie = valeurTotale * fractionDivision;
+      } else if (x.division === 'valeur') {
+        valeurPartie = x.residencePrincipale ? n(x.valeurPartie) * 0.8 : n(x.valeurPartie);
+        fractionDivision = valeurTotale > 0 ? valeurPartie / valeurTotale : null;
+      }
+      // Quote-part vendue (ex. 1/3 d'un chemin d'accès commun) ; vide = en totalité.
+      const qt = String(x.quoteVendue === undefined || x.quoteVendue === null ? '' : x.quoteVendue).trim();
+      const qv = qt ? fraction(qt) : 1;
+      const quoteVendue = qv === null ? 0 : qv;
+      return { index: i, designation: x.designation || '', cadastre: x.cadastreVendu || x.cadastre || '', division: x.division || 'aucune',
+        valeurDeclaree, valeurTotale, fractionDivision, quoteVendue, quoteTexte: qt, quoteInvalide: qv === null, valeur: arrondi(valeurPartie * quoteVendue),
+        surfaceTotale: n(x.surfaceTotale), surfaceVendue: n(x.surfaceVendue), residencePrincipale: !!x.residencePrincipale };
+    });
+    const valeurDeclaree = arrondi(sum(parties, (x) => x.valeurDeclaree));
+    const valeurTotale = arrondi(sum(parties, (x) => x.valeurTotale));
+    const valeurBien = arrondi(sum(parties, (x) => x.valeur));
+    const fractionDivision = parties.length === 1 ? (parties[0].fractionDivision === null && parties[0].quoteVendue === 1 ? null : (valeurTotale > 0 ? valeurBien / valeurTotale : null)) : null;
     const base = n(d.baseTotale);
     const quotePart = base > 0 ? Math.min(1, valeurBien / base) : 0;
     const frais = (d.frais || []).filter((f) => n(f.montant));
@@ -79,15 +93,19 @@
     });
     const alertes = [];
     if (!(base > 0)) alertes.push('Indiquez la valeur totale de l\'actif de la succession.');
-    if (!(valeurDeclaree > 0)) alertes.push('Indiquez la valeur du bien vendu dans la succession.');
-    if (b.division === 'surface' && !(n(b.surfaceTotale) > 0 && n(b.surfaceVendue) > 0)) alertes.push('Bien divisé : indiquez la superficie du bien d\'origine et celle de la partie vendue.');
-    if (b.division === 'valeur' && !(n(b.valeurPartie) > 0)) alertes.push('Bien divisé : indiquez la valeur de la partie vendue.');
-    if (fractionDivision !== null && fractionDivision > 1.0001) alertes.push('Bien divisé : la partie vendue dépasse le bien d\'origine, vérifiez les chiffres.');
     if (base > 0 && valeurBien > base + 0.005) alertes.push('La valeur du bien dépasse l\'actif de la succession : vérifiez les montants.');
+    parties.forEach((x) => {
+      const nom = parties.length > 1 ? 'Immeuble ' + (x.index + 1) + (x.designation ? ' (' + x.designation + ')' : '') + ' : ' : '';
+      if (!(x.valeurDeclaree > 0)) alertes.push(nom + 'indiquez la valeur ' + (parties.length > 1 ? 'de l\'immeuble' : 'du bien vendu') + ' dans la succession.');
+      if (x.division === 'surface' && !(x.surfaceTotale > 0 && x.surfaceVendue > 0)) alertes.push(nom + 'bien divisé, indiquez la superficie du bien d\'origine et celle de la partie vendue.');
+      if (x.division === 'valeur' && !(x.fractionDivision > 0)) alertes.push(nom + 'bien divisé, indiquez la valeur de la partie vendue.');
+      if (x.fractionDivision !== null && x.fractionDivision > 1.0001) alertes.push(nom + 'la partie vendue dépasse le bien d\'origine, vérifiez les chiffres.');
+      if (x.quoteInvalide || x.quoteVendue > 1) alertes.push(nom + 'quote-part vendue « ' + x.quoteTexte + ' » non comprise (ex. 1/3 ou 33,33 %).');
+    });
     const sommeParts = sum(heritiers, (h) => h.partFrais);
     if (heritiers.length && Math.abs(sommeParts - 1) > 0.001 && sommeParts > 0) alertes.push('Les parts des frais des héritiers font ' + (Math.round(sommeParts * 10000) / 100).toLocaleString('fr-FR') + ' % (au lieu de 100 %).');
     if (frais.some((f) => f.retenu !== false && /PARTAGE/i.test(f.libelle || ''))) alertes.push('Des frais de partage sont retenus : ils ne doivent pas l\'être (art. 150 U, IV CGI).');
-    return { valeurDeclaree, valeurTotale, fractionDivision, valeurBien, base, quotePart, fraisRetenus, fraisBien, heritiers, alertes };
+    return { parties, valeurDeclaree, valeurTotale, fractionDivision, valeurBien, base, quotePart, fraisRetenus, fraisBien, heritiers, alertes };
   }
 
   /* ---------- Lecture de la déclaration de succession ---------- */
