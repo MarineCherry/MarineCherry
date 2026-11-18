@@ -118,3 +118,12 @@ test('frais gratuit : droits répartis selon la quotité, sauf montant saisi', (
   assert.deepStrictEqual(m.heritiers.map((x) => [x.droits, x.droitsImputables]), [[8000, 4000], [2000, 1000]]);
   assert.deepStrictEqual(m.alertes, []);
 });
+
+test('frais gratuit : droits « TOTAL DES DROITS DUS PAR » et prénom composé', () => {
+  const T = 'DEVOLUTION 1 - REVENANT A Monsieur Jean-Paul MARTIN : LA MOITIÉ (1/2) de la pleine-propriété des biens de succession, Ci, ..... 300 000,00 € '
+    + 'Montant égal à ses droits : ..... 280 000,00 € Reste taxable : ..... 180 000,00 € TOTAL DES DROITS DUS PAR Monsieur Jean- Paul MARTIN : ...... 34 194,00 € '
+    + '2 - REVENANT A Madame Anne MARTIN : LA MOITIÉ (1/2) de la pleine-propriété des biens de succession, Ci, ..... 300 000,00 € '
+    + 'Montant égal à ses droits : ..... 300 000,00 € TOTAL DES DROITS DUS PAR Madame Anne MARTIN : ...... 38 194,00 €';
+  const r = E.lireDDS(T);
+  assert.deepStrictEqual(r.heritiers.map((x) => [x.nom, x.quote, x.droits]), [['Monsieur Jean-Paul MARTIN', '1/2', 34194], ['Madame Anne MARTIN', '1/2', 38194]]);
+});

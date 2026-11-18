@@ -191,12 +191,13 @@
     const parts = T.split(/\d+\s*-\s*REVENANT A\s*:?\s*/i).slice(1);
     parts.forEach((bloc) => {
       // « Madame Prénom(s) NOM » : le nom s'arrête après les mots en capitales.
-      const nom = (/^((?:Madame|Monsieur)\s+(?:\p{Lu}[\p{Ll}'-]+\s+)*(?:\p{Lu}[\p{Lu}'-]+)(?:\s+\p{Lu}[\p{Lu}'-]+)*)/u.exec(bloc) || [])[1] || '';
+      const nom = (/^((?:Madame|Monsieur)\s+(?:\p{Lu}[\p{Ll}']+(?:-\p{Lu}?[\p{Ll}']+)*\s+)*(?:\p{Lu}[\p{Lu}'-]+)(?:\s+\p{Lu}[\p{Lu}'-]+)*)/u.exec(bloc) || [])[1] || '';
       const nature = /nue-propri/i.test(bloc.slice(0, 300)) ? 'NP' : /usufruit/i.test(bloc.slice(0, 300)) ? 'US' : 'PP';
       const quote = quotiteRecue(bloc);
       const recu = apres(bloc, /Montant [ée]gal [àa] ses droits\s*:?[\s.…]*([\d\s]+,\d{2})/i) || apres(bloc, /Part recueillie\s*:?[\s.…]*([\d\s]+,\d{2})/i)
         || apres(bloc, /MONTANT des DROITS DU CONJOINT\s*:?[\s.…]*([\d\s]+,\d{2})/i);
       let droits = apres(bloc, /Montant des droits [àa] acquitter\s*:?[\s.…]*([\d\s]+,\d{2})/i);
+      if (droits === null) droits = apres(bloc, /TOTAL DES DROITS DUS PAR[^:]{0,120}:[\s.…]*([\d\s]+,\d{2})/i);
       if (droits === null) droits = apres(bloc, /(?:Droits dus|Droits [àa] payer|Montant des droits)\s*:?[\s.…]*([\d\s]+,\d{2})/i);
       if (droits === null && /Reste taxable\s*:?[\s.…]*0,00/i.test(bloc) && !/Reste taxable\s*:?[\s.…]*[1-9]/i.test(bloc)) droits = 0;
       res.heritiers.push({ nom: nom.replace(/\s+/g, ' ').trim(), nature, quote, recu, droits });
