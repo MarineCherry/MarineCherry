@@ -41,6 +41,7 @@
     quasi: '<path d="M4 7h16v12H4z"/><path d="M4 11h16"/><path d="M8 3v4M16 3v4"/><path d="M9 15.5h6"/>',
     fraisGratuit: '<path d="M6 3h9l3 3v15H6z"/><path d="M9 10h6M9 14h6M9 18h3"/><path d="M15 3v3h3"/>',
     nru: '<path d="M6 3h9l3 3v15H6z"/><path d="M9 9h6M9 13h6"/><path d="M9 17l1.5 1.5L14 15"/>',
+    servitudes: '<path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/>',
     supports: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/><path d="M7 12.5l3-3 2.5 2 4-4"/>',
     link: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
   };

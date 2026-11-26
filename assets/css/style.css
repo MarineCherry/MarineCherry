@@ -1344,3 +1344,14 @@ td .pos { color: #2f7d5b; }
 .nru-apercu { background: #fff; color: #1d1d1f; border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px; font-family: "Times New Roman", Times, serif; font-size: 15px; line-height: 1.45; outline: none; overflow-wrap: anywhere; }
 .nru-apercu:focus { border-color: var(--primary); }
 .nru-apercu ul { padding-left: 28px; }
+
+/* Plan de servitudes */
+.sv-plan { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+.sv-plan svg { display: block; max-width: 100%; height: auto; }
+.sv-texte { min-height: 150px; resize: vertical; font-family: inherit; line-height: 1.4; padding: 10px 12px; height: auto; }
+.sv-fiche { grid-template-columns: minmax(0, 1fr); }
+.sv-tete { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.sv-tete .small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.sv-pastille { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+.sv-assiette { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 14px; padding: 12px; border-radius: 10px; background: var(--surface); border: 1px dashed var(--line); }
+.sv-assiette .field-help { display: none; }
